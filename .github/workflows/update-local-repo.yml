@@ -36,22 +36,6 @@ jobs:
       DCM_PROJECT_IDENTIFIER: AAA_DEV_SYNTHETIC_BANK.PUBLIC.SYNTHETIC_RETAIL_BANK
       DCM_TARGET: DEV
       SNOW_CONFIG_B64: ${{ secrets.SNOW_CONFIG_B64 }}
-      CMD_RAW: CMD_RAW_001
-      CMD_AGG: CMD_AGG_001
-      CRM_RAW: CRM_RAW_001
-      CRM_AGG: CRM_AGG_001
-      EQT_RAW: EQT_RAW_001
-      EQT_AGG: EQT_AGG_001
-      FII_RAW: FII_RAW_001
-      FII_AGG: FII_AGG_001
-      LOA_RAW: LOA_RAW_001
-      LOA_AGG: LOA_AGG_001
-      PAY_RAW: PAY_RAW_001
-      PAY_AGG: PAY_AGG_001
-      REF_RAW: REF_RAW_001
-      REF_AGG: REF_AGG_001
-      REP_RAW: REP_RAW_001
-      REP_AGG: REP_AGG_001
 
     steps:
       - name: Set up dynamic base directories
@@ -86,12 +70,6 @@ jobs:
         run: |
           bash github-workflow-verification_v1.sh
 
-      - name: Run pre-deploy SQL
-        run: |
-          envsubst < pre_deploy.sql > /tmp/pre_deploy.sql
-          snow sql -f /tmp/pre_deploy.sql -c $CONNECTION_NAME
-        continue-on-error: true
-
       - name: DCM Analyze + Plan + Deploy
         run: |
           bash /usr/local/bin/snowflake-deploy-dcm_v1.sh \
@@ -100,12 +78,6 @@ jobs:
             --TARGET=$DCM_TARGET \
             --ALIAS="release-${RELEASE_NUM}-${GITHUB_RUN_ATTEMPT}" \
             --PROJECT_DIR="$(pwd)"
-
-      - name: Run post-deploy SQL
-        run: |
-          envsubst < post_deploy.sql > /tmp/post_deploy.sql
-          snow sql -f /tmp/post_deploy.sql -c $CONNECTION_NAME
-        continue-on-error: true
 
       - name: Extract dependencies
         run: |
@@ -136,13 +108,12 @@ jobs:
 
       - name: Run SQL Validation Tests
         run: |
-          envsubst < sqlunit/tests.sqltest > /tmp/tests.sqltest
           bash /usr/local/bin/sql_validation_v4.sh \
             --CLONE_DATABASE=$SOURCE_DATABASE \
             --CLONE_SCHEMA=$SOURCE_SCHEMA \
             --RELEASE_NUM=$RELEASE_NUM \
             --CONNECTION_NAME=$CONNECTION_NAME \
-            --TEST_FILE="/tmp/tests.sqltest"
+            --TEST_FILE="$(pwd)/sqlunit/tests.sqltest"
 
       - name: Drop cloned schema
         if: always()

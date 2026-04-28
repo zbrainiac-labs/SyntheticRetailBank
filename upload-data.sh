@@ -38,7 +38,6 @@ set -e
 
 # --- Default values ---
 CONNECTION_NAME=""
-SOURCE_DATABASE="${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK}"
 DRY_RUN=false
 MAX_RETRIES=3
 RETRY_DELAY=5
@@ -474,7 +473,7 @@ execute_upload() {
     
     # Upload files to stage with retry logic
     local sql_command="
-        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
+        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
         USE SCHEMA $schema;
         PUT file://$local_pattern @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
     "
@@ -610,7 +609,7 @@ execute_single_files_upload() {
     if [[ $file_count -le $BATCH_SIZE ]]; then
         # Small batch - upload all at once
         local sql_command="
-            USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
+            USE DATABASE AAA_DEV_SYNTHETIC_BANK;
             USE SCHEMA $schema;
             PUT file://$source_dir/$file_pattern @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
         "
@@ -648,7 +647,7 @@ execute_single_files_upload() {
             
             # Upload batch
             local batch_sql="
-                USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
+                USE DATABASE AAA_DEV_SYNTHETIC_BANK;
                 USE SCHEMA $schema;
                 PUT file://$temp_batch_dir/* @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
             "
@@ -857,7 +856,7 @@ upload_to_stage \
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for EMPI_RAW_SM_EMPLOYEE_FILES..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
+        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
         USE SCHEMA CRM_RAW_001;
         SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_SM_EMPLOYEE_FILES') AS has_data;
     " > /dev/null 2>&1
@@ -874,7 +873,7 @@ upload_to_stage \
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for EMPI_RAW_SM_ASSIGNMENT_FILES..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
+        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
         USE SCHEMA CRM_RAW_001;
         SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_SM_ASSIGNMENT_FILES') AS has_data;
     " > /dev/null 2>&1
@@ -994,7 +993,7 @@ upload_single_files \
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for LCR data..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
+        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
         USE SCHEMA REP_RAW_001;
         SELECT SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_HQLA_FILES') AS hqla_stream_has_data,
                SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_DEPOSIT_FILES') AS deposit_stream_has_data;
@@ -1059,7 +1058,7 @@ elif [[ $FAILED_UPLOADS -eq 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. Monitor task execution:"
-    echo "     SHOW TASKS IN DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};"
+    echo "     SHOW TASKS IN DATABASE AAA_DEV_SYNTHETIC_BANK;"
     echo ""
     echo "  2. Check data loading:"
     echo "     SELECT COUNT(*) FROM [schema].[table];"
@@ -1068,7 +1067,7 @@ elif [[ $FAILED_UPLOADS -eq 0 ]]; then
     echo "     LIST @[stage_name];"
     echo ""
     echo "  4. Check streams with data:"
-    echo "     SHOW STREAMS IN DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};"
+    echo "     SHOW STREAMS IN DATABASE AAA_DEV_SYNTHETIC_BANK;"
     echo ""
     echo "Data is now ready for automated processing by Snowflake tasks!"
 else
