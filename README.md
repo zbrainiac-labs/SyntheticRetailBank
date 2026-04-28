@@ -16,6 +16,9 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
+# One-time setup (requires ACCOUNTADMIN):
+snow sql -c <my-sf-connection> -f operation/setup_listings.sql
+
 ./data_generator.sh 1000 --clean
 ./upload-data.sh --CONNECTION_NAME=<my-sf-connection>
 ```
@@ -27,7 +30,7 @@ pip install -r requirements.txt
 ```
 SyntheticRetailBank/
 ├── manifest.yml                    DCM manifest (v2, target: DEV)
-├── pre_deploy.sql                  DB/schema/project creation, marketplace listings
+├── pre_deploy.sql                  DB/schema/project creation
 ├── post_deploy.sql                 Streams, file formats, procedures, agents, semantic views
 ├── github-workflow-verification_v1.sh  Workflow SHA256 integrity check
 ├── .github/workflows/
