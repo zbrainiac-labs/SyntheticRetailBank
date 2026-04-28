@@ -58,7 +58,7 @@ WITH fx_rates_base AS (
 
         CREATED_AT
 
-    FROM {{ ref_raw }}.REFI_RAW_TB_FX_RATES
+    FROM {{ db }}.{{ ref_raw }}.REFI_RAW_TB_FX_RATES
 ),
 
 fx_rates_with_trends AS (
@@ -157,7 +157,7 @@ SELECT
 
     CASE 
         WHEN DATE = CURRENT_DATE() THEN TRUE
-        WHEN DATE = (SELECT MAX(DATE) FROM {{ ref_raw }}.REFI_RAW_TB_FX_RATES) THEN TRUE
+        WHEN DATE = (SELECT MAX(DATE) FROM {{ db }}.{{ ref_raw }}.REFI_RAW_TB_FX_RATES) THEN TRUE
         ELSE FALSE
     END AS IS_CURRENT_RATE,
 

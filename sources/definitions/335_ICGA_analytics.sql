@@ -118,7 +118,7 @@ SELECT
     CURRENT_TIMESTAMP() AS parsed_at,
     LENGTH(RAW_XML::STRING) AS xml_size_bytes
 
-FROM {{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES
+FROM {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES
 WHERE RAW_XML IS NOT NULL
   AND (FILE_NAME ILIKE '%pacs008%' OR RAW_XML::STRING ILIKE '%FIToFICstmrCdtTrf%');
 
@@ -214,7 +214,7 @@ SELECT
     CURRENT_TIMESTAMP() AS parsed_at,                                      
     LENGTH(RAW_XML::STRING) AS xml_size_bytes                             
 
-FROM {{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES
+FROM {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES
 WHERE RAW_XML IS NOT NULL
   AND (FILE_NAME ILIKE '%pacs002%' OR RAW_XML::STRING ILIKE '%FIToFIPmtStsRpt%');
 
@@ -278,8 +278,8 @@ SELECT
     DATEDIFF('minutes', p002.ORIGINAL_CREATION_DATETIME, p002.CREATION_DATETIME) AS ack_time,
     CURRENT_TIMESTAMP() AS joined_at                                 
 
-FROM {{ pay_agg }}.ICGA_AGG_DT_SWIFT_PACS008 p008
-LEFT JOIN {{ pay_agg }}.ICGA_AGG_DT_SWIFT_PACS002 p002
+FROM {{ db }}.{{ pay_agg }}.ICGA_AGG_DT_SWIFT_PACS008 p008
+LEFT JOIN {{ db }}.{{ pay_agg }}.ICGA_AGG_DT_SWIFT_PACS002 p002
     ON p002.original_message_id = p008.message_id
    AND (
         p002.original_end_to_end_id = p008.end_to_end_id

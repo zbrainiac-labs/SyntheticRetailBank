@@ -61,7 +61,7 @@ WITH customer_behavioral_profile AS (
 
         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY AMOUNT) as large_transaction_threshold
 
-    FROM {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS
+    FROM {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS
     WHERE BOOKING_DATE >= CURRENT_DATE - INTERVAL '450 days' 
       AND BOOKING_DATE < CURRENT_DATE
     GROUP BY ACCOUNT_ID
@@ -103,19 +103,19 @@ transaction_analysis AS (
 
         COUNT(*) OVER (
             PARTITION BY t.ACCOUNT_ID 
-            ORDER BY t.BOOKING_DATE 
-            RANGE BETWEEN INTERVAL '24 hours' PRECEDING AND CURRENT ROW
+            ORDER BY DATEDIFF('DAY', '1970-01-01'::DATE, t.BOOKING_DATE)
+            RANGE BETWEEN 1 PRECEDING AND CURRENT ROW
         ) - 1 as transactions_last_24h,
 
         COUNT(*) OVER (
             PARTITION BY t.ACCOUNT_ID 
-            ORDER BY t.BOOKING_DATE 
-            RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW
+            ORDER BY DATEDIFF('DAY', '1970-01-01'::DATE, t.BOOKING_DATE)
+            RANGE BETWEEN 7 PRECEDING AND CURRENT ROW
         ) - 1 as transactions_last_7d
 
-    FROM {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
+    FROM {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
     LEFT JOIN customer_behavioral_profile cbp ON t.ACCOUNT_ID = cbp.ACCOUNT_ID
-    LEFT JOIN {{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS acc ON t.ACCOUNT_ID = acc.ACCOUNT_ID
+    LEFT JOIN {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS acc ON t.ACCOUNT_ID = acc.ACCOUNT_ID
     WHERE t.BOOKING_DATE >= CURRENT_DATE - INTERVAL '120 days' 
 )
 
@@ -274,7 +274,7 @@ WITH all_accounts AS (
         BASE_CURRENCY,
         CUSTOMER_ID,
         STATUS AS ACCOUNT_STATUS
-    FROM {{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS
+    FROM {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS
     WHERE IS_ACTIVE = TRUE
 ),
 
@@ -297,14 +297,14 @@ account_transactions AS (
         t.BASE_AMOUNT AS allocated_amount_base 
 
     FROM all_accounts acc
-    LEFT JOIN {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t ON acc.ACCOUNT_ID = t.ACCOUNT_ID
+    LEFT JOIN {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t ON acc.ACCOUNT_ID = t.ACCOUNT_ID
         AND t.BOOKING_DATE >= CURRENT_DATE - INTERVAL '450 days' 
 ),
 
 transaction_base_currency AS (
     SELECT DISTINCT t.BASE_CURRENCY
     FROM account_transactions atd
-    INNER JOIN {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t ON atd.TRANSACTION_ID = t.TRANSACTION_ID
+    INNER JOIN {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t ON atd.TRANSACTION_ID = t.TRANSACTION_ID
     WHERE atd.TRANSACTION_ID IS NOT NULL
     LIMIT 1
 ),
@@ -319,7 +319,7 @@ fx_rates_current AS (
         fx.VOLATILITY_RISK_LEVEL,
         fx.IS_CURRENT_RATE,
         tbc.BASE_CURRENCY
-    FROM {{ ref_agg }}.REFA_AGG_DT_FX_RATES_ENHANCED fx
+    FROM {{ db }}.{{ ref_agg }}.REFA_AGG_DT_FX_RATES_ENHANCED fx
     CROSS JOIN transaction_base_currency tbc
     WHERE fx.FROM_CURRENCY = tbc.BASE_CURRENCY
       AND fx.IS_CURRENT_RATE = TRUE 
@@ -417,7 +417,7 @@ LEFT JOIN fx_rates_current fx ON fx.TO_CURRENCY = abc.BASE_CURRENCY
 ORDER BY abc.current_balance_base DESC, abc.ACCOUNT_ID;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_CUSTOMER_TRANSACTION_SUMMARY(
-    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for joining to {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for joining to {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
 
     TOTAL_TRANSACTIONS_12M NUMBER(10,0) COMMENT 'Count of all transactions in last 12 months for engagement scoring',
     TOTAL_TRANSACTIONS_ALL_TIME NUMBER(10,0) COMMENT 'Lifetime transaction count since customer onboarding',
@@ -437,7 +437,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_CUSTOMER_TRANSACTION_SUM
 
     SUMMARY_AS_OF_DATE TIMESTAMP_NTZ COMMENT 'Timestamp when summary was calculated'
 
-) COMMENT = 'Pre-aggregated customer transaction metrics for efficient integration into Customer 360 and employee analytics. Provides engagement scoring, dormancy detection, and churn prediction indicators. Refreshed hourly to match {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 lag.'
+) COMMENT = 'Pre-aggregated customer transaction metrics for efficient integration into Customer 360 and employee analytics. Provides engagement scoring, dormancy detection, and churn prediction indicators. Refreshed hourly to match {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 lag.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
@@ -477,7 +477,7 @@ SELECT
 
     CURRENT_TIMESTAMP() AS SUMMARY_AS_OF_DATE
 
-FROM {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS txn
-INNER JOIN {{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS acc
+FROM {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS txn
+INNER JOIN {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS acc
     ON txn.ACCOUNT_ID = acc.ACCOUNT_ID
 GROUP BY acc.CUSTOMER_ID;

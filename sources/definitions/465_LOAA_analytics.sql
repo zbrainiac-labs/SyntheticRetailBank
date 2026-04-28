@@ -1,10 +1,10 @@
 DEFINE TABLE {{ db }}.{{ loa_agg }}.LOAA_AGG_TB_APPLICATIONS (
     APPLICATION_ID VARCHAR(50) PRIMARY KEY COMMENT 'Unique application identifier (APP_*)',
-    CUSTOMER_ID VARCHAR(30) COMMENT 'FK to {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
+    CUSTOMER_ID VARCHAR(30) COMMENT 'FK to {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
     APPLICATION_DATE_TIME TIMESTAMP_NTZ NOT NULL COMMENT 'Application submission timestamp',
     CHANNEL VARCHAR(50) COMMENT 'Application channel: EMAIL, PORTAL, BRANCH, BROKER',
     COUNTRY VARCHAR(50) COMMENT 'Country code (CHE, GBR, DEU) for regulatory parameterization',
-    PRODUCT_ID VARCHAR(50) COMMENT 'FK to {{ loa_raw }}.LOAI_REF_TB_PRODUCT_CATALOGUE',
+    PRODUCT_ID VARCHAR(50) COMMENT 'FK to {{ db }}.{{ loa_raw }}.LOAI_REF_TB_PRODUCT_CATALOGUE',
     REQUESTED_AMOUNT NUMBER(18,2) COMMENT 'Requested loan amount in local currency',
     REQUESTED_TERM_MONTHS INT COMMENT 'Requested loan term in months',
     REQUESTED_CURRENCY VARCHAR(3) COMMENT 'Currency code (CHF, GBP, EUR)',
@@ -36,7 +36,7 @@ COMMENT = 'Property collateral master table. Contains valuation, property charac
 DEFINE TABLE {{ db }}.{{ loa_agg }}.LOAA_AGG_TB_LOAN_COLLATERAL_LINK (
     LINK_ID VARCHAR(50) PRIMARY KEY COMMENT 'Unique link identifier (LINK_*)',
     ACCOUNT_ID VARCHAR(50) NOT NULL COMMENT 'FK to loan account (using APPLICATION_ID for showcase)',
-    COLLATERAL_ID VARCHAR(50) NOT NULL COMMENT 'FK to {{ loa_agg }}.LOAA_AGG_TB_COLLATERAL',
+    COLLATERAL_ID VARCHAR(50) NOT NULL COMMENT 'FK to {{ db }}.{{ loa_agg }}.LOAA_AGG_TB_COLLATERAL',
     EFFECTIVE_FROM_DATE DATE NOT NULL COMMENT 'Date when collateral link became effective',
     EFFECTIVE_TO_DATE DATE COMMENT 'Date when collateral link ended (NULL = active)',
     CHARGE_RANK VARCHAR(10) COMMENT 'Charge rank: 1ST, 2ND, 3RD (legal priority)',
@@ -49,8 +49,8 @@ COMMENT = 'Loan-to-collateral M:M mapping table. Supports cross-collateralizatio
 
 DEFINE TABLE {{ db }}.{{ loa_agg }}.LOAA_AGG_TB_AFFORDABILITY_ASSESSMENTS (
     AFFORDABILITY_ID VARCHAR(50) PRIMARY KEY COMMENT 'Unique affordability assessment ID (AFF_*)',
-    APPLICATION_ID VARCHAR(50) NOT NULL COMMENT 'FK to {{ loa_agg }}.LOAA_AGG_TB_APPLICATIONS',
-    CUSTOMER_ID VARCHAR(30) COMMENT 'FK to {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
+    APPLICATION_ID VARCHAR(50) NOT NULL COMMENT 'FK to {{ db }}.{{ loa_agg }}.LOAA_AGG_TB_APPLICATIONS',
+    CUSTOMER_ID VARCHAR(30) COMMENT 'FK to {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
     GROSS_INCOME_MONTHLY NUMBER(18,2) COMMENT 'Gross monthly income before taxes',
     NET_INCOME_MONTHLY NUMBER(18,2) COMMENT 'Net monthly income after taxes',
     FIXED_INCOME_MONTHLY NUMBER(18,2) COMMENT 'Fixed income component (salary, pension)',

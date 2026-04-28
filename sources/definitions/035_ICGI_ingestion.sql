@@ -18,12 +18,12 @@ DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_LOAD_SWIFT_MESSAGES
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ pay_raw }}.ICGI_RAW_SM_SWIFT_FILES')
 AS
-    COPY INTO {{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES (FILE_NAME, RAW_XML)
+    COPY INTO {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES (FILE_NAME, RAW_XML)
     FROM (
         SELECT 
             METADATA$FILENAME AS FILE_NAME,         
             PARSE_XML($1) AS RAW_XML                
-        FROM @{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
+        FROM @{{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
     )
     PATTERN = '.*\.xml'                             
     FILE_FORMAT = ICGI_RAW_FF_XML              
@@ -34,4 +34,4 @@ DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_CLEANUP_AFTER_LOAD_SWIFT_MESSAGES
     COMMENT = 'Automated stage cleanup AFTER SWIFT message data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_LOAD_SWIFT_MESSAGES
 AS
-    CALL PAYI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND', 5);
+    CALL PAYI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND', 5);

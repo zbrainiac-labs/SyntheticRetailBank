@@ -37,7 +37,7 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE (
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ,                 
 
     PRIMARY KEY (EMPLOYEE_ID),
-    CONSTRAINT FK_{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE__{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE FOREIGN KEY (MANAGER_EMPLOYEE_ID) REFERENCES {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
+    CONSTRAINT FK_EMPI_RAW_TB_EMPLOYEE__EMPI_RAW_TB_EMPLOYEE FOREIGN KEY (MANAGER_EMPLOYEE_ID) REFERENCES {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Employee master data with 3-tier hierarchy (advisors, team leaders, super team leaders). Scales dynamically based on customer distribution.';
@@ -60,7 +60,7 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT (
     FOREIGN KEY (ADVISOR_EMPLOYEE_ID) REFERENCES {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
 )
 CHANGE_TRACKING = TRUE
-COMMENT = 'Client-advisor assignment tracking with history support (SCD Type 2 ready). Tracks customer-advisor relationships over time. CUSTOMER_ID references {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER but FK not enforced due to SCD Type 2 composite key.';
+COMMENT = 'Client-advisor assignment tracking with history support (SCD Type 2 ready). Tracks customer-advisor relationships over time. CUSTOMER_ID references {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER but FK not enforced due to SCD Type 2 composite key.';
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -68,8 +68,8 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
 WHEN
     SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_EMPLOYEE_FILES')
 AS
-    COPY INTO {{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE
-    FROM @{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES
+    COPY INTO {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE
+    FROM @{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES
     FILE_FORMAT = (FORMAT_NAME = 'EMPI_RAW_FF_EMPLOYEE_CSV')
     MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
     ON_ERROR = 'CONTINUE';
@@ -80,8 +80,8 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
 WHEN
     SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_ASSIGNMENT_FILES')
 AS
-    COPY INTO {{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT
-    FROM @{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS
+    COPY INTO {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT
+    FROM @{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS
     FILE_FORMAT = (FORMAT_NAME = 'EMPI_RAW_FF_ASSIGNMENT_CSV')
     MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
     ON_ERROR = 'CONTINUE';
@@ -91,11 +91,11 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_CLEANUP_AFTER_LOAD_EMPLOYEES
     COMMENT = 'Automated stage cleanup AFTER employee data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES', 5);
+    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES', 5);
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_CLEANUP_AFTER_LOAD_ASSIGNMENTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER client assignment data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS', 5);
+    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS', 5);

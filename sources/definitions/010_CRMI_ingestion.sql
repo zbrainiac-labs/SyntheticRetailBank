@@ -46,13 +46,13 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
     CREDIT_SCORE_BAND VARCHAR(20) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Credit score band (POOR, FAIR, GOOD, VERY_GOOD, EXCELLENT)',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL COMMENT 'UTC timestamp when this customer record version was inserted (for SCD Type 2)',
 
-    CONSTRAINT PK_{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER PRIMARY KEY (CUSTOMER_ID, INSERT_TIMESTAMP_UTC)
+    CONSTRAINT PK_CRMI_RAW_TB_CUSTOMER PRIMARY KEY (CUSTOMER_ID, INSERT_TIMESTAMP_UTC)
 )
 CHANGE_TRACKING = TRUE
-COMMENT = 'Customer master data table with SCD Type 2 support for tracking attribute changes over time. Extended attributes include employment, account tier, contact preferences, and risk profile. Multiple records per customer allowed, uniquely identified by (CUSTOMER_ID, INSERT_TIMESTAMP_UTC). Address data stored separately in {{ crm_raw }}.CRMI_RAW_TB_ADDRESSES with its own SCD Type 2 tracking.';
+COMMENT = 'Customer master data table with SCD Type 2 support for tracking attribute changes over time. Extended attributes include employment, account tier, contact preferences, and risk profile. Multiple records per customer allowed, uniquely identified by (CUSTOMER_ID, INSERT_TIMESTAMP_UTC). Address data stored separately in {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES with its own SCD Type 2 tracking.';
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
-    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
+    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
     STREET_ADDRESS VARCHAR(200) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='top_secret') COMMENT 'Street address (localized format)',
     CITY VARCHAR(100) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'City name (localized to country)',
     STATE VARCHAR(100) COMMENT 'State/Region (where applicable for the country)',
@@ -60,7 +60,7 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
     COUNTRY VARCHAR(50) NOT NULL COMMENT 'Customer country (12 EMEA countries supported)',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL COMMENT 'UTC timestamp when this address record was inserted (for SCD Type 2)',
 
-    CONSTRAINT PK_{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES PRIMARY KEY (CUSTOMER_ID, INSERT_TIMESTAMP_UTC)
+    CONSTRAINT PK_CRMI_RAW_TB_ADDRESSES PRIMARY KEY (CUSTOMER_ID, INSERT_TIMESTAMP_UTC)
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Customer address base table with append-only structure (SCD Type 2). Multiple records per customer are allowed, uniquely identified by (CUSTOMER_ID, INSERT_TIMESTAMP_UTC). Dynamic tables in CRM_AGG_001 provide current and historical views.';
@@ -85,14 +85,14 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
     LAST_UPDATED DATE NOT NULL COMMENT 'Date when record was last updated (YYYY-MM-DD)',
     CREATED_DATE DATE NOT NULL COMMENT 'Date when record was created (YYYY-MM-DD)',
 
-    CONSTRAINT PK_{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON PRIMARY KEY (EXPOSED_PERSON_ID)
+    CONSTRAINT PK_CRMI_RAW_TB_EXPOSED_PERSON PRIMARY KEY (EXPOSED_PERSON_ID)
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Politically Exposed Persons (PEP) master data for compliance and risk management. Tracks current and former political figures, their family members, and close associates for regulatory compliance.';
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
     EVENT_ID VARCHAR(50) NOT NULL COMMENT 'Unique event identifier (EVT_XXXXX format)',
-    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
+    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
     EVENT_TYPE VARCHAR(30) NOT NULL COMMENT 'Type of event (ONBOARDING, ADDRESS_CHANGE, EMPLOYMENT_CHANGE, ACCOUNT_UPGRADE, ACCOUNT_DOWNGRADE, ACCOUNT_CLOSE, REACTIVATION, CHURN)',
     EVENT_DATE DATE NOT NULL COMMENT 'Date when the event occurred (YYYY-MM-DD)',
     EVENT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL COMMENT 'UTC timestamp of the event for precise ordering',
@@ -107,34 +107,34 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
     NOTES VARCHAR(1000) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Free-text notes about the event for compliance or customer service',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL DEFAULT CURRENT_TIMESTAMP() COMMENT 'System timestamp when record was inserted',
 
-    CONSTRAINT PK_{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT PRIMARY KEY (EVENT_ID)
+    CONSTRAINT PK_CRMI_RAW_TB_CUSTOMER_EVENT PRIMARY KEY (EVENT_ID)
 )
 CHANGE_TRACKING = TRUE
-COMMENT = 'Customer lifecycle event log tracking all significant customer status changes, account modifications, and behavioral milestones. Used for lifecycle analytics, churn prediction, and AML correlation. PREVIOUS_VALUE and NEW_VALUE provide quick summaries;
+COMMENT = 'Customer lifecycle event log tracking all significant customer status changes, account modifications, and behavioral milestones. Used for lifecycle analytics, churn prediction, and AML correlation. PREVIOUS_VALUE and NEW_VALUE provide quick summaries; full details in EVENT_DETAILS JSON. FK constraint removed due to SCD Type 2 composite PK in CRMI_RAW_TB_CUSTOMER.';
 
-DEFINE TABLE CRMI_RAW_TB_CUSTOMER_STATUS (
+DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS (
     STATUS_ID VARCHAR(50) NOT NULL COMMENT 'Unique status record identifier (STAT_XXXXX format)',
-    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
+    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
     STATUS VARCHAR(30) NOT NULL COMMENT 'Customer status (ACTIVE/INACTIVE/DORMANT/SUSPENDED/CLOSED/REACTIVATED)',
     STATUS_REASON VARCHAR(100) COMMENT 'Reason for status change (e.g., VOLUNTARY_CLOSURE, INACTIVITY, REGULATORY_SUSPENSION)',
     STATUS_START_DATE DATE NOT NULL COMMENT 'Date when this status became effective',
     STATUS_END_DATE DATE COMMENT 'Date when this status ended (NULL if current)',
     IS_CURRENT BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Flag indicating if this is the current status',
-    LINKED_EVENT_ID VARCHAR(50) COMMENT 'Reference to triggering event in {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT',
+    LINKED_EVENT_ID VARCHAR(50) COMMENT 'Reference to triggering event in {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL DEFAULT CURRENT_TIMESTAMP() COMMENT 'System timestamp when record was inserted',
 
-    CONSTRAINT PK_{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS PRIMARY KEY (STATUS_ID),
-    CONSTRAINT FK_{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS__{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT FOREIGN KEY (LINKED_EVENT_ID) REFERENCES {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (EVENT_ID)
+    CONSTRAINT PK_CRMI_RAW_TB_CUSTOMER_STATUS PRIMARY KEY (STATUS_ID),
+    CONSTRAINT FK_CRMI_RAW_TB_CUSTOMER_STATUS__CRMI_RAW_TB_CUSTOMER_EVENT FOREIGN KEY (LINKED_EVENT_ID) REFERENCES {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (EVENT_ID)
 )
 CHANGE_TRACKING = TRUE
-COMMENT = 'Customer status history with SCD Type 2 tracking. Maintains current and historical customer status for lifecycle analysis, churn prediction, and regulatory reporting. Linked to {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT for complete audit trail. FK to {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER removed due to SCD Type 2 composite PK.';
+COMMENT = 'Customer status history with SCD Type 2 tracking. Maintains current and historical customer status for lifecycle analysis, churn prediction, and regulatory reporting. Linked to {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT for complete audit trail. FK to {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER removed due to SCD Type 2 composite PK.';
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMERS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_FILES')
 AS
-    COPY INTO {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
+    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
         CUSTOMER_ID, 
         FIRST_NAME, 
         FAMILY_NAME, 
@@ -177,7 +177,7 @@ AS
                 TRY_CAST($18 AS TIMESTAMP_NTZ), 
                 CURRENT_TIMESTAMP()              
             ) AS INSERT_TIMESTAMP_UTC
-        FROM @{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS
+        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS
     )
     PATTERN = '.*customers.*\.csv'
     FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_CSV
@@ -188,7 +188,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_ADDRESSES
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_ADDRESS_FILES')
 AS
-    COPY INTO {{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
+    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
         CUSTOMER_ID, 
         STREET_ADDRESS, 
         CITY, 
@@ -206,7 +206,7 @@ AS
             $5::VARCHAR(20) AS ZIPCODE,
             $6::VARCHAR(50) AS COUNTRY,
             $7::TIMESTAMP_NTZ AS INSERT_TIMESTAMP_UTC
-        FROM @{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES
+        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES
     )
     PATTERN = '.*customer_addresses.*\.csv'
     FILE_FORMAT = CRMI_RAW_FF_ADDRESS_CSV
@@ -217,7 +217,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_EXPOSED_PERSON
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_EXPOSED_PERSON_FILES')
 AS
-    COPY INTO {{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
+    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
         EXPOSED_PERSON_ID, 
         FULL_NAME, 
         FIRST_NAME, 
@@ -237,7 +237,7 @@ AS
         LAST_UPDATED, 
         CREATED_DATE
     )
-    FROM @{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON
+    FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON
     PATTERN = '.*pep.*\.csv'
     FILE_FORMAT = CRMI_RAW_FF_EXPOSED_PERSON_CSV
     ON_ERROR = CONTINUE;
@@ -247,7 +247,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_EVENT_FILES')
 AS
-    COPY INTO {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
+    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
         EVENT_ID,
         CUSTOMER_ID,
         EVENT_TYPE,
@@ -279,7 +279,7 @@ AS
             $12::VARCHAR(20),
             NULLIF($13, '')::DATE, 
             $14::VARCHAR(1000)
-        FROM @{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
+        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
     )
     FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_EVENT_CSV
     PATTERN = '.*customer_events.*\.csv'
@@ -290,7 +290,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_STATUS
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_STATUS_FILES')
 AS
-    COPY INTO {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS (
+    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS (
         STATUS_ID,
         CUSTOMER_ID,
         STATUS,
@@ -310,7 +310,7 @@ AS
             $6::DATE,
             $7::BOOLEAN,
             $8::VARCHAR(50)
-        FROM @{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
+        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
     )
     FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_STATUS_CSV
     PATTERN = '.*customer_status.*\.csv'
@@ -321,18 +321,18 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_CUSTOMERS
     COMMENT = 'Automated stage cleanup AFTER customer data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMERS
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS', 5);
+    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS', 5);
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_ADDRESSES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER address data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_ADDRESSES
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES', 5);
+    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES', 5);
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_EXPOSED_PERSON
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER PEP data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_EXPOSED_PERSON
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON', 5);
+    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON', 5);

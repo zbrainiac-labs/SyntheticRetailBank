@@ -88,7 +88,7 @@ cash_performance AS (
 
         COUNT(*) as cash_transaction_count,
         COUNT(DISTINCT DATE(t.BOOKING_DATE)) as cash_trading_days
-    FROM {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
+    FROM {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
     WHERE t.BOOKING_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
 ),
@@ -109,7 +109,7 @@ equity_performance AS (
         SUM(CASE WHEN t.SIDE = '1' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE 0 END) as realized_pl_chf,
 
         COUNT(DISTINCT DATE(t.TRADE_DATE)) as equity_trading_days
-    FROM {{ eqt_raw }}.EQTI_RAW_TB_TRADES t
+    FROM {{ db }}.{{ eqt_raw }}.EQTI_RAW_TB_TRADES t
     WHERE t.TRADE_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
 ),
@@ -124,7 +124,7 @@ fixed_income_performance AS (
         SUM(t.COMMISSION) as fi_total_commission_chf,
         SUM(CASE WHEN t.SIDE = '2' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE -ABS(t.BASE_GROSS_AMOUNT) END) as fi_net_pl_chf,
         COUNT(DISTINCT DATE(t.TRADE_DATE)) as fi_trading_days
-    FROM {{ fii_raw }}.FIII_RAW_TB_TRADES t
+    FROM {{ db }}.{{ fii_raw }}.FIII_RAW_TB_TRADES t
     WHERE t.TRADE_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
 ),
@@ -139,7 +139,7 @@ commodity_performance AS (
         SUM(t.COMMISSION) as cmd_total_commission_chf,
         SUM(CASE WHEN t.SIDE = '2' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE -ABS(t.BASE_GROSS_AMOUNT) END) as cmd_net_pl_chf,
         COUNT(DISTINCT DATE(t.TRADE_DATE)) as cmd_trading_days
-    FROM {{ cmd_raw }}.CMDI_RAW_TB_TRADES t
+    FROM {{ db }}.{{ cmd_raw }}.CMDI_RAW_TB_TRADES t
     WHERE t.TRADE_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
 ),
@@ -150,11 +150,11 @@ current_balances AS (
         b.CURRENT_BALANCE_BASE as current_cash_balance,
         b.CURRENT_BALANCE_BASE - COALESCE((
             SELECT SUM(t.AMOUNT)
-            FROM {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
+            FROM {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
             WHERE t.ACCOUNT_ID = b.ACCOUNT_ID
               AND t.BOOKING_DATE >= CURRENT_DATE - INTERVAL '450 days'
         ), 0) as starting_cash_balance
-    FROM {{ pay_agg }}.PAYA_AGG_DT_ACCOUNT_BALANCES b
+    FROM {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_ACCOUNT_BALANCES b
 ),
 
 current_equity_positions AS (
@@ -163,7 +163,7 @@ current_equity_positions AS (
         COUNT(*) as open_positions,
         SUM(p.NET_INVESTMENT_CHF) as equity_value_at_cost,
         SUM(p.REALIZED_PL_CHF) as total_realized_pl
-    FROM {{ eqt_agg }}.EQTA_AGG_DT_PORTFOLIO_POSITIONS p
+    FROM {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_PORTFOLIO_POSITIONS p
     WHERE p.POSITION_STATUS != 'CLOSED'
     GROUP BY p.ACCOUNT_ID
 ),
@@ -174,7 +174,7 @@ current_fi_positions AS (
         COUNT(*) as fi_open_positions,
         SUM(p.NET_INVESTMENT_CHF) as fi_value_at_cost,
         SUM(p.REALIZED_PL_CHF) as fi_total_realized_pl
-    FROM {{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
+    FROM {{ db }}.{{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
     WHERE p.POSITION_STATUS != 'CLOSED'
     GROUP BY p.ACCOUNT_ID
 ),
@@ -185,7 +185,7 @@ current_cmd_positions AS (
         COUNT(*) as cmd_open_positions,
         SUM(p.NET_INVESTMENT_CHF) as cmd_value_at_cost,
         SUM(p.REALIZED_PL_CHF) as cmd_total_realized_pl
-    FROM {{ cmd_agg }}.CMDA_AGG_DT_PORTFOLIO_POSITIONS p
+    FROM {{ db }}.{{ cmd_agg }}.CMDA_AGG_DT_PORTFOLIO_POSITIONS p
     WHERE p.POSITION_STATUS != 'CLOSED'
     GROUP BY p.ACCOUNT_ID
 )
@@ -551,7 +551,7 @@ LEFT JOIN current_balances cb ON COALESCE(cp.ACCOUNT_ID, ep.ACCOUNT_ID, fip.ACCO
 LEFT JOIN current_equity_positions ceqp ON COALESCE(cp.ACCOUNT_ID, ep.ACCOUNT_ID, fip.ACCOUNT_ID, cmdp.ACCOUNT_ID) = ceqp.ACCOUNT_ID
 LEFT JOIN current_fi_positions cfip ON COALESCE(cp.ACCOUNT_ID, ep.ACCOUNT_ID, fip.ACCOUNT_ID, cmdp.ACCOUNT_ID) = cfip.ACCOUNT_ID
 LEFT JOIN current_cmd_positions ccmdp ON COALESCE(cp.ACCOUNT_ID, ep.ACCOUNT_ID, fip.ACCOUNT_ID, cmdp.ACCOUNT_ID) = ccmdp.ACCOUNT_ID
-LEFT JOIN {{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS acc 
+LEFT JOIN {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS acc 
     ON COALESCE(cp.ACCOUNT_ID, ep.ACCOUNT_ID, fip.ACCOUNT_ID, cmdp.ACCOUNT_ID) = acc.ACCOUNT_ID
 WHERE COALESCE(cb.starting_cash_balance, 0) > 0 
    OR COALESCE(ep.total_invested_chf, 0) > 0

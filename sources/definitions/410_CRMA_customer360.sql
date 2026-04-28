@@ -31,7 +31,7 @@ FROM (
         COUNTRY,
         INSERT_TIMESTAMP_UTC,
         ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) as rn
-    FROM {{ crm_raw }}.CRMI_RAW_TB_ADDRESSES
+    FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES
 ) ranked
 WHERE rn = 1;
 
@@ -70,7 +70,7 @@ SELECT
         ELSE FALSE 
     END AS IS_CURRENT,
     INSERT_TIMESTAMP_UTC
-FROM {{ crm_raw }}.CRMI_RAW_TB_ADDRESSES
+FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES
 ORDER BY CUSTOMER_ID, INSERT_TIMESTAMP_UTC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT(
@@ -141,7 +141,7 @@ FROM (
         CREDIT_SCORE_BAND,
         INSERT_TIMESTAMP_UTC,
         ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) as rn
-    FROM {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER
+    FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER
 ) ranked
 WHERE rn = 1;
 
@@ -204,7 +204,7 @@ SELECT
         ELSE FALSE 
     END AS IS_CURRENT,
     INSERT_TIMESTAMP_UTC
-FROM {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER
+FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER
 ORDER BY CUSTOMER_ID, INSERT_TIMESTAMP_UTC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE(
@@ -274,8 +274,8 @@ SELECT
         )
     END AS ENGAGEMENT_SCORE,
     CURRENT_TIMESTAMP() AS LAST_UPDATED
-FROM {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
-LEFT JOIN {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT evt
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
+LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT evt
     ON c.CUSTOMER_ID = evt.CUSTOMER_ID
 GROUP BY 
     c.CUSTOMER_ID, c.FIRST_NAME, c.FAMILY_NAME, c.FULL_NAME, c.ONBOARDING_DATE
@@ -397,7 +397,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360(
 ) 
 TARGET_LAG = '{{ lag }}' 
 WAREHOUSE = {{ wh }}
-COMMENT = 'Comprehensive 360-degree customer view with master data, current address, current status, account summary with balances (Phase 1), transaction activity metrics via direct cross-schema join (Phase 2 - Option A), Exposed Person fuzzy matching, and Global Sanctions Data fuzzy matching with accuracy scoring from enhanced screening view (302_CRMA_sanctions_screening.sql). Phase 3 adds vulnerability attributes for UK Consumer Duty compliance. Phase 4 integrates key lifecycle metrics (LIFECYCLE_STAGE, ENGAGEMENT_SCORE, CHURN_PROBABILITY, TOTAL_LIFECYCLE_EVENTS) from {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE for unified customer analytics. Enables AUM tracking, advisor performance measurement, engagement scoring, churn prediction, comprehensive compliance screening, and vulnerable customer identification for holistic customer risk assessment and relationship management.'
+COMMENT = 'Comprehensive 360-degree customer view with master data, current address, current status, account summary with balances (Phase 1), transaction activity metrics via direct cross-schema join (Phase 2 - Option A), Exposed Person fuzzy matching, and Global Sanctions Data fuzzy matching with accuracy scoring from enhanced screening view (302_CRMA_sanctions_screening.sql). Phase 3 adds vulnerability attributes for UK Consumer Duty compliance. Phase 4 integrates key lifecycle metrics (LIFECYCLE_STAGE, ENGAGEMENT_SCORE, CHURN_PROBABILITY, TOTAL_LIFECYCLE_EVENTS) from {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE for unified customer analytics. Enables AUM tracking, advisor performance measurement, engagement scoring, churn prediction, comprehensive compliance screening, and vulnerable customer identification for holistic customer risk assessment and relationship management.'
 AS
 SELECT 
     c.CUSTOMER_ID,
@@ -692,9 +692,9 @@ SELECT
 
     CURRENT_TIMESTAMP() AS LAST_UPDATED
 
-FROM {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
 
-LEFT JOIN {{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT addr
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT addr
     ON c.CUSTOMER_ID = addr.CUSTOMER_ID
 
 LEFT JOIN (
@@ -703,30 +703,30 @@ LEFT JOIN (
         STATUS,
         STATUS_START_DATE,
         ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY STATUS_START_DATE DESC) AS rn
-    FROM {{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS
+    FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS
     WHERE IS_CURRENT = TRUE
 ) status
     ON c.CUSTOMER_ID = status.CUSTOMER_ID
     AND status.rn = 1
 
-LEFT JOIN {{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS acc
+LEFT JOIN {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS acc
     ON c.CUSTOMER_ID = acc.CUSTOMER_ID
 
-LEFT JOIN {{ pay_agg }}.PAYA_AGG_DT_ACCOUNT_BALANCES bal
+LEFT JOIN {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_ACCOUNT_BALANCES bal
     ON c.CUSTOMER_ID = bal.CUSTOMER_ID
 
-LEFT JOIN {{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS txn
+LEFT JOIN {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS txn
     ON acc.ACCOUNT_ID = txn.ACCOUNT_ID
 
-LEFT JOIN {{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT adv_assign
+LEFT JOIN {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT adv_assign
     ON c.CUSTOMER_ID = adv_assign.CUSTOMER_ID
     AND adv_assign.IS_CURRENT = TRUE
 
-LEFT JOIN {{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_exact
+LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_exact
     ON UPPER(CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME)) = UPPER(pep_exact.FULL_NAME)
     AND pep_exact.STATUS = 'ACTIVE'
 
-LEFT JOIN {{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_fuzzy
+LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_fuzzy
     ON pep_fuzzy.EXPOSED_PERSON_ID != COALESCE(pep_exact.EXPOSED_PERSON_ID, 'NO_EXACT_MATCH') 
     AND pep_fuzzy.STATUS = 'ACTIVE'
     AND (
@@ -742,10 +742,10 @@ LEFT JOIN {{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_fuzzy
         EDITDISTANCE(UPPER(CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) <= 3
     )
 
-LEFT JOIN {{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_CUSTOMER_SCREENING sanctions
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_CUSTOMER_SCREENING sanctions
     ON c.CUSTOMER_ID = sanctions.CUSTOMER_ID
 
-LEFT JOIN {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE lifecycle
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE lifecycle
     ON c.CUSTOMER_ID = lifecycle.CUSTOMER_ID
 
 GROUP BY 
@@ -882,7 +882,7 @@ SELECT
         ELSE 0 
     END) as TOTAL_HIGH_RISK_AUM
 
-FROM {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360;
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360;
 
 DEFINE VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS
 COMMENT = 'Combined PEP and sanctions screening status for all customers. Provides detailed match information, risk tiers, SLA tracking, and investigation requirements. Single source of truth for compliance screening across all notebooks. Used by 4 notebooks.'
@@ -1024,13 +1024,13 @@ SELECT
     LAST_UPDATED as SCREENING_LAST_UPDATED,
     CURRENT_TIMESTAMP() as AS_OF_TIMESTAMP
 
-FROM {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360;
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360;
 
 DEFINE VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_ALERTS
 COMMENT = 'Filtered view showing only customers with PEP or sanctions hits requiring investigation. Pre-prioritized by action urgency and SLA breach status. Used for alert dashboards and case management.'
 AS
 SELECT * 
-FROM {{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS
 WHERE REQUIRES_INVESTIGATION = TRUE
 ORDER BY 
     CASE REQUIRED_ACTION

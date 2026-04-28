@@ -16,7 +16,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_FRTB_RISK_POSITIONS(
 FRTB (Fundamental Review of the Trading Book): Provides the granular position data required as the input for calculating regulatory capital under the Standardized Approach (SA). It consolidates risk for reporting and limit monitoring.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-SELECT 
+SELECT
     'EQUITY' AS RISK_CLASS,
     'EQUITY_LARGE_CAP' AS RISK_BUCKET,
     p.CUSTOMER_ID,
@@ -25,19 +25,19 @@ SELECT
     p.SYMBOL AS INSTRUMENT_NAME,
     'CHF' AS CURRENCY,
     p.NET_INVESTMENT_CHF AS POSITION_VALUE_CHF,
-    p.NET_INVESTMENT_CHF AS DELTA_CHF, 
+    p.NET_INVESTMENT_CHF AS DELTA_CHF,  -- Simplified: equity delta = position value
     NULL AS VEGA_CHF,
-    8.0 AS LIQUIDITY_SCORE, 
+    8.0 AS LIQUIDITY_SCORE,  -- Equities generally liquid
     FALSE AS IS_NMRF,
     CURRENT_TIMESTAMP() AS LAST_UPDATED
-FROM {{ eqt_agg }}.EQTA_AGG_DT_PORTFOLIO_POSITIONS p
+FROM {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_PORTFOLIO_POSITIONS p
 WHERE p.POSITION_STATUS != 'CLOSED'
 
 UNION ALL
 
-SELECT 
+SELECT
     'INTEREST_RATE' AS RISK_CLASS,
-    CASE 
+    CASE
         WHEN p.ISSUER_TYPE = 'SOVEREIGN' THEN 'IR_SOVEREIGN'
         WHEN p.ISSUER_TYPE = 'CORPORATE' THEN 'IR_CORPORATE'
         ELSE 'IR_OTHER'
@@ -48,26 +48,26 @@ SELECT
     p.ISSUER AS INSTRUMENT_NAME,
     p.CURRENCY,
     p.TOTAL_INVESTMENT_CHF AS POSITION_VALUE_CHF,
-    p.TOTAL_DV01_CHF AS DELTA_CHF, 
+    p.TOTAL_DV01_CHF AS DELTA_CHF,  -- DV01 as delta for interest rate risk
     NULL AS VEGA_CHF,
-    CASE 
+    CASE
         WHEN p.ISSUER_TYPE = 'SOVEREIGN' THEN 9.0
         WHEN p.CREDIT_RATING IN ('AAA', 'AA') THEN 7.0
         ELSE 5.0
     END AS LIQUIDITY_SCORE,
-    CASE 
+    CASE
         WHEN p.ISSUER_TYPE = 'CORPORATE' AND p.CREDIT_RATING NOT IN ('AAA', 'AA', 'A') THEN TRUE
         ELSE FALSE
     END AS IS_NMRF,
     CURRENT_TIMESTAMP() AS LAST_UPDATED
-FROM {{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
+FROM {{ db }}.{{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
 WHERE p.POSITION_STATUS != 'CLOSED'
 
 UNION ALL
 
-SELECT 
+SELECT
     'CREDIT_SPREAD' AS RISK_CLASS,
-    CASE 
+    CASE
         WHEN p.CREDIT_RATING IN ('AAA', 'AA') THEN 'CS_IG_HIGH'
         WHEN p.CREDIT_RATING IN ('A', 'BBB') THEN 'CS_IG_LOW'
         ELSE 'CS_HY'
@@ -78,27 +78,27 @@ SELECT
     p.ISSUER AS INSTRUMENT_NAME,
     p.CURRENCY,
     p.TOTAL_INVESTMENT_CHF AS POSITION_VALUE_CHF,
-    p.TOTAL_INVESTMENT_CHF * 0.01 AS DELTA_CHF, 
+    p.TOTAL_INVESTMENT_CHF * 0.01 AS DELTA_CHF,  -- Simplified: 1% credit spread sensitivity
     NULL AS VEGA_CHF,
-    CASE 
+    CASE
         WHEN p.CREDIT_RATING IN ('AAA', 'AA', 'A') THEN 7.0
         ELSE 4.0
     END AS LIQUIDITY_SCORE,
-    CASE 
+    CASE
         WHEN p.CREDIT_RATING NOT IN ('AAA', 'AA', 'A', 'BBB') THEN TRUE
         ELSE FALSE
     END AS IS_NMRF,
     CURRENT_TIMESTAMP() AS LAST_UPDATED
-FROM {{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
+FROM {{ db }}.{{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
 WHERE p.POSITION_STATUS != 'CLOSED'
   AND p.INSTRUMENT_TYPE = 'BOND'
   AND p.ISSUER_TYPE = 'CORPORATE'
 
 UNION ALL
 
-SELECT 
+SELECT
     'COMMODITY' AS RISK_CLASS,
-    CASE 
+    CASE
         WHEN p.COMMODITY_TYPE = 'ENERGY' THEN 'COMM_ENERGY'
         WHEN p.COMMODITY_TYPE = 'PRECIOUS_METAL' THEN 'COMM_PRECIOUS'
         WHEN p.COMMODITY_TYPE = 'BASE_METAL' THEN 'COMM_BASE'
@@ -113,17 +113,17 @@ SELECT
     p.TOTAL_INVESTMENT_CHF AS POSITION_VALUE_CHF,
     p.TOTAL_DELTA_CHF AS DELTA_CHF,
     NULL AS VEGA_CHF,
-    CASE 
+    CASE
         WHEN p.COMMODITY_TYPE IN ('ENERGY', 'PRECIOUS_METAL') THEN 7.0
         WHEN p.COMMODITY_TYPE = 'BASE_METAL' THEN 6.0
         ELSE 4.0
     END AS LIQUIDITY_SCORE,
-    CASE 
+    CASE
         WHEN p.COMMODITY_TYPE = 'AGRICULTURAL' THEN TRUE
         ELSE FALSE
     END AS IS_NMRF,
     CURRENT_TIMESTAMP() AS LAST_UPDATED
-FROM {{ cmd_agg }}.CMDA_AGG_DT_PORTFOLIO_POSITIONS p
+FROM {{ db }}.{{ cmd_agg }}.CMDA_AGG_DT_PORTFOLIO_POSITIONS p
 WHERE p.POSITION_STATUS != 'CLOSED'
 
 ORDER BY RISK_CLASS, RISK_BUCKET, POSITION_VALUE_CHF DESC;
@@ -145,7 +145,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_FRTB_SENSITIVITIES(
 Market Risk Management: Essential for internal risk control, quantifying the exposure of the trading book to interest rate changes (Δ for bonds), volatility (ν for options/swaps), and non-linear risk (Curvature).'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-SELECT 
+SELECT
     RISK_CLASS,
     RISK_BUCKET,
     COUNT(*) AS TOTAL_POSITIONS,
@@ -158,7 +158,7 @@ SELECT
     MAX(ABS(POSITION_VALUE_CHF)) AS LARGEST_POSITION_CHF,
     COUNT(CASE WHEN IS_NMRF THEN 1 END) AS NMRF_POSITIONS,
     CURRENT_TIMESTAMP() AS LAST_UPDATED
-FROM {{ rep_agg }}.REPP_AGG_DT_FRTB_RISK_POSITIONS
+FROM REPP_AGG_DT_FRTB_RISK_POSITIONS
 GROUP BY RISK_CLASS, RISK_BUCKET
 ORDER BY RISK_CLASS, RISK_BUCKET;
 
@@ -178,7 +178,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_FRTB_CAPITAL_CHARGES(
 Basel III/IV Regulatory Compliance: The core output for regulatory reporting. It determines the Total Capital Charge (SA-based RWA), including Delta, Vega, Curvature, and the NMRF Add-On, which must be covered by the banks capital.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-SELECT 
+SELECT
     s.RISK_CLASS,
     s.RISK_BUCKET,
     s.GROSS_DELTA_CHF,
@@ -187,43 +187,43 @@ SELECT
     CASE s.RISK_CLASS
         WHEN 'EQUITY' THEN 25.0
         WHEN 'FX' THEN 15.0
-        WHEN 'INTEREST_RATE' THEN 
-            CASE 
+        WHEN 'INTEREST_RATE' THEN
+            CASE
                 WHEN s.RISK_BUCKET = 'IR_SOVEREIGN' THEN 1.5
                 ELSE 3.0
             END
         WHEN 'COMMODITY' THEN
-            CASE 
+            CASE
                 WHEN s.RISK_BUCKET = 'COMM_ENERGY' THEN 30.0
                 WHEN s.RISK_BUCKET = 'COMM_PRECIOUS' THEN 20.0
                 WHEN s.RISK_BUCKET = 'COMM_BASE' THEN 25.0
-                ELSE 35.0 
+                ELSE 35.0  -- Agricultural
             END
         WHEN 'CREDIT_SPREAD' THEN
-            CASE 
+            CASE
                 WHEN s.RISK_BUCKET = 'CS_IG_HIGH' THEN 2.0
                 WHEN s.RISK_BUCKET = 'CS_IG_LOW' THEN 3.5
-                ELSE 6.0 
+                ELSE 6.0  -- High yield
             END
         ELSE 10.0
     END AS RISK_WEIGHT,
 
     ROUND(
-        s.GROSS_DELTA_CHF * 
+        s.GROSS_DELTA_CHF *
         CASE s.RISK_CLASS
             WHEN 'EQUITY' THEN 0.25
             WHEN 'FX' THEN 0.15
-            WHEN 'INTEREST_RATE' THEN 
+            WHEN 'INTEREST_RATE' THEN
                 CASE WHEN s.RISK_BUCKET = 'IR_SOVEREIGN' THEN 0.015 ELSE 0.03 END
             WHEN 'COMMODITY' THEN
-                CASE 
+                CASE
                     WHEN s.RISK_BUCKET = 'COMM_ENERGY' THEN 0.30
                     WHEN s.RISK_BUCKET = 'COMM_PRECIOUS' THEN 0.20
                     WHEN s.RISK_BUCKET = 'COMM_BASE' THEN 0.25
                     ELSE 0.35
                 END
             WHEN 'CREDIT_SPREAD' THEN
-                CASE 
+                CASE
                     WHEN s.RISK_BUCKET = 'CS_IG_HIGH' THEN 0.02
                     WHEN s.RISK_BUCKET = 'CS_IG_LOW' THEN 0.035
                     ELSE 0.06
@@ -241,21 +241,21 @@ SELECT
     ) AS NMRF_ADD_ON_CHF,
 
     ROUND(
-        (s.GROSS_DELTA_CHF * 
+        (s.GROSS_DELTA_CHF *
          CASE s.RISK_CLASS
              WHEN 'EQUITY' THEN 0.25
              WHEN 'FX' THEN 0.15
-             WHEN 'INTEREST_RATE' THEN 
+             WHEN 'INTEREST_RATE' THEN
                  CASE WHEN s.RISK_BUCKET = 'IR_SOVEREIGN' THEN 0.015 ELSE 0.03 END
              WHEN 'COMMODITY' THEN
-                 CASE 
+                 CASE
                      WHEN s.RISK_BUCKET = 'COMM_ENERGY' THEN 0.30
                      WHEN s.RISK_BUCKET = 'COMM_PRECIOUS' THEN 0.20
                      WHEN s.RISK_BUCKET = 'COMM_BASE' THEN 0.25
                      ELSE 0.35
                  END
              WHEN 'CREDIT_SPREAD' THEN
-                 CASE 
+                 CASE
                      WHEN s.RISK_BUCKET = 'CS_IG_HIGH' THEN 0.02
                      WHEN s.RISK_BUCKET = 'CS_IG_LOW' THEN 0.035
                      ELSE 0.06
@@ -269,7 +269,7 @@ SELECT
 
     CURRENT_TIMESTAMP() AS LAST_UPDATED
 
-FROM {{ rep_agg }}.REPP_AGG_DT_FRTB_SENSITIVITIES s
+FROM REPP_AGG_DT_FRTB_SENSITIVITIES s
 ORDER BY TOTAL_CAPITAL_CHARGE_CHF DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_FRTB_NMRF_ANALYSIS(
@@ -287,7 +287,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_FRTB_NMRF_ANALYSIS(
 Market Risk / Regulatory Compliance: Directly addresses the FRTB requirement for liquidity-based capital charges. It isolates and calculates the capital add-on based on the position value and liquidity score, ensuring sufficient capital for difficult-to-hedge risks.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-SELECT 
+SELECT
     RISK_CLASS,
     RISK_BUCKET,
     INSTRUMENT_NAME,
@@ -296,7 +296,7 @@ SELECT
     DELTA_CHF,
     LIQUIDITY_SCORE,
 
-    CASE 
+    CASE
         WHEN LIQUIDITY_SCORE < 3 THEN 'HIGHLY_ILLIQUID'
         WHEN LIQUIDITY_SCORE < 5 THEN 'ILLIQUID'
         WHEN RISK_CLASS = 'CREDIT_SPREAD' AND RISK_BUCKET = 'CS_HY' THEN 'HIGH_YIELD_CREDIT'
@@ -308,6 +308,6 @@ SELECT
 
     CURRENT_TIMESTAMP() AS LAST_UPDATED
 
-FROM {{ rep_agg }}.REPP_AGG_DT_FRTB_RISK_POSITIONS
+FROM REPP_AGG_DT_FRTB_RISK_POSITIONS
 WHERE IS_NMRF = TRUE
 ORDER BY CAPITAL_ADD_ON_CHF DESC;
