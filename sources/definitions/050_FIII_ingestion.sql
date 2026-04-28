@@ -20,16 +20,16 @@ DEFINE TABLE {{ db }}.{{ fii_raw }}.FIII_RAW_TB_TRADES (
     CURRENCY VARCHAR(3) COMMENT 'Trade currency (CHF, EUR, USD, GBP)',
     SIDE VARCHAR(1) COMMENT '1=Buy/Pay, 2=Sell/Receive (FIX standard)',
 
-    NOTIONAL FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Notional amount (face value)',
+    NOTIONAL FLOAT COMMENT 'Notional amount (face value)',
     PRICE FLOAT COMMENT 'Clean price (as % of par for bonds, rate for swaps)',
-    ACCRUED_INTEREST FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Accrued interest amount (bonds only)',
-    GROSS_AMOUNT FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Signed gross amount: price * notional + accrued',
-    COMMISSION FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Trading commission',
-    NET_AMOUNT FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Signed net amount: gross_amount +/- commission',
+    ACCRUED_INTEREST FLOAT COMMENT 'Accrued interest amount (bonds only)',
+    GROSS_AMOUNT FLOAT COMMENT 'Signed gross amount: price * notional + accrued',
+    COMMISSION FLOAT COMMENT 'Trading commission',
+    NET_AMOUNT FLOAT COMMENT 'Signed net amount: gross_amount +/- commission',
 
     BASE_CURRENCY VARCHAR(3) COMMENT 'Base reporting currency (CHF)',
-    BASE_GROSS_AMOUNT FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Gross amount in CHF',
-    BASE_NET_AMOUNT FLOAT WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Net amount in CHF',
+    BASE_GROSS_AMOUNT FLOAT COMMENT 'Gross amount in CHF',
+    BASE_NET_AMOUNT FLOAT COMMENT 'Net amount in CHF',
     FX_RATE FLOAT COMMENT 'Exchange rate used for conversion to CHF',
 
     FIXED_RATE FLOAT COMMENT 'Fixed rate for IRS (annual %)',

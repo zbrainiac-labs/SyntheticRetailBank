@@ -16,27 +16,9 @@ DEFINE STAGE {{ db }}.{{ loa_raw }}.LOAI_RAW_ST_PDF_INBOUND
 
 DEFINE TABLE {{ db }}.{{ loa_raw }}.LOAI_RAW_TB_EMAIL_INBOUND_LOAN_SCHEMA_CONFIG (
     schema_json VARIANT COMMENT 'AI_EXTRACT schema definition: {"field_name": "type: description"}'
-) 
+)
 CHANGE_TRACKING = TRUE
-COMMENT = 'Configuration table storing the AI_EXTRACT schema for mortgage email processing. Defines 15 fields to extract using Snowflake Cortex AI.'
-AS
-SELECT PARSE_JSON('{
-    "document_type": "string: classify this email as one of: MORTGAGE_APPLICATION, CUSTOMER_INQUIRY, INTERNAL_REVIEW, LOAN_OFFICER_NOTES, PRE_APPROVAL, OFFER_LETTER, GENERAL_CORRESPONDENCE. Required field.",
-    "customer_name": "string: full name of the mortgage applicant or borrower. Return null if not mentioned.",
-    "property_address": "string: complete property address including street, city, postal code. Return null if not mentioned.",
-    "property_type": "string: type of property such as Single Family Home, Multi-family, Apartment, Condo, Townhouse, Detached House. Return null if not mentioned.",
-    "purchase_price": "number: property purchase price or current market valuation in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
-    "down_payment": "number: down payment amount or deposit being paid by the borrower in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
-    "loan_amount": "number: requested mortgage loan amount in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
-    "loan_term_years": "number: loan term duration in years (e.g., 15, 20, 25, 30). Return null if not mentioned.",
-    "rate_type": "string: interest rate type, either Fixed or Variable (also known as Adjustable or Tracker). Return null if not mentioned.",
-    "monthly_income": "number: applicant total monthly gross income before taxes in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
-    "employment": "string: job title, occupation, or employment type (e.g., Software Engineer, Self-Employed, Government Employee, Teacher). Return null if not mentioned.",
-    "employment_tenure_years": "number: number of years the applicant has been in their current employment or job. Return null if not mentioned.",
-    "credit_score": "number: applicant credit score or credit rating (typically 300-850 range). Return null if not mentioned.",
-    "existing_debts_monthly": "number: total monthly debt obligations including credit cards, car loans, other mortgages, in the local currency. Return only the numeric value without currency symbols. Return 0 if explicitly stated as none, return null if not mentioned.",
-    "country": "string: country where the property is located (e.g., Switzerland, UK, Germany, Portugal, France). Return null if not mentioned."
-}');
+COMMENT = 'Configuration table storing the AI_EXTRACT schema for mortgage email processing. Defines 15 fields to extract using Snowflake Cortex AI. Seed data loaded via post_deploy.sql.';
 
 DEFINE TABLE {{ db }}.{{ loa_raw }}.LOAI_REF_TB_PRODUCT_CATALOGUE (
     PRODUCT_ID VARCHAR(50) PRIMARY KEY,

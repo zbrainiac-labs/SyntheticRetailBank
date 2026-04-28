@@ -10,13 +10,13 @@ DEFINE TABLE {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS (
     VALUE_DATE DATE NOT NULL COMMENT 'Date when funds are settled/available (YYYY-MM-DD)',
     TRANSACTION_ID VARCHAR(50) NOT NULL COMMENT 'Unique transaction identifier',
     ACCOUNT_ID VARCHAR(30) NOT NULL COMMENT 'Reference to account ID in {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS',
-    AMOUNT DECIMAL(15,2) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Signed transaction amount in original currency (positive = incoming, negative = outgoing)',
+    AMOUNT DECIMAL(15,2) NOT NULL COMMENT 'Signed transaction amount in original currency (positive = incoming, negative = outgoing)',
     CURRENCY VARCHAR(3) NOT NULL COMMENT 'Transaction currency (USD, EUR, GBP, JPY, CAD, CHF)',
-    BASE_AMOUNT DECIMAL(15,2) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Signed transaction amount converted to base currency USD (positive = incoming, negative = outgoing)',
+    BASE_AMOUNT DECIMAL(15,2) NOT NULL COMMENT 'Signed transaction amount converted to base currency USD (positive = incoming, negative = outgoing)',
     BASE_CURRENCY VARCHAR(3) NOT NULL COMMENT 'Currency of Account - ISO 4217 currency code',
     FX_RATE DECIMAL(15,6) NOT NULL COMMENT 'Exchange rate used for conversion (from transaction currency to base currency)',
-    COUNTERPARTY_ACCOUNT VARCHAR(100) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Counterparty account identifier',
-    DESCRIPTION VARCHAR(500) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Transaction description (may contain anomaly indicators in [brackets])',
+    COUNTERPARTY_ACCOUNT VARCHAR(100) NOT NULL COMMENT 'Counterparty account identifier',
+    DESCRIPTION VARCHAR(500) NOT NULL COMMENT 'Transaction description (may contain anomaly indicators in [brackets])',
 
     CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
 

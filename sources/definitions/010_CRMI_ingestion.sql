@@ -27,23 +27,23 @@ DEFINE STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
     COMMENT = 'Internal stage for customer lifecycle event and status CSV files. Expected patterns: *customer_events*.csv, *customer_status*.csv';
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
-    CUSTOMER_ID VARCHAR(30) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='top_secret') COMMENT 'Unique customer identifier (CUST_XXXXX format)',
-    FIRST_NAME VARCHAR(100) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Customer first name (localized to country)',
-    FAMILY_NAME VARCHAR(100) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Customer family/last name (localized to country)',
-    DATE_OF_BIRTH DATE NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Date of birth (YYYY-MM-DD format)',
+    CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Unique customer identifier (CUST_XXXXX format)',
+    FIRST_NAME VARCHAR(100) NOT NULL COMMENT 'Customer first name (localized to country)',
+    FAMILY_NAME VARCHAR(100) NOT NULL COMMENT 'Customer family/last name (localized to country)',
+    DATE_OF_BIRTH DATE NOT NULL COMMENT 'Date of birth (YYYY-MM-DD format)',
     ONBOARDING_DATE DATE NOT NULL COMMENT 'Customer onboarding date (YYYY-MM-DD)',
     REPORTING_CURRENCY VARCHAR(3) NOT NULL COMMENT 'Customer reporting currency based on country (EUR, GBP, USD, CHF, NOK, SEK, DKK, PLN)',
-    HAS_ANOMALY BOOLEAN NOT NULL DEFAULT FALSE WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Flag indicating customer has anomalous transaction patterns for compliance testing',
-    EMPLOYER VARCHAR(200) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Employer name (nullable for unemployed/retired)',
+    HAS_ANOMALY BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Flag indicating customer has anomalous transaction patterns for compliance testing',
+    EMPLOYER VARCHAR(200) COMMENT 'Employer name (nullable for unemployed/retired)',
     POSITION VARCHAR(100) COMMENT 'Job position/title',
     EMPLOYMENT_TYPE VARCHAR(30) COMMENT 'Employment type (FULL_TIME, PART_TIME, CONTRACT, SELF_EMPLOYED, RETIRED, UNEMPLOYED)',
     INCOME_RANGE VARCHAR(30) COMMENT 'Income range bracket (e.g., 50K-75K, 100K-150K)',
     ACCOUNT_TIER VARCHAR(30) COMMENT 'Account tier (STANDARD, SILVER, GOLD, PLATINUM, PREMIUM)',
-    EMAIL VARCHAR(255) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Customer email address',
-    PHONE VARCHAR(50) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Customer phone number',
+    EMAIL VARCHAR(255) COMMENT 'Customer email address',
+    PHONE VARCHAR(50) COMMENT 'Customer phone number',
     PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Preferred contact method (EMAIL, SMS, POST, MOBILE_APP)',
-    RISK_CLASSIFICATION VARCHAR(20) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Risk classification (LOW, MEDIUM, HIGH)',
-    CREDIT_SCORE_BAND VARCHAR(20) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Credit score band (POOR, FAIR, GOOD, VERY_GOOD, EXCELLENT)',
+    RISK_CLASSIFICATION VARCHAR(20) COMMENT 'Risk classification (LOW, MEDIUM, HIGH)',
+    CREDIT_SCORE_BAND VARCHAR(20) COMMENT 'Credit score band (POOR, FAIR, GOOD, VERY_GOOD, EXCELLENT)',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL COMMENT 'UTC timestamp when this customer record version was inserted (for SCD Type 2)',
 
     CONSTRAINT PK_CRMI_RAW_TB_CUSTOMER PRIMARY KEY (CUSTOMER_ID, INSERT_TIMESTAMP_UTC)
@@ -53,10 +53,10 @@ COMMENT = 'Customer master data table with SCD Type 2 support for tracking attri
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
     CUSTOMER_ID VARCHAR(30) NOT NULL COMMENT 'Reference to customer (foreign key to {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER)',
-    STREET_ADDRESS VARCHAR(200) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='top_secret') COMMENT 'Street address (localized format)',
-    CITY VARCHAR(100) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'City name (localized to country)',
+    STREET_ADDRESS VARCHAR(200) NOT NULL COMMENT 'Street address (localized format)',
+    CITY VARCHAR(100) NOT NULL COMMENT 'City name (localized to country)',
     STATE VARCHAR(100) COMMENT 'State/Region (where applicable for the country)',
-    ZIPCODE VARCHAR(20) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Postal code (country-specific format)',
+    ZIPCODE VARCHAR(20) NOT NULL COMMENT 'Postal code (country-specific format)',
     COUNTRY VARCHAR(50) NOT NULL COMMENT 'Customer country (12 EMEA countries supported)',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL COMMENT 'UTC timestamp when this address record was inserted (for SCD Type 2)',
 
@@ -67,16 +67,16 @@ COMMENT = 'Customer address base table with append-only structure (SCD Type 2). 
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
     EXPOSED_PERSON_ID VARCHAR(50) NOT NULL COMMENT 'Unique PEP identifier',
-    FULL_NAME VARCHAR(200) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='top_secret') COMMENT 'Full name of the politically exposed person',
-    FIRST_NAME VARCHAR(100) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='top_secret') COMMENT 'First name',
-    LAST_NAME VARCHAR(100) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='top_secret') COMMENT 'Last name/family name',
-    DATE_OF_BIRTH DATE WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Date of birth (YYYY-MM-DD)',
+    FULL_NAME VARCHAR(200) NOT NULL COMMENT 'Full name of the politically exposed person',
+    FIRST_NAME VARCHAR(100) COMMENT 'First name',
+    LAST_NAME VARCHAR(100) NOT NULL COMMENT 'Last name/family name',
+    DATE_OF_BIRTH DATE COMMENT 'Date of birth (YYYY-MM-DD)',
     NATIONALITY VARCHAR(50) COMMENT 'Nationality/citizenship',
     POSITION_TITLE VARCHAR(200) NOT NULL COMMENT 'Political position or title held',
     ORGANIZATION VARCHAR(200) COMMENT 'Government organization or political party',
     COUNTRY VARCHAR(50) NOT NULL COMMENT 'Country where political position is/was held',
-    EXPOSED_PERSON_CATEGORY VARCHAR(50) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'PEP category: DOMESTIC, FOREIGN, INTERNATIONAL_ORG, FAMILY_MEMBER, CLOSE_ASSOCIATE',
-    RISK_LEVEL VARCHAR(20) NOT NULL WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Risk assessment level: LOW, MEDIUM, HIGH, CRITICAL',
+    EXPOSED_PERSON_CATEGORY VARCHAR(50) NOT NULL COMMENT 'PEP category: DOMESTIC, FOREIGN, INTERNATIONAL_ORG, FAMILY_MEMBER, CLOSE_ASSOCIATE',
+    RISK_LEVEL VARCHAR(20) NOT NULL COMMENT 'Risk assessment level: LOW, MEDIUM, HIGH, CRITICAL',
     STATUS VARCHAR(20) NOT NULL COMMENT 'Current status: ACTIVE, INACTIVE, DECEASED',
     START_DATE DATE COMMENT 'Date when PEP status began (YYYY-MM-DD)',
     END_DATE DATE COMMENT 'Date when PEP status ended (YYYY-MM-DD), NULL if still active',
@@ -104,7 +104,7 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
     REQUIRES_REVIEW BOOLEAN DEFAULT FALSE COMMENT 'Flag indicating if event requires manual compliance review',
     REVIEW_STATUS VARCHAR(20) COMMENT 'Review status (PENDING/APPROVED/REJECTED/NOT_REQUIRED)',
     REVIEW_DATE DATE COMMENT 'Date when review was completed',
-    NOTES VARCHAR(1000) WITH TAG ({{ db }}.PUBLIC.SENSITIVITY_LEVEL='restricted') COMMENT 'Free-text notes about the event for compliance or customer service',
+    NOTES VARCHAR(1000) COMMENT 'Free-text notes about the event for compliance or customer service',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ NOT NULL DEFAULT CURRENT_TIMESTAMP() COMMENT 'System timestamp when record was inserted',
 
     CONSTRAINT PK_CRMI_RAW_TB_CUSTOMER_EVENT PRIMARY KEY (EVENT_ID)
