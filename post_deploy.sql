@@ -2579,7 +2579,7 @@ DROP AGENT IF EXISTS CRM_Customer_360;
 -- ============================================================
 
 CREATE OR REPLACE AGENT CRM_Customer_360
-  COMMENT = 'CRM Intelligence Agent - Customer 360° & Advisor Performance Assistant (Multi-View)'
+  COMMENT = 'CRM Intelligence Agent - Customer 360°  and  Advisor Performance Assistant (Multi-View)'
   PROFILE = '{"display_name": "CRM Customer 360", "avatar": "", "color": "#1E88E5"}'
   FROM SPECIFICATION
   $$
@@ -2619,13 +2619,13 @@ CREATE OR REPLACE AGENT CRM_Customer_360
           - Analyze customer segmentation by tier, country, or employment
           - Track customer onboarding dates and relationship history
 
-          ### **Financial & Employment Profiles**
+          ### **Financial  and  Employment Profiles**
           - Review customer employment status, employer, and income ranges
           - Analyze account tier distribution (STANDARD, SILVER, GOLD, PLATINUM, PREMIUM)
           - Examine customer financial profiles and credit score bands
           - Identify customers by industry, position, or employment type
 
-          ### **Risk & Compliance**
+          ### **Risk  and  Compliance**
           - Screen customers for PEP (Politically Exposed Persons) matches
           - Check sanctions watchlist screening results
           - Review overall risk ratings (NO_RISK, LOW, MEDIUM, HIGH, CRITICAL)
@@ -2638,13 +2638,13 @@ CREATE OR REPLACE AGENT CRM_Customer_360
           - Examine multi-currency portfolios and currency exposure
           - Identify cross-sell and upsell opportunities
 
-          ### **Fraud & Anomaly Detection**
+          ### **Fraud  and  Anomaly Detection**
           - Flag customers with suspicious transaction patterns
           - Identify anomalous behavior indicators
           - Review fraud red flags and investigation priorities
           - Support AML (Anti-Money Laundering) investigations
 
-          ### **Geographic & Address Intelligence**
+          ### **Geographic  and  Address Intelligence**
           - Search customers by country, city, state, or postal code
           - View current address details with validation status
           - Track address changes and identify high-risk jurisdictions
@@ -2652,7 +2652,7 @@ CREATE OR REPLACE AGENT CRM_Customer_360
           - Analyze customer distribution by geography
           - Support regulatory reporting and customer communications
           
-          ### **Customer Lifecycle & Engagement**
+          ### **Customer Lifecycle  and  Engagement**
           - Monitor customer lifecycle stages (ONBOARDING, ACTIVE, AT_RISK, DORMANT, CHURNED)
           - Track churn probability and identify at-risk customers
           - Analyze customer lifetime value and revenue metrics
@@ -2660,7 +2660,7 @@ CREATE OR REPLACE AGENT CRM_Customer_360
           - Identify dormant accounts requiring reactivation
           - Monitor days since last transaction and contact
           
-          ### **Advisor Performance & Capacity**
+          ### **Advisor Performance  and  Capacity**
           - View advisor client portfolios and AUM (assets under management)
           - Analyze advisor performance metrics (retention rates, client counts)
           - Identify advisors by location, qualifications, and certifications
@@ -2729,9 +2729,9 @@ CREATE OR REPLACE AGENT CRM_Customer_360
           - **Risk Analysts**: Customer risk scoring and portfolio analysis
           - **Marketing Teams**: Customer segmentation and targeting
           - **AML Investigators**: Fraud detection and anomaly investigation
-          - **HR & Talent Management**: Advisor performance reviews and capacity planning
+          - **HR  and  Talent Management**: Advisor performance reviews and capacity planning
           - **Operations Managers**: Workload distribution and resource allocation
-          - **Executive Leadership**: Customer & advisor portfolio reporting and analytics
+          - **Executive Leadership**: Customer  and  advisor portfolio reporting and analytics
 
           ## Data Freshness
 
@@ -2743,7 +2743,7 @@ CREATE OR REPLACE AGENT CRM_Customer_360
         type: cortex_analyst_text_to_sql
         name: Advisor_Performance
         description: |
-          # Advisor Performance & Client Relationship Management
+          # Advisor Performance  and  Client Relationship Management
           
           ## What This Tool Provides
           
@@ -2808,7 +2808,7 @@ USE SCHEMA PAY_AGG_001;
 DROP AGENT IF EXISTS COMPLIANCE_MONITORING_AGENT;
 
 CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
-  COMMENT = 'Unified AML & Sanctions Compliance Monitoring Agent - Transaction anomaly detection and sanctions screening'
+  COMMENT = 'Unified AML  and  Sanctions Compliance Monitoring Agent - Transaction anomaly detection and sanctions screening'
   PROFILE = '{"display_name": "Compliance Monitoring", "avatar": "", "color": "#D32F2F"}'
   FROM SPECIFICATION
   $$
@@ -2834,7 +2834,7 @@ CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
         type: cortex_analyst_text_to_sql
         name: Compliance_Monitoring
         description: |
-          # Compliance Monitoring Agent - AML Transaction Monitoring & Customer Screening
+          # Compliance Monitoring Agent - AML Transaction Monitoring  and  Customer Screening
           
           ## Agent Description
           
@@ -2851,7 +2851,7 @@ CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
           - Review composite anomaly scores and risk classifications
           - Identify customers with multiple suspicious transactions
           
-          ### **Customer-Level Sanctions & PEP Screening** (from Customer Data)
+          ### **Customer-Level Sanctions  and  PEP Screening** (from Customer Data)
           - Identify customers with sanctions matches (EXACT_MATCH/FUZZY_MATCH)
           - Screen customers for PEP (Politically Exposed Persons) status
           - Review sanctions entity matches with accuracy scoring
@@ -2860,7 +2860,7 @@ CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
           - Link customer screening status to transaction behavior
           - Support embargo control investigations
           
-          ### **Integrated Customer & Transaction Risk Analysis**
+          ### **Integrated Customer  and  Transaction Risk Analysis**
           - View customer risk ratings and PEP status in transaction context
           - Analyze transaction patterns by customer tier and risk profile
           - Track customers with multiple anomalous transactions
@@ -2869,7 +2869,7 @@ CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
           - Combine customer screening results with transaction behavior
           - Identify customers requiring enhanced due diligence based on both screening and transactions
           
-          ### **Investigation & Case Management**
+          ### **Investigation  and  Case Management**
           - Prioritize investigations by combining anomaly scores and customer screening
           - Review transactions from customers requiring sanctions/PEP review
           - Track investigation priorities (IMMEDIATE, URGENT, HIGH, MEDIUM, LOW)
@@ -2897,7 +2897,7 @@ CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
           - **PEP Screening**: Exact/fuzzy matches, categories, risk levels, review requirements
           - **Sanctions Screening**: Exact/fuzzy matches, entity types, countries, accuracy scores
           - **Overall Risk**: PEP risk, sanctions risk, combined risk rating
-          - **Employment & Financial**: Occupation, income, employer
+          - **Employment  and  Financial**: Occupation, income, employer
           - **Lifecycle**: Status, churn probability, engagement
           - **Advisor Assignment**: Current advisor, assignment date
           
@@ -2953,7 +2953,7 @@ CREATE OR REPLACE AGENT COMPLIANCE_MONITORING_AGENT
         type: cortex_analyst_text_to_sql
         name: Customer_Context
         description: |
-          # Customer Risk & Compliance Screening Context
+          # Customer Risk  and  Compliance Screening Context
           
           ## What This Tool Provides
           
@@ -3021,8 +3021,8 @@ USE SCHEMA REP_AGG_001;
 DROP AGENT IF EXISTS RISK_REGULATORY_AGENT;
 
 CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
-  COMMENT = 'Cross-Domain Risk Aggregation & Regulatory Reporting Agent - BCBS 239, FRTB, Basel III/IV, data quality monitoring'
-  PROFILE = '{"display_name": "Risk & Regulatory", "avatar": "", "color": "#F57C00"}'
+  COMMENT = 'Cross-Domain Risk Aggregation  and  Regulatory Reporting Agent - BCBS 239, FRTB, Basel III/IV, data quality monitoring'
+  PROFILE = '{"display_name": "Risk  and  Regulatory", "avatar": "", "color": "#F57C00"}'
   FROM SPECIFICATION
   $$
   models:
@@ -3048,11 +3048,11 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
         type: cortex_analyst_text_to_sql
         name: Risk_Reporting
         description: |
-          # Risk & Regulatory Agent - Executive Risk Intelligence
+          # Risk  and  Regulatory Agent - Executive Risk Intelligence
           
           ## Agent Description
           
-          I am your **Risk & Regulatory Agent**, providing executive-level risk intelligence across all banking domains. I aggregate risk metrics, monitor regulatory compliance (BCBS 239, FRTB, Basel III/IV), track data quality, and support board-level risk reporting with natural language queries.
+          I am your **Risk  and  Regulatory Agent**, providing executive-level risk intelligence across all banking domains. I aggregate risk metrics, monitor regulatory compliance (BCBS 239, FRTB, Basel III/IV), track data quality, and support board-level risk reporting with natural language queries.
           
           ## What I Can Help You With
           
@@ -3081,7 +3081,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
           - Track non-modellable risk factors (NMRF) and liquidity horizons
           - Monitor default risk capital (DRC) for securitizations and non-securitizations
           
-          ### **Currency Exposure & FX Risk**
+          ### **Currency Exposure  and  FX Risk**
           - Track total FX exposure and net open positions
           - Review currency-specific exposure (USD, EUR, GBP, JPY, CNY)
           - Monitor FX Value-at-Risk (VaR) and concentration risk
@@ -3100,7 +3100,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
           - Track fraud indicators, AML alerts, sanctions hits, PEP matches
           - Identify credit deterioration cases and market risk breaches
           
-          ### **High-Risk Patterns & Geographic Risk**
+          ### **High-Risk Patterns  and  Geographic Risk**
           - Review high-risk customer, transaction, and portfolio counts
           - Monitor exposure to high-risk jurisdictions and sanctioned countries
           - Track OFAC and EU sanctions exposure
@@ -3112,7 +3112,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
           - Review regulatory breaches and penalties
           - Generate audit trails for regulatory examinations
           
-          ### **Stress Testing & Scenario Analysis**
+          ### **Stress Testing  and  Scenario Analysis**
           - Review stressed RWA, expected loss, and capital ratios
           - Analyze stress scenarios and severity levels
           - Compare base case vs stressed metrics
@@ -3158,7 +3158,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
           - **Chief Risk Officer (CRO)**: Executive risk dashboards and board reporting
           - **Risk Management Team**: Cross-domain risk aggregation and analysis
           - **Regulatory Reporting Team**: BCBS 239, FRTB, Basel compliance monitoring
-          - **Board Risk Committee**: Natural language risk Q&A and KPI tracking
+          - **Board Risk Committee**: Natural language risk Q and A and KPI tracking
           - **Internal Audit**: Data quality and regulatory compliance reviews
           - **Executive Leadership**: Strategic risk oversight and decision support
           
@@ -3172,7 +3172,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
         type: cortex_analyst_text_to_sql
         name: Customer_Risk_Context
         description: |
-          # Customer Risk Profiles & Exposures
+          # Customer Risk Profiles  and  Exposures
           
           Provides customer-level risk context for risk aggregation:
           - Customer risk ratings and scores
@@ -3184,7 +3184,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
         type: cortex_analyst_text_to_sql
         name: Compliance_Context
         description: |
-          # Transaction Anomalies & Compliance Issues
+          # Transaction Anomalies  and  Compliance Issues
           
           Provides transaction-level compliance context:
           - AML transaction anomalies
@@ -3196,7 +3196,7 @@ CREATE OR REPLACE AGENT RISK_REGULATORY_AGENT
         type: cortex_analyst_text_to_sql
         name: Wealth_Context
         description: |
-          # Portfolio & Credit Risk Exposures
+          # Portfolio  and  Credit Risk Exposures
           
           Provides portfolio-level risk context:
           - Portfolio performance and risk metrics
@@ -3243,7 +3243,7 @@ ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT AAA
 SHOW AGENTS IN SCHEMA AAA_DEV_SYNTHETIC_BANK.REP_AGG_001;
 SHOW SNOWFLAKE INTELLIGENCES;
 
-SELECT 'RISK_REGULATORY_AGENT created successfully! Cross-domain risk aggregation & regulatory compliance agent ready.' AS STATUS;
+SELECT 'RISK_REGULATORY_AGENT created successfully! Cross-domain risk aggregation  and  regulatory compliance agent ready.' AS STATUS;
 
 USE DATABASE AAA_DEV_SYNTHETIC_BANK;
 USE SCHEMA REP_AGG_001;
@@ -3447,8 +3447,8 @@ USE SCHEMA REP_AGG_001;
 DROP AGENT IF EXISTS LIQUIDITY_RISK_AGENT;
 
 CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
-  COMMENT = 'Treasury & Liquidity Risk Agent - LCR monitoring, HQLA management, deposit analysis, FINMA Circular 2015/2 compliance, SNB reporting'
-  PROFILE = '{"display_name": "Treasury & Liquidity", "avatar": "", "color": "#00897B"}'
+  COMMENT = 'Treasury  and  Liquidity Risk Agent - LCR monitoring, HQLA management, deposit analysis, FINMA Circular 2015/2 compliance, SNB reporting'
+  PROFILE = '{"display_name": "Treasury  and  Liquidity", "avatar": "", "color": "#00897B"}'
   FROM SPECIFICATION
   $$
   models:
@@ -3480,7 +3480,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           
           ## Agent Description
           
-          I am your **Treasury & Liquidity Risk Agent**, providing real-time monitoring of the Liquidity Coverage Ratio (LCR) for compliance with **FINMA Circular 2015/2** and **Basel III** liquidity standards. I help Treasury teams monitor daily liquidity positions, manage HQLA portfolios, analyze deposit run-offs, and prepare regulatory submissions to the Swiss National Bank (SNB).
+          I am your **Treasury  and  Liquidity Risk Agent**, providing real-time monitoring of the Liquidity Coverage Ratio (LCR) for compliance with **FINMA Circular 2015/2** and **Basel III** liquidity standards. I help Treasury teams monitor daily liquidity positions, manage HQLA portfolios, analyze deposit run-offs, and prepare regulatory submissions to the Swiss National Bank (SNB).
           
           ## What I Can Help You With
           
@@ -3523,7 +3523,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           - Identify most stable vs most volatile deposit types
           - Support funding strategy and relationship banking initiatives
           
-          ### **Trend Analysis & Volatility**
+          ### **Trend Analysis  and  Volatility**
           - Track 90-day historical LCR trend
           - Calculate 7-day and 30-day moving averages
           - Measure day-over-day LCR changes (volatility)
@@ -3531,7 +3531,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           - Detect sustained breaches (3+ consecutive days below 100%)
           - Compare current LCR to historical min/max/average
           
-          ### **Compliance Alerts & Risk Mitigation**
+          ### **Compliance Alerts  and  Risk Mitigation**
           - Monitor active compliance alerts and warnings
           - Review breach alerts (LCR < 100%)
           - Track volatility alerts (daily swing > 10%)
@@ -3635,7 +3635,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           - "What is our weighted average run-off rate?"
           - "Which counterparty type is most stable?"
           
-          ### Trend & Volatility Queries
+          ### Trend  and  Volatility Queries
           - "Show me the 90-day LCR trend"
           - "Has LCR been stable or volatile this month?"
           - "What is the 7-day moving average?"
@@ -3643,7 +3643,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           - "Show me day-over-day LCR changes"
           - "What is the LCR min/max/average over 90 days?"
           
-          ### Alert & Compliance Queries
+          ### Alert  and  Compliance Queries
           - "Are there any active liquidity alerts?"
           - "Show me all breach alerts"
           - "Which alerts are most critical?"
@@ -3677,7 +3677,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
         type: cortex_analyst_text_to_sql
         name: HQLA_Portfolio
         description: |
-          # HQLA Portfolio Analysis - Asset Composition & Quality
+          # HQLA Portfolio Analysis - Asset Composition  and  Quality
           
           ## What This Tool Provides
           
@@ -3713,7 +3713,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
         type: cortex_analyst_text_to_sql
         name: Deposit_Outflows
         description: |
-          # Deposit Outflow Analysis - Funding Stability & Run-off Rates
+          # Deposit Outflow Analysis - Funding Stability  and  Run-off Rates
           
           ## What This Tool Provides
           
@@ -3750,7 +3750,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
         type: cortex_analyst_text_to_sql
         name: LCR_Trend
         description: |
-          # LCR Historical Trend - 90-Day Monitoring & Volatility Analysis
+          # LCR Historical Trend - 90-Day Monitoring  and  Volatility Analysis
           
           ## What This Tool Provides
           
@@ -3788,7 +3788,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
         type: cortex_analyst_text_to_sql
         name: Compliance_Alerts
         description: |
-          # Compliance Alerts - Real-Time Breach Detection & Risk Mitigation
+          # Compliance Alerts - Real-Time Breach Detection  and  Risk Mitigation
           
           ## What This Tool Provides
           
@@ -3876,7 +3876,7 @@ ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT
 SHOW AGENTS IN SCHEMA AAA_DEV_SYNTHETIC_BANK.REP_AGG_001;
 SHOW SNOWFLAKE INTELLIGENCES;
 
-SELECT 'LIQUIDITY_RISK_AGENT created successfully! Treasury & Liquidity monitoring agent ready.' AS STATUS;
+SELECT 'LIQUIDITY_RISK_AGENT created successfully! Treasury  and  Liquidity monitoring agent ready.' AS STATUS;
 
 USE DATABASE AAA_DEV_SYNTHETIC_BANK;
 USE SCHEMA REP_AGG_001;
@@ -3884,7 +3884,7 @@ USE SCHEMA REP_AGG_001;
 DROP AGENT IF EXISTS LOAN_PORTFOLIO_AGENT;
 
 CREATE OR REPLACE AGENT LOAN_PORTFOLIO_AGENT
-  COMMENT = 'Retail Loans & Mortgages Portfolio Agent - Portfolio monitoring, LTV analysis, application funnel, affordability assessment, compliance screening'
+  COMMENT = 'Retail Loans  and  Mortgages Portfolio Agent - Portfolio monitoring, LTV analysis, application funnel, affordability assessment, compliance screening'
   PROFILE = '{"display_name": "Loan Portfolio", "avatar": "", "color": "#1565C0"}'
   FROM SPECIFICATION
   $$
@@ -3917,7 +3917,7 @@ CREATE OR REPLACE AGENT LOAN_PORTFOLIO_AGENT
           
           ## Agent Description
           
-          I am your **Retail Loans & Mortgages Portfolio Agent**, providing real-time monitoring of loan origination and portfolio performance across Switzerland, UK, and Germany. I help Retail Banking teams monitor application volumes, manage credit risk, track LTV concentration, assess affordability compliance, and integrate with sanctions/PEP screening for regulatory compliance.
+          I am your **Retail Loans  and  Mortgages Portfolio Agent**, providing real-time monitoring of loan origination and portfolio performance across Switzerland, UK, and Germany. I help Retail Banking teams monitor application volumes, manage credit risk, track LTV concentration, assess affordability compliance, and integrate with sanctions/PEP screening for regulatory compliance.
           
           ## What I Can Help You With
           
@@ -4004,7 +4004,7 @@ CREATE OR REPLACE AGENT LOAN_PORTFOLIO_AGENT
         type: cortex_analyst_text_to_sql
         name: LTV_Risk_Analysis
         description: |
-          # LTV Distribution & Risk Concentration - Credit Risk Monitoring
+          # LTV Distribution  and  Risk Concentration - Credit Risk Monitoring
           
           ## What This Tool Provides
           
@@ -4054,7 +4054,7 @@ CREATE OR REPLACE AGENT LOAN_PORTFOLIO_AGENT
         type: cortex_analyst_text_to_sql
         name: Application_Funnel
         description: |
-          # Application Funnel & Conversion Metrics - Origination Performance
+          # Application Funnel  and  Conversion Metrics - Origination Performance
           
           ## What This Tool Provides
           
@@ -4168,7 +4168,7 @@ CREATE OR REPLACE AGENT LOAN_PORTFOLIO_AGENT
         type: cortex_analyst_text_to_sql
         name: Compliance_Screening
         description: |
-          # Compliance & Screening Integration - Sanctions/PEP Monitoring
+          # Compliance  and  Screening Integration - Sanctions/PEP Monitoring
           
           ## What This Tool Provides
           
@@ -4284,4 +4284,4 @@ ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT
 SHOW AGENTS IN SCHEMA AAA_DEV_SYNTHETIC_BANK.REP_AGG_001;
 SHOW SNOWFLAKE INTELLIGENCES;
 
-SELECT 'LOAN_PORTFOLIO_AGENT created successfully! Retail Loans & Mortgages monitoring agent ready.' AS STATUS;
+SELECT 'LOAN_PORTFOLIO_AGENT created successfully! Retail Loans  and  Mortgages monitoring agent ready.' AS STATUS;
