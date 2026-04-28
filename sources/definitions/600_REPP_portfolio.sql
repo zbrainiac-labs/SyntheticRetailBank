@@ -78,16 +78,16 @@ WITH
 cash_performance AS (
     SELECT 
         t.ACCOUNT_ID,
-        MIN(DATE(t.BOOKING_DATE)) as period_start,
-        MAX(DATE(t.BOOKING_DATE)) as period_end,
-        DATEDIFF(DAY, MIN(DATE(t.BOOKING_DATE)), MAX(DATE(t.BOOKING_DATE))) as days_in_period,
+        MIN(CAST(t.BOOKING_DATE AS DATE)) as period_start,
+        MAX(CAST(t.BOOKING_DATE AS DATE)) as period_end,
+        DATEDIFF(DAY, MIN(CAST(t.BOOKING_DATE AS DATE)), MAX(CAST(t.BOOKING_DATE AS DATE))) as days_in_period,
 
         SUM(CASE WHEN t.AMOUNT > 0 THEN t.AMOUNT ELSE 0 END) as total_deposits,
         SUM(CASE WHEN t.AMOUNT < 0 THEN ABS(t.AMOUNT) ELSE 0 END) as total_withdrawals,
         SUM(t.AMOUNT) as net_cash_flow,
 
         COUNT(*) as cash_transaction_count,
-        COUNT(DISTINCT DATE(t.BOOKING_DATE)) as cash_trading_days
+        COUNT(DISTINCT CAST(t.BOOKING_DATE AS DATE)) as cash_trading_days
     FROM {{ db }}.{{ pay_raw }}.PAYI_RAW_TB_TRANSACTIONS t
     WHERE t.BOOKING_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
@@ -108,7 +108,7 @@ equity_performance AS (
         SUM(CASE WHEN t.SIDE = '2' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE 0 END) - 
         SUM(CASE WHEN t.SIDE = '1' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE 0 END) as realized_pl_chf,
 
-        COUNT(DISTINCT DATE(t.TRADE_DATE)) as equity_trading_days
+        COUNT(DISTINCT CAST(t.TRADE_DATE AS DATE)) as equity_trading_days
     FROM {{ db }}.{{ eqt_raw }}.EQTI_RAW_TB_TRADES t
     WHERE t.TRADE_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
@@ -123,7 +123,7 @@ fixed_income_performance AS (
         SUM(ABS(t.BASE_GROSS_AMOUNT)) as fi_total_invested_chf,
         SUM(t.COMMISSION) as fi_total_commission_chf,
         SUM(CASE WHEN t.SIDE = '2' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE -ABS(t.BASE_GROSS_AMOUNT) END) as fi_net_pl_chf,
-        COUNT(DISTINCT DATE(t.TRADE_DATE)) as fi_trading_days
+        COUNT(DISTINCT CAST(t.TRADE_DATE AS DATE)) as fi_trading_days
     FROM {{ db }}.{{ fii_raw }}.FIII_RAW_TB_TRADES t
     WHERE t.TRADE_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID
@@ -138,7 +138,7 @@ commodity_performance AS (
         SUM(ABS(t.BASE_GROSS_AMOUNT)) as cmd_total_invested_chf,
         SUM(t.COMMISSION) as cmd_total_commission_chf,
         SUM(CASE WHEN t.SIDE = '2' THEN ABS(t.BASE_GROSS_AMOUNT) ELSE -ABS(t.BASE_GROSS_AMOUNT) END) as cmd_net_pl_chf,
-        COUNT(DISTINCT DATE(t.TRADE_DATE)) as cmd_trading_days
+        COUNT(DISTINCT CAST(t.TRADE_DATE AS DATE)) as cmd_trading_days
     FROM {{ db }}.{{ cmd_raw }}.CMDI_RAW_TB_TRADES t
     WHERE t.TRADE_DATE >= CURRENT_DATE - INTERVAL '450 days'
     GROUP BY t.ACCOUNT_ID

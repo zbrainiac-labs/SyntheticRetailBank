@@ -48,8 +48,8 @@ WITH customer_behavioral_profile AS (
         PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY AMOUNT) as q1_amount,
         PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY AMOUNT) as q3_amount,
 
-        COUNT(DISTINCT DATE(BOOKING_DATE)) as active_days,
-        COUNT(*) / GREATEST(COUNT(DISTINCT DATE(BOOKING_DATE)), 1) as avg_daily_transaction_count,
+        COUNT(DISTINCT CAST(BOOKING_DATE AS DATE)) as active_days,
+        COUNT(*) / GREATEST(COUNT(DISTINCT CAST(BOOKING_DATE AS DATE)), 1) as avg_daily_transaction_count,
 
         AVG(EXTRACT(HOUR FROM BOOKING_DATE)) as avg_transaction_hour,
         STDDEV(EXTRACT(HOUR FROM BOOKING_DATE)) as stddev_transaction_hour,
@@ -179,7 +179,7 @@ SELECT
     END as is_delayed_settlement,
 
     CASE 
-        WHEN VALUE_DATE < DATE(BOOKING_DATE) THEN TRUE
+        WHEN VALUE_DATE < CAST(BOOKING_DATE AS DATE) THEN TRUE
         ELSE FALSE
     END as is_backdated_settlement,
 
@@ -198,7 +198,7 @@ SELECT
             timing_z_score >= 2.0 OR 
             transactions_last_24h >= (avg_daily_transaction_count * 5) OR
             (AMOUNT >= large_transaction_threshold AND transaction_hour < 6) OR
-            VALUE_DATE < DATE(BOOKING_DATE) 
+            VALUE_DATE < CAST(BOOKING_DATE AS DATE) 
         ) THEN 'CRITICAL_ANOMALY'
         WHEN (
             amount_z_score >= 2.0 OR 
@@ -217,7 +217,7 @@ SELECT
     END as overall_anomaly_classification,
 
     CASE 
-        WHEN amount_z_score >= 3.0 OR transactions_last_24h >= (avg_daily_transaction_count * 5) OR VALUE_DATE < DATE(BOOKING_DATE) THEN TRUE
+        WHEN amount_z_score >= 3.0 OR transactions_last_24h >= (avg_daily_transaction_count * 5) OR VALUE_DATE < CAST(BOOKING_DATE AS DATE) THEN TRUE
         ELSE FALSE
     END as requires_immediate_review,
 

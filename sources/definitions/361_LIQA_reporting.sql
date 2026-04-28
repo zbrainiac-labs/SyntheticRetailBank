@@ -356,8 +356,10 @@ SELECT
     ARRAY_CAT(ARRAY_CAT(compliance_alerts, volatility_alerts), cap_alerts) AS ALL_ALERTS,
     ARRAY_SIZE(ARRAY_CAT(ARRAY_CAT(compliance_alerts, volatility_alerts), cap_alerts)) AS TOTAL_ALERT_COUNT,
     CASE
-        WHEN ARRAY_SIZE(ARRAY_CAT(ARRAY_CAT(compliance_alerts, volatility_alerts), cap_alerts)) > 0 THEN
-            (SELECT MAX(VALUE:severity::STRING) FROM TABLE(FLATTEN(ARRAY_CAT(ARRAY_CAT(compliance_alerts, volatility_alerts), cap_alerts))))
+        WHEN ARRAY_SIZE(compliance_alerts) > 0 AND GET(compliance_alerts[0], 'severity')::STRING = 'CRITICAL' THEN 'CRITICAL'
+        WHEN ARRAY_SIZE(compliance_alerts) > 0 THEN 'HIGH'
+        WHEN ARRAY_SIZE(volatility_alerts) > 0 THEN 'MEDIUM'
+        WHEN ARRAY_SIZE(cap_alerts) > 0 THEN 'INFO'
         ELSE 'NONE'
     END AS HIGHEST_SEVERITY,
     CURRENT_TIMESTAMP() AS ALERT_TIMESTAMP

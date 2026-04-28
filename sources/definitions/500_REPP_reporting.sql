@@ -48,7 +48,7 @@ Operations/Liquidity: Monitors daily transaction counts for system capacity plan
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
-    DATE(BOOKING_DATE) AS TRANSACTION_DATE,
+    CAST(BOOKING_DATE AS DATE) AS TRANSACTION_DATE,
     COUNT(*) AS TRANSACTION_COUNT,
     COUNT(DISTINCT CUSTOMER_ID) AS UNIQUE_CUSTOMERS,
     SUM(AMOUNT) AS TOTAL_BASE_AMOUNT,
@@ -58,7 +58,7 @@ SELECT
     COUNT(CASE WHEN DESCRIPTION LIKE '%[%]%' THEN 1 END) AS ANOMALOUS_COUNT,
     COUNT(DISTINCT CURRENCY) AS CURRENCY_COUNT
 FROM {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES
-GROUP BY DATE(BOOKING_DATE)
+GROUP BY CAST(BOOKING_DATE AS DATE)
 ORDER BY TRANSACTION_DATE;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CURRENCY_EXPOSURE_CURRENT(
@@ -109,7 +109,7 @@ Market Risk/Treasury: Used for analyzing currency volatility, forecasting future
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
-    DATE(BOOKING_DATE) AS EXPOSURE_DATE,                         -- Business date for time series analysis
+    CAST(BOOKING_DATE AS DATE) AS EXPOSURE_DATE,                         -- Business date for time series analysis
     CURRENCY,                                                    -- Foreign currency for exposure tracking
     COUNT(*) AS DAILY_TRANSACTION_COUNT,                         -- Daily transaction volume per currency
     SUM(AMOUNT) AS DAILY_TOTAL_AMOUNT,                           -- Daily total exposure amount
@@ -120,32 +120,32 @@ SELECT
 
     SUM(COUNT(*)) OVER (
         PARTITION BY CURRENCY
-        ORDER BY DATE(BOOKING_DATE)
+        ORDER BY CAST(BOOKING_DATE AS DATE)
         ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
     ) AS ROLLING_7D_TRANSACTION_COUNT,                           -- 7-day rolling transaction volume
 
     SUM(SUM(AMOUNT)) OVER (
         PARTITION BY CURRENCY
-        ORDER BY DATE(BOOKING_DATE)
+        ORDER BY CAST(BOOKING_DATE AS DATE)
         ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
     ) AS ROLLING_7D_TOTAL_AMOUNT,                                -- 7-day rolling exposure amount
 
     AVG(SUM(AMOUNT)) OVER (
         PARTITION BY CURRENCY
-        ORDER BY DATE(BOOKING_DATE)
+        ORDER BY CAST(BOOKING_DATE AS DATE)
         ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
     ) AS ROLLING_7D_AVG_DAILY_AMOUNT,                            -- 7-day average daily exposure
 
     LAG(SUM(AMOUNT), 30) OVER (
         PARTITION BY CURRENCY
-        ORDER BY DATE(BOOKING_DATE)
+        ORDER BY CAST(BOOKING_DATE AS DATE)
     ) AS AMOUNT_30_DAYS_AGO,                                     -- Exposure amount 30 days prior for comparison
 
     CASE
-        WHEN LAG(SUM(AMOUNT), 30) OVER (PARTITION BY CURRENCY ORDER BY DATE(BOOKING_DATE)) > 0
+        WHEN LAG(SUM(AMOUNT), 30) OVER (PARTITION BY CURRENCY ORDER BY CAST(BOOKING_DATE AS DATE)) > 0
         THEN ROUND(
-            ((SUM(AMOUNT) - LAG(SUM(AMOUNT), 30) OVER (PARTITION BY CURRENCY ORDER BY DATE(BOOKING_DATE))) /
-             LAG(SUM(AMOUNT), 30) OVER (PARTITION BY CURRENCY ORDER BY DATE(BOOKING_DATE))) * 100, 2
+            ((SUM(AMOUNT) - LAG(SUM(AMOUNT), 30) OVER (PARTITION BY CURRENCY ORDER BY CAST(BOOKING_DATE AS DATE))) /
+             LAG(SUM(AMOUNT), 30) OVER (PARTITION BY CURRENCY ORDER BY CAST(BOOKING_DATE AS DATE))) * 100, 2
         )
         ELSE NULL
     END AS GROWTH_RATE_30D_PERCENT,                              -- 30-day growth rate percentage for trend monitoring
@@ -164,7 +164,7 @@ SELECT
 
 FROM {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES
 WHERE CURRENCY != 'CHF'
-GROUP BY DATE(BOOKING_DATE), CURRENCY
+GROUP BY CAST(BOOKING_DATE AS DATE), CURRENCY
 ORDER BY EXPOSURE_DATE DESC, DAILY_TOTAL_AMOUNT DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CURRENCY_SETTLEMENT_EXPOSURE(
@@ -185,7 +185,7 @@ Operational Risk/Treasury: Flags transactions with high settlement risk (delayed
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
-    DATE(VALUE_DATE) AS SETTLEMENT_DATE,                         -- Settlement date for liquidity planning
+    CAST(VALUE_DATE AS DATE) AS SETTLEMENT_DATE,                         -- Settlement date for liquidity planning
     CURRENCY,                                                    -- Currency for settlement risk analysis
     COUNT(*) AS SETTLEMENT_TRANSACTION_COUNT,                    -- Number of transactions settling on this date
     SUM(AMOUNT) AS SETTLEMENT_TOTAL_AMOUNT,                      -- Total amount settling in this currency
@@ -195,7 +195,7 @@ SELECT
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) = 1 THEN 1 END) AS T_PLUS_1_SETTLEMENTS,     -- Next business day settlements
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) BETWEEN 2 AND 3 THEN 1 END) AS T_PLUS_2_3_SETTLEMENTS, -- Standard settlement period
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) > 5 THEN 1 END) AS DELAYED_SETTLEMENTS,      -- Delayed settlements requiring attention
-    COUNT(CASE WHEN VALUE_DATE < DATE(BOOKING_DATE) THEN 1 END) AS BACKDATED_SETTLEMENTS,               -- Backdated settlements (compliance risk)
+    COUNT(CASE WHEN VALUE_DATE < CAST(BOOKING_DATE AS DATE) THEN 1 END) AS BACKDATED_SETTLEMENTS,               -- Backdated settlements (compliance risk)
 
     CASE
         WHEN COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) > 5 THEN 1 END) > 0
@@ -207,13 +207,13 @@ SELECT
     END AS SETTLEMENT_RISK_LEVEL,                                -- Overall settlement risk classification
 
     CASE
-        WHEN DAYOFWEEK(DATE(VALUE_DATE)) IN (1,7) THEN 'WEEKEND_SETTLEMENT'
+        WHEN DAYOFWEEK(CAST(VALUE_DATE AS DATE)) IN (1,7) THEN 'WEEKEND_SETTLEMENT'
         ELSE 'WEEKDAY_SETTLEMENT'
     END AS SETTLEMENT_TIMING_TYPE                                -- Settlement timing pattern for operational planning
 
 FROM {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES
 WHERE CURRENCY != 'CHF'
-GROUP BY DATE(VALUE_DATE), CURRENCY
+GROUP BY CAST(VALUE_DATE AS DATE), CURRENCY
 ORDER BY SETTLEMENT_DATE DESC, SETTLEMENT_TOTAL_AMOUNT DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_ANOMALY_ANALYSIS(
@@ -277,7 +277,7 @@ SELECT
         WHEN COUNTERPARTY_ACCOUNT LIKE 'OFF_SHORE_%' THEN 'OFFSHORE'
         WHEN COUNTERPARTY_ACCOUNT LIKE 'CRYPTO_%' THEN 'CRYPTO'
         WHEN HOUR(BOOKING_DATE) NOT BETWEEN 9 AND 17 THEN 'OFF_HOURS'
-        WHEN VALUE_DATE < DATE(BOOKING_DATE) THEN 'BACKDATED_SETTLEMENT'
+        WHEN VALUE_DATE < CAST(BOOKING_DATE AS DATE) THEN 'BACKDATED_SETTLEMENT'
         WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) > 5 THEN 'DELAYED_SETTLEMENT'
         ELSE 'OTHER'
     END AS RISK_CATEGORY,
@@ -290,7 +290,7 @@ WHERE
     OR COUNTERPARTY_ACCOUNT LIKE 'OFF_SHORE_%'
     OR COUNTERPARTY_ACCOUNT LIKE 'CRYPTO_%'
     OR HOUR(BOOKING_DATE) NOT BETWEEN 9 AND 17
-    OR VALUE_DATE < DATE(BOOKING_DATE)  -- Backdated settlements
+    OR VALUE_DATE < CAST(BOOKING_DATE AS DATE)  -- Backdated settlements
     OR DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) > 5  -- Delayed settlements
 ORDER BY AMOUNT DESC, BOOKING_DATE DESC;
 
@@ -312,20 +312,20 @@ Operations/Liquidity: Used to manage and improve payment processing efficiency, 
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
-    DATE(BOOKING_DATE) AS BOOKING_DATE,                          -- Transaction booking date for settlement tracking
-    DATE(VALUE_DATE) AS VALUE_DATE,                              -- Actual settlement date for liquidity planning
+    CAST(BOOKING_DATE AS DATE) AS BOOKING_DATE,                          -- Transaction booking date for settlement tracking
+    CAST(VALUE_DATE AS DATE) AS VALUE_DATE,                              -- Actual settlement date for liquidity planning
     DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) AS SETTLEMENT_DAYS,  -- Settlement period for operational analysis
     COUNT(*) AS TRANSACTION_COUNT,                               -- Number of transactions with this settlement pattern
     COUNT(DISTINCT CUSTOMER_ID) AS UNIQUE_CUSTOMERS,            -- Number of customers affected by settlement timing
     SUM(AMOUNT) AS TOTAL_AMOUNT,                                 -- Total value settling with this timing
     AVG(AMOUNT) AS AVG_AMOUNT,                                   -- Average transaction size for this settlement pattern
-    COUNT(CASE WHEN VALUE_DATE < DATE(BOOKING_DATE) THEN 1 END) AS BACKDATED_COUNT,     -- Backdated settlements (compliance concern)
+    COUNT(CASE WHEN VALUE_DATE < CAST(BOOKING_DATE AS DATE) THEN 1 END) AS BACKDATED_COUNT,     -- Backdated settlements (compliance concern)
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) > 5 THEN 1 END) AS DELAYED_COUNT,  -- Delayed settlements (operational risk)
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) = 0 THEN 1 END) AS SAME_DAY_COUNT,  -- Same-day settlements
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) = 1 THEN 1 END) AS NEXT_DAY_COUNT,  -- Next business day settlements
     COUNT(CASE WHEN DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE) BETWEEN 2 AND 3 THEN 1 END) AS T_PLUS_2_3_COUNT -- Standard settlement period
 FROM {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES
-GROUP BY DATE(BOOKING_DATE), DATE(VALUE_DATE), DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE)
+GROUP BY CAST(BOOKING_DATE AS DATE), CAST(VALUE_DATE AS DATE), DATEDIFF(DAY, BOOKING_DATE, VALUE_DATE)
 ORDER BY BOOKING_DATE DESC, SETTLEMENT_DAYS DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LIFECYCLE_ANOMALIES(
