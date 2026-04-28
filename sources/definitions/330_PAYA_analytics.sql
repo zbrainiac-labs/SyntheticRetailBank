@@ -417,7 +417,7 @@ LEFT JOIN fx_rates_current fx ON fx.TO_CURRENCY = abc.BASE_CURRENCY
 ORDER BY abc.current_balance_base DESC, abc.ACCOUNT_ID;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_CUSTOMER_TRANSACTION_SUMMARY(
-    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for joining to CRMA_AGG_DT_CUSTOMER_360',
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for joining to {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',
 
     TOTAL_TRANSACTIONS_12M NUMBER(10,0) COMMENT 'Count of all transactions in last 12 months for engagement scoring',
     TOTAL_TRANSACTIONS_ALL_TIME NUMBER(10,0) COMMENT 'Lifetime transaction count since customer onboarding',
@@ -437,7 +437,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_CUSTOMER_TRANSACTION_SUM
 
     SUMMARY_AS_OF_DATE TIMESTAMP_NTZ COMMENT 'Timestamp when summary was calculated'
 
-) COMMENT = 'Pre-aggregated customer transaction metrics for efficient integration into Customer 360 and employee analytics. Provides engagement scoring, dormancy detection, and churn prediction indicators. Refreshed hourly to match CRMA_AGG_DT_CUSTOMER_360 lag.'
+) COMMENT = 'Pre-aggregated customer transaction metrics for efficient integration into Customer 360 and employee analytics. Provides engagement scoring, dormancy detection, and churn prediction indicators. Refreshed hourly to match {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 lag.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT

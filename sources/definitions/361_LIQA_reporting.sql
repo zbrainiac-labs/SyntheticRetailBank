@@ -22,7 +22,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_DAILY(
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_TREND(
     AS_OF_DATE DATE COMMENT 'Reporting date for trend analysis (daily COB snapshot). Time dimension for historical trend visualization, volatility monitoring, and predictive analytics. Used for identifying adverse liquidity patterns before breaches occur.',
-    LCR_RATIO NUMBER(8,2) COMMENT 'Daily LCR ratio snapshot from REPP_AGG_DT_LCR_DAILY. Point-in-time value used for calculating rolling averages, volatility measures, and trend analysis. Primary metric for time-series charting.',
+    LCR_RATIO NUMBER(8,2) COMMENT 'Daily LCR ratio snapshot from {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY. Point-in-time value used for calculating rolling averages, volatility measures, and trend analysis. Primary metric for time-series charting.',
     LCR_7D_AVG NUMBER(8,2) COMMENT '7-day rolling average LCR ratio. Short-term trend indicator for weekly liquidity patterns and intraweek volatility smoothing. Used for identifying immediate trend reversals and operational issues.',
     LCR_30D_AVG NUMBER(8,2) COMMENT '30-day rolling average LCR ratio. Medium-term trend indicator for monthly compliance averaging and business cycle patterns. Used for SNB monthly submissions and management reporting.',
     LCR_90D_AVG NUMBER(8,2) COMMENT '90-day rolling average LCR ratio. Long-term strategic trend indicator for quarterly performance assessment and seasonal pattern identification. Used for Board reporting and strategic liquidity planning.',
@@ -48,7 +48,7 @@ WITH daily_lcr AS (
         OUTFLOW_TOTAL,
         LCR_STATUS,
         SEVERITY
-    FROM REPP_AGG_DT_LCR_DAILY
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
 ),
 rolling_stats AS (
     SELECT 
@@ -126,7 +126,7 @@ SELECT
     SUM(CASE WHEN LCR_STATUS = 'WARNING' THEN 1 ELSE 0 END) AS WARNING_DAYS,
     SUM(CASE WHEN LCR_STATUS = 'PASS' THEN 1 ELSE 0 END) AS COMPLIANT_DAYS,
     ROUND(SUM(CASE WHEN LCR_STATUS = 'FAIL' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS BREACH_RATE_PCT
-FROM REPP_AGG_DT_LCR_DAILY
+FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
 GROUP BY DATE_TRUNC('MONTH', AS_OF_DATE)
 ORDER BY REPORTING_MONTH DESC;
 
@@ -135,12 +135,12 @@ DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_MONITORING
     AS
 WITH latest_lcr AS (
     SELECT * 
-    FROM REPP_AGG_DT_LCR_DAILY
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
     QUALIFY ROW_NUMBER() OVER (ORDER BY AS_OF_DATE DESC) = 1
 ),
 latest_trend AS (
     SELECT * 
-    FROM REPP_AGG_DT_LCR_TREND
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_TREND
     QUALIFY ROW_NUMBER() OVER (ORDER BY AS_OF_DATE DESC) = 1
 ),
 hqla_breakdown AS (
@@ -223,12 +223,12 @@ DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_ALERTS
     AS
 WITH latest_lcr AS (
     SELECT * 
-    FROM REPP_AGG_DT_LCR_DAILY
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
     QUALIFY ROW_NUMBER() OVER (ORDER BY AS_OF_DATE DESC) = 1
 ),
 latest_trend AS (
     SELECT * 
-    FROM REPP_AGG_DT_LCR_TREND
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_TREND
     QUALIFY ROW_NUMBER() OVER (ORDER BY AS_OF_DATE DESC) = 1
 ),
 alerts AS (
@@ -369,7 +369,7 @@ SELECT
         ELSE 'STALE'
     END AS DATA_FRESHNESS
 
-FROM REPP_AGG_DT_LCR_DAILY
+FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
 WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY);
 
 DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_HQLA_BREAKDOWN
@@ -377,11 +377,11 @@ COMMENT = 'HQLA composition by level (L1/L2A/L2B) and asset type with market val
 AS
 WITH latest_date AS (
     SELECT MAX(AS_OF_DATE) AS AS_OF_DATE
-    FROM REPP_AGG_DT_LCR_HQLA
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_HQLA
 ),
 total_hqla AS (
     SELECT HQLA_TOTAL
-    FROM REPP_AGG_DT_LCR_DAILY
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
     WHERE AS_OF_DATE = (SELECT AS_OF_DATE FROM latest_date)
 )
 SELECT 
@@ -439,11 +439,11 @@ COMMENT = 'Deposit outflow breakdown by counterparty type showing balances, run-
 AS
 WITH latest_date AS (
     SELECT MAX(AS_OF_DATE) AS AS_OF_DATE
-    FROM REPP_AGG_DT_LCR_OUTFLOW
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_OUTFLOW
 ),
 total_outflows AS (
     SELECT OUTFLOW_TOTAL
-    FROM REPP_AGG_DT_LCR_DAILY
+    FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
     WHERE AS_OF_DATE = (SELECT AS_OF_DATE FROM latest_date)
 )
 SELECT 
@@ -560,7 +560,7 @@ SELECT
     CALCULATION_TIMESTAMP AS LAST_CALCULATED_UTC,
     CAP_APPLIED AS IS_40PCT_CAP_APPLIED
 
-FROM REPP_AGG_DT_LCR_DAILY
+FROM {{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
 
 WHERE AS_OF_DATE >= DATEADD(day, -90, CURRENT_DATE())
 

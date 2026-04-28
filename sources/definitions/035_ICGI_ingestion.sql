@@ -23,7 +23,7 @@ AS
         SELECT 
             METADATA$FILENAME AS FILE_NAME,         
             PARSE_XML($1) AS RAW_XML                
-        FROM @ICGI_RAW_ST_SWIFT_INBOUND
+        FROM @{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
     )
     PATTERN = '.*\.xml'                             
     FILE_FORMAT = ICGI_RAW_FF_XML              
@@ -34,4 +34,4 @@ DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_CLEANUP_AFTER_LOAD_SWIFT_MESSAGES
     COMMENT = 'Automated stage cleanup AFTER SWIFT message data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_LOAD_SWIFT_MESSAGES
 AS
-    CALL PAYI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('ICGI_RAW_ST_SWIFT_INBOUND', 5);
+    CALL PAYI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND', 5);

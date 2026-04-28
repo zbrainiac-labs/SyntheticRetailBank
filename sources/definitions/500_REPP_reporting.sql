@@ -338,7 +338,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LIFECYCLE_ANOMALIES(
     TRANSACTION_ID VARCHAR(50) COMMENT 'Suspicious transaction ID',
     TRANSACTION_DATE DATE COMMENT 'Date of suspicious transaction',
     TRANSACTION_AMOUNT DECIMAL(15,2) COMMENT 'Transaction amount',
-    ANOMALY_SCORE NUMBER(8,2) COMMENT 'Composite anomaly score from PAYA_AGG_DT_TRANSACTION_ANOMALIES',
+    ANOMALY_SCORE NUMBER(8,2) COMMENT 'Composite anomaly score from {{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES',
     ANOMALY_LEVEL VARCHAR(30) COMMENT 'Overall anomaly level (CRITICAL/HIGH/MODERATE)',
     DAYS_BETWEEN_EVENT_AND_TRANSACTION NUMBER(10,0) COMMENT 'Days between lifecycle event and suspicious transaction',
     AML_RISK_LEVEL VARCHAR(30) COMMENT 'AML risk assessment (CRITICAL/HIGH/MEDIUM/LOW)',

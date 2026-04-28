@@ -1,7 +1,7 @@
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_HQLA(
     AS_OF_DATE DATE COMMENT 'Reporting date for HQLA positions (daily COB snapshot). Primary time dimension for portfolio composition analysis, asset allocation monitoring, and strategic rebalancing decisions. Used for time-series analysis of HQLA mix evolution and regulatory level distribution trends.',
     HQLA_LEVEL VARCHAR(10) COMMENT 'Basel III HQLA regulatory level classification: L1 (highest quality, 0% haircut), L2A (high quality, 15% haircut), L2B (acceptable quality, 50% haircut). Primary grouping dimension for regulatory reporting, cap rule monitoring, and portfolio quality assessment. Critical for automated compliance validation.',
-    ASSET_TYPE VARCHAR(50) COMMENT 'HQLA asset type code from eligibility rules (e.g., CASH_SNB, GOVT_BOND_CHF, CANTON_BOND, EQUITY_SMI). Secondary grouping dimension for granular portfolio analysis, concentration risk monitoring, and strategic asset allocation. Links to LIQI_RAW_TB_HQLA_ELIGIBILITY for regulatory metadata.',
+    ASSET_TYPE VARCHAR(50) COMMENT 'HQLA asset type code from eligibility rules (e.g., CASH_SNB, GOVT_BOND_CHF, CANTON_BOND, EQUITY_SMI). Secondary grouping dimension for granular portfolio analysis, concentration risk monitoring, and strategic asset allocation. Links to {{ rep_raw }}.LIQI_RAW_TB_HQLA_ELIGIBILITY for regulatory metadata.',
     HOLDINGS_COUNT NUMBER(10,0) COMMENT 'Number of individual securities/positions within this asset type for this reporting date. Portfolio diversification metric indicating concentration risk. Low counts (1-2) indicate potential single-security dependence;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_OUTFLOW(

@@ -66,7 +66,7 @@ AS
         CONTRACT_SIZE, NUM_CONTRACTS, DELIVERY_MONTH, DELIVERY_LOCATION, DELTA, VEGA, SPOT_PRICE, FORWARD_PRICE, VOLATILITY,
         EXCHANGE, BROKER_ID, VENUE, LIQUIDITY_SCORE
     )
-    FROM @CMDI_RAW_ST_TRADES
+    FROM @{{ cmd_raw }}.CMDI_RAW_ST_TRADES
     PATTERN = '.*commodity_trades.*\.csv'
     FILE_FORMAT = CMDI_RAW_FF_TRADES_CSV
     ON_ERROR = CONTINUE;
@@ -76,4 +76,4 @@ DEFINE TASK {{ db }}.{{ cmd_raw }}.CMDI_RAW_TK_CLEANUP_AFTER_LOAD_TRADES
     COMMENT = 'Automated stage cleanup AFTER commodity trade data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ cmd_raw }}.CMDI_RAW_TK_LOAD_TRADES
 AS
-    CALL CMDI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('CMDI_RAW_ST_TRADES', 5);
+    CALL CMDI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ cmd_raw }}.CMDI_RAW_ST_TRADES', 5);

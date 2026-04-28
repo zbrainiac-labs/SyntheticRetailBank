@@ -440,7 +440,7 @@ WHERE e.POSITION_LEVEL = 'CLIENT_ADVISOR'
 GROUP BY e.COUNTRY, e.REGION;
 
 DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISORS
-COMMENT = 'Alias view for EMPA_AGG_DT_ADVISOR_PERFORMANCE to match semantic view references'
+COMMENT = 'Alias view for {{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE to match semantic view references'
 AS SELECT 
     EMPLOYEE_ID,
     ADVISOR_NAME AS FULL_NAME,

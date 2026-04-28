@@ -397,7 +397,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360(
 ) 
 TARGET_LAG = '{{ lag }}' 
 WAREHOUSE = {{ wh }}
-COMMENT = 'Comprehensive 360-degree customer view with master data, current address, current status, account summary with balances (Phase 1), transaction activity metrics via direct cross-schema join (Phase 2 - Option A), Exposed Person fuzzy matching, and Global Sanctions Data fuzzy matching with accuracy scoring from enhanced screening view (302_CRMA_sanctions_screening.sql). Phase 3 adds vulnerability attributes for UK Consumer Duty compliance. Phase 4 integrates key lifecycle metrics (LIFECYCLE_STAGE, ENGAGEMENT_SCORE, CHURN_PROBABILITY, TOTAL_LIFECYCLE_EVENTS) from CRMA_AGG_DT_CUSTOMER_LIFECYCLE for unified customer analytics. Enables AUM tracking, advisor performance measurement, engagement scoring, churn prediction, comprehensive compliance screening, and vulnerable customer identification for holistic customer risk assessment and relationship management.'
+COMMENT = 'Comprehensive 360-degree customer view with master data, current address, current status, account summary with balances (Phase 1), transaction activity metrics via direct cross-schema join (Phase 2 - Option A), Exposed Person fuzzy matching, and Global Sanctions Data fuzzy matching with accuracy scoring from enhanced screening view (302_CRMA_sanctions_screening.sql). Phase 3 adds vulnerability attributes for UK Consumer Duty compliance. Phase 4 integrates key lifecycle metrics (LIFECYCLE_STAGE, ENGAGEMENT_SCORE, CHURN_PROBABILITY, TOTAL_LIFECYCLE_EVENTS) from {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE for unified customer analytics. Enables AUM tracking, advisor performance measurement, engagement scoring, churn prediction, comprehensive compliance screening, and vulnerable customer identification for holistic customer risk assessment and relationship management.'
 AS
 SELECT 
     c.CUSTOMER_ID,
@@ -1030,7 +1030,7 @@ DEFINE VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_ALERTS
 COMMENT = 'Filtered view showing only customers with PEP or sanctions hits requiring investigation. Pre-prioritized by action urgency and SLA breach status. Used for alert dashboards and case management.'
 AS
 SELECT * 
-FROM CRMA_AGG_VW_SCREENING_STATUS
+FROM {{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS
 WHERE REQUIRES_INVESTIGATION = TRUE
 ORDER BY 
     CASE REQUIRED_ACTION

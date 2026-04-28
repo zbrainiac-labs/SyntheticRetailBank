@@ -66,7 +66,7 @@ AS
         COUPON_RATE, MATURITY_DATE, DURATION, DV01, CREDIT_RATING, CREDIT_SPREAD_BPS,
         MARKET, BROKER_ID, VENUE, LIQUIDITY_SCORE
     )
-    FROM @FIII_RAW_ST_TRADES
+    FROM @{{ fii_raw }}.FIII_RAW_ST_TRADES
     PATTERN = '.*fixed_income_trades.*\.csv'
     FILE_FORMAT = FIII_RAW_FF_TRADES_CSV
     ON_ERROR = CONTINUE;
@@ -76,4 +76,4 @@ DEFINE TASK {{ db }}.{{ fii_raw }}.FIII_RAW_TK_CLEANUP_AFTER_LOAD_TRADES
     COMMENT = 'Automated stage cleanup AFTER fixed income trade data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ fii_raw }}.FIII_RAW_TK_LOAD_TRADES
 AS
-    CALL FIII_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('FIII_RAW_ST_TRADES', 5);
+    CALL FIII_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ fii_raw }}.FIII_RAW_ST_TRADES', 5);
