@@ -29,12 +29,13 @@
 
 | # | Priority | Item | Count | Fix |
 |---|----------|------|-------|-----|
-| O1 | High | **DCM plan not yet validated** | - | Run `snow dcm raw-analyze` + `snow dcm plan` (needs working CLI connection) |
-| O2 | Medium | **Column COMMENTs verbose** | 1,591 | Strip to reduce 8,474 to ~3,500 lines |
-| O3 | Medium | **Object-level COMMENTs verbose** | 61 | Shorten to one-liners or remove |
-| O4 | Medium | **WITH TAG inline on columns** | 63 | May fail if tag doesn't exist before table; consider `post_deploy.sql` |
+| O1 | ~~High~~ | ~~**DCM plan not yet validated**~~ | - | ~~DONE — 193 entities (192 create, 1 alter)~~ |
+| O2 | Medium | **post_deploy.sql / pre_deploy.sql hardcoded DB/schema** | ~200 refs | Parameterize with `snow sql -D` variables or `envsubst` for PROD support |
+| O3 | Medium | **Column COMMENTs verbose** | 1,591 | Strip to reduce 8,474 to ~3,500 lines |
+| O4 | Medium | **Object-level COMMENTs verbose** | 61 | Shorten to one-liners or remove |
 | O5 | Low | **No data quality expectations** | 0 | Add `ATTACH DATA METRIC FUNCTION` for null checks, freshness |
 | O6 | Low | **sqlunit schema names hardcoded** | 54 | Add schema `envsubst` vars (same as post_deploy pattern) |
+| O7 | Low | **WITH TAG moved to post_deploy** | 63 | Tags removed from DEFINE (DCM unsupported), ALTER TAG in post_deploy |
 
 ## Architecture
 
