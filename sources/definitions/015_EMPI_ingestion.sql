@@ -1,101 +1,101 @@
 DEFINE STAGE {{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES
-    DIRECTORY = (
-        ENABLE = TRUE
-        AUTO_REFRESH = TRUE
-    )
-    COMMENT = 'Internal stage for employee master data CSV files. Expected pattern: *employees*.csv';
+ DIRECTORY = (
+ ENABLE = TRUE
+ AUTO_REFRESH = TRUE
+ )
+ COMMENT = 'Internal stage for employee master data CSV files. Expected pattern: *employees*.csv';
 
 DEFINE STAGE {{ db }}.{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS
-    DIRECTORY = (
-        ENABLE = TRUE
-        AUTO_REFRESH = TRUE
-    )
-    COMMENT = 'Internal stage for client-advisor assignment CSV files. Expected pattern: *client_assignments*.csv';
+ DIRECTORY = (
+ ENABLE = TRUE
+ AUTO_REFRESH = TRUE
+ )
+ COMMENT = 'Internal stage for client-advisor assignment CSV files. Expected pattern: *client_assignments*.csv';
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE (
-    EMPLOYEE_ID VARCHAR(20) NOT NULL,                   
-    FIRST_NAME VARCHAR(100),                            
-    FAMILY_NAME VARCHAR(100),                           
-    EMAIL VARCHAR(200),                                 
-    PHONE VARCHAR(50),                                  
+ EMPLOYEE_ID VARCHAR(20) NOT NULL,
+ FIRST_NAME VARCHAR(100),
+ FAMILY_NAME VARCHAR(100),
+ EMAIL VARCHAR(200),
+ PHONE VARCHAR(50),
 
-    DATE_OF_BIRTH DATE,                                 
-    HIRE_DATE DATE,                                     
-    EMPLOYMENT_STATUS VARCHAR(20),                      
+ DATE_OF_BIRTH DATE,
+ HIRE_DATE DATE,
+ EMPLOYMENT_STATUS VARCHAR(20),
 
-    COUNTRY VARCHAR(50),                                
-    OFFICE_LOCATION VARCHAR(200),                       
-    REGION VARCHAR(50),                                 
+ COUNTRY VARCHAR(50),
+ OFFICE_LOCATION VARCHAR(200),
+ REGION VARCHAR(50),
 
-    POSITION_LEVEL VARCHAR(30),                         
-    MANAGER_EMPLOYEE_ID VARCHAR(20),                    
+ POSITION_LEVEL VARCHAR(30),
+ MANAGER_EMPLOYEE_ID VARCHAR(20),
 
-    PERFORMANCE_RATING DECIMAL(3,2),                    
-    LANGUAGES_SPOKEN VARCHAR(200),                      
-    CERTIFICATIONS VARCHAR(500),                        
+ PERFORMANCE_RATING DECIMAL(3,2),
+ LANGUAGES_SPOKEN VARCHAR(200),
+ CERTIFICATIONS VARCHAR(500),
 
-    INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ,                 
+ INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ,
 
-    PRIMARY KEY (EMPLOYEE_ID),
-    CONSTRAINT FK_EMPI_RAW_TB_EMPLOYEE__EMPI_RAW_TB_EMPLOYEE FOREIGN KEY (MANAGER_EMPLOYEE_ID) REFERENCES EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
+ PRIMARY KEY (EMPLOYEE_ID),
+ CONSTRAINT FK_EMPI_RAW_TB_EMPLOYEE__EMPI_RAW_TB_EMPLOYEE FOREIGN KEY (MANAGER_EMPLOYEE_ID) REFERENCES {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Employee master data with 3-tier hierarchy (advisors, team leaders, super team leaders). Scales dynamically based on customer distribution.';
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT (
-    ASSIGNMENT_ID VARCHAR(30) NOT NULL,                 
-    CUSTOMER_ID VARCHAR(30) NOT NULL,                   
-    ADVISOR_EMPLOYEE_ID VARCHAR(20) NOT NULL,           
+ ASSIGNMENT_ID VARCHAR(30) NOT NULL,
+ CUSTOMER_ID VARCHAR(30) NOT NULL,
+ ADVISOR_EMPLOYEE_ID VARCHAR(20) NOT NULL,
 
-    ASSIGNMENT_START_DATE DATE,                         
-    ASSIGNMENT_END_DATE DATE,                           
-    IS_CURRENT BOOLEAN DEFAULT TRUE,                    
+ ASSIGNMENT_START_DATE DATE,
+ ASSIGNMENT_END_DATE DATE,
+ IS_CURRENT BOOLEAN DEFAULT TRUE,
 
-    ASSIGNMENT_REASON VARCHAR(50),                      
+ ASSIGNMENT_REASON VARCHAR(50),
 
-    INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ,                 
+ INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ,
 
-    PRIMARY KEY (ASSIGNMENT_ID),
+ PRIMARY KEY (ASSIGNMENT_ID),
 
-    FOREIGN KEY (ADVISOR_EMPLOYEE_ID) REFERENCES EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
+ FOREIGN KEY (ADVISOR_EMPLOYEE_ID) REFERENCES {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE(EMPLOYEE_ID)
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Client-advisor assignment tracking with history support (SCD Type 2 ready). Tracks customer-advisor relationships over time. CUSTOMER_ID references CRMI_RAW_TB_CUSTOMER but FK not enforced due to SCD Type 2 composite key.';
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
-    USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
-    SCHEDULE = '60 MINUTE'
+ USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
+ SCHEDULE = '60 MINUTE'
 WHEN
-    SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_EMPLOYEE_FILES')
+ SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_EMPLOYEE_FILES')
 AS
-    COPY INTO EMPI_RAW_TB_EMPLOYEE
-    FROM @EMPI_RAW_ST_EMPLOYEES
-    FILE_FORMAT = (FORMAT_NAME = 'EMPI_RAW_FF_EMPLOYEE_CSV')
-    MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-    ON_ERROR = 'CONTINUE';
+ COPY INTO {{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE
+ FROM @EMPI_RAW_ST_EMPLOYEES
+ FILE_FORMAT = (FORMAT_NAME = 'EMPI_RAW_FF_EMPLOYEE_CSV')
+ MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+ ON_ERROR = 'CONTINUE';
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
-    USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
-    SCHEDULE = '60 MINUTE'
+ USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
+ SCHEDULE = '60 MINUTE'
 WHEN
-    SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_ASSIGNMENT_FILES')
+ SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_ASSIGNMENT_FILES')
 AS
-    COPY INTO EMPI_RAW_TB_CLIENT_ASSIGNMENT
-    FROM @EMPI_RAW_ST_CLIENT_ASSIGNMENTS
-    FILE_FORMAT = (FORMAT_NAME = 'EMPI_RAW_FF_ASSIGNMENT_CSV')
-    MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-    ON_ERROR = 'CONTINUE';
+ COPY INTO {{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT
+ FROM @EMPI_RAW_ST_CLIENT_ASSIGNMENTS
+ FILE_FORMAT = (FORMAT_NAME = 'EMPI_RAW_FF_ASSIGNMENT_CSV')
+ MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+ ON_ERROR = 'CONTINUE';
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_CLEANUP_AFTER_LOAD_EMPLOYEES
-    USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
-    COMMENT = 'Automated stage cleanup AFTER {{ db }}.{{ crm_raw }}.employee data load. Keeps last 5 files to manage storage costs.'
-    AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
+ USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
+ COMMENT = 'Automated stage cleanup after employee data load. Keeps last 5 files to manage storage costs.'
+ AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('EMPI_RAW_ST_EMPLOYEES', 5);
+ CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('EMPI_RAW_ST_EMPLOYEES', 5);
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_CLEANUP_AFTER_LOAD_ASSIGNMENTS
-    USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
-    COMMENT = 'Automated stage cleanup AFTER {{ db }}.{{ crm_raw }}.client assignment data load. Keeps last 5 files to manage storage costs.'
-    AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
+ USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
+ COMMENT = 'Automated stage cleanup AFTER client assignment data load. Keeps last 5 files to manage storage costs.'
+ AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
 AS
-    CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('EMPI_RAW_ST_CLIENT_ASSIGNMENTS', 5);
+ CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('EMPI_RAW_ST_CLIENT_ASSIGNMENTS', 5);
