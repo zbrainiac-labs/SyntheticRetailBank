@@ -38,6 +38,7 @@ set -e
 
 # --- Default values ---
 CONNECTION_NAME=""
+SOURCE_DATABASE="${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK}"
 DRY_RUN=false
 MAX_RETRIES=3
 RETRY_DELAY=5
@@ -473,7 +474,7 @@ execute_upload() {
     
     # Upload files to stage with retry logic
     local sql_command="
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
         USE SCHEMA $schema;
         PUT file://$local_pattern @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
     "
@@ -609,7 +610,7 @@ execute_single_files_upload() {
     if [[ $file_count -le $BATCH_SIZE ]]; then
         # Small batch - upload all at once
         local sql_command="
-            USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+            USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
             USE SCHEMA $schema;
             PUT file://$source_dir/$file_pattern @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
         "
@@ -647,7 +648,7 @@ execute_single_files_upload() {
             
             # Upload batch
             local batch_sql="
-                USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+                USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
                 USE SCHEMA $schema;
                 PUT file://$temp_batch_dir/* @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
             "
@@ -789,21 +790,21 @@ echo ""
 # Customer master data
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/customers.csv" \
-    "CRMI_RAW_STAGE_CUSTOMERS" \
+    "CRMI_RAW_ST_CUSTOMERS" \
     "CRM_RAW_001" \
     "Customer Master Data"
 
 # Customer addresses (SCD Type 2)
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/customer_addresses.csv" \
-    "CRMI_RAW_STAGE_ADDRESSES" \
+    "CRMI_RAW_ST_ADDRESSES" \
     "CRM_RAW_001" \
     "Customer Addresses (SCD Type 2)"
 
 # Customer address updates (SCD Type 2 historical changes)
 upload_single_files \
     "$GENERATED_DATA_DIR/master_data/address_updates" \
-    "CRMI_RAW_STAGE_ADDRESSES" \
+    "CRMI_RAW_ST_ADDRESSES" \
     "CRM_RAW_001" \
     "Customer Address Updates (SCD Type 2)" \
     "customer_addresses_*.csv"
@@ -811,7 +812,7 @@ upload_single_files \
 # Customer attribute updates (SCD Type 2 - employment, account tier, etc.)
 upload_single_files \
     "$GENERATED_DATA_DIR/master_data/customer_updates" \
-    "CRMI_RAW_STAGE_CUSTOMERS" \
+    "CRMI_RAW_ST_CUSTOMERS" \
     "CRM_RAW_001" \
     "Customer Attribute Updates (SCD Type 2)" \
     "customer_updates_*.csv"
@@ -819,14 +820,14 @@ upload_single_files \
 # Exposed Person compliance data
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/pep_data.csv" \
-    "CRMI_RAW_STAGE_EXPOSED_PERSON" \
+    "CRMI_RAW_ST_EXPOSED_PERSON" \
     "CRM_RAW_001" \
     "Exposed Person Compliance Data"
 
 # Customer lifecycle events (date-based files)
 upload_single_files \
     "$GENERATED_DATA_DIR/master_data/customer_events" \
-    "CRMI_RAW_STAGE_CUSTOMER_EVENTS" \
+    "CRMI_RAW_ST_CUSTOMER_EVENTS" \
     "CRM_RAW_001" \
     "Customer Lifecycle Events (by date)" \
     "customer_events_*.csv"
@@ -834,48 +835,48 @@ upload_single_files \
 # Customer status history
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/customer_status.csv" \
-    "CRMI_RAW_STAGE_CUSTOMER_EVENTS" \
+    "CRMI_RAW_ST_CUSTOMER_EVENTS" \
     "CRM_RAW_001" \
     "Customer Status History"
 
 # Account master data
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/accounts.csv" \
-    "ACCI_RAW_STAGE_ACCOUNTS" \
+    "ACCI_RAW_ST_ACCOUNTS" \
     "CRM_RAW_001" \
     "Account Master Data"
 
 # Employee master data
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/employees.csv" \
-    "EMPI_RAW_STAGE_EMPLOYEES" \
+    "EMPI_RAW_ST_EMPLOYEES" \
     "CRM_RAW_001" \
     "Employee Master Data"
 
 # Refresh stream metadata for employee files
 if [[ "$DRY_RUN" != "true" ]]; then
-    echo "  [INFO] Refreshing stream metadata for EMPI_RAW_STREAM_EMPLOYEE_FILES..."
+    echo "  [INFO] Refreshing stream metadata for EMPI_RAW_SM_EMPLOYEE_FILES..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
         USE SCHEMA CRM_RAW_001;
-        SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_STREAM_EMPLOYEE_FILES') AS has_data;
+        SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_SM_EMPLOYEE_FILES') AS has_data;
     " > /dev/null 2>&1
 fi
 
 # Client-advisor assignments
 upload_to_stage \
     "$GENERATED_DATA_DIR/master_data/client_assignments.csv" \
-    "EMPI_RAW_STAGE_CLIENT_ASSIGNMENTS" \
+    "EMPI_RAW_ST_CLIENT_ASSIGNMENTS" \
     "CRM_RAW_001" \
     "Client-Advisor Assignments"
 
 # Refresh stream metadata for assignment files
 if [[ "$DRY_RUN" != "true" ]]; then
-    echo "  [INFO] Refreshing stream metadata for EMPI_RAW_STREAM_ASSIGNMENT_FILES..."
+    echo "  [INFO] Refreshing stream metadata for EMPI_RAW_SM_ASSIGNMENT_FILES..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
         USE SCHEMA CRM_RAW_001;
-        SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_STREAM_ASSIGNMENT_FILES') AS has_data;
+        SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_SM_ASSIGNMENT_FILES') AS has_data;
     " > /dev/null 2>&1
 fi
 
@@ -888,7 +889,7 @@ echo ""
 # FX Rates
 upload_single_files \
     "$GENERATED_DATA_DIR/fx_rates" \
-    "REFI_RAW_STAGE_FX_RATES" \
+    "REFI_RAW_ST_FX_RATES" \
     "REF_RAW_001" \
     "FX Rates" \
     "fx_rates_*.csv"
@@ -902,7 +903,7 @@ echo ""
 # Payment transactions
 upload_single_files \
     "$GENERATED_DATA_DIR/payment_transactions" \
-    "PAYI_RAW_STAGE_TRANSACTIONS" \
+    "PAYI_RAW_ST_TRANSACTIONS" \
     "PAY_RAW_001" \
     "Payment Transactions" \
     "pay_transactions_*.csv"
@@ -910,7 +911,7 @@ upload_single_files \
 # SWIFT ISO20022 messages
 upload_single_files \
     "$GENERATED_DATA_DIR/swift_messages" \
-    "ICGI_RAW_STAGE_SWIFT_INBOUND" \
+    "ICGI_RAW_ST_SWIFT_INBOUND" \
     "PAY_RAW_001" \
     "SWIFT ISO20022 Messages" \
     "*.xml"
@@ -924,7 +925,7 @@ echo ""
 # Equity trades
 upload_single_files \
     "$GENERATED_DATA_DIR/equity_trades" \
-    "EQTI_RAW_STAGE_TRADES" \
+    "EQTI_RAW_ST_TRADES" \
     "EQT_RAW_001" \
     "Equity Trades" \
     "trades_*.csv"
@@ -932,7 +933,7 @@ upload_single_files \
 # Fixed Income trades
 upload_single_files \
     "$GENERATED_DATA_DIR/fixed_income_trades" \
-    "FIII_RAW_STAGE_TRADES" \
+    "FIII_RAW_ST_TRADES" \
     "FII_RAW_001" \
     "Fixed Income Trades" \
     "fixed_income_trades_*.csv"
@@ -940,7 +941,7 @@ upload_single_files \
 # Commodity trades
 upload_single_files \
     "$GENERATED_DATA_DIR/commodity_trades" \
-    "CMDI_RAW_STAGE_TRADES" \
+    "CMDI_RAW_ST_TRADES" \
     "CMD_RAW_001" \
     "Commodity Trades" \
     "commodity_trades_*.csv"
@@ -954,7 +955,7 @@ echo ""
 # Email documents
 upload_single_files \
     "$GENERATED_DATA_DIR/emails" \
-    "LOAI_RAW_STAGE_EMAIL_INBOUND" \
+    "LOAI_RAW_ST_EMAIL_INBOUND" \
     "LOA_RAW_001" \
     "Loan Email Documents" \
     "*.txt"
@@ -962,7 +963,7 @@ upload_single_files \
 # PDF documents
 upload_single_files \
     "$GENERATED_DATA_DIR/creditcard_pdf" \
-    "LOAI_RAW_STAGE_PDF_INBOUND" \
+    "LOAI_RAW_ST_PDF_INBOUND" \
     "LOA_RAW_001" \
     "Loan PDF Documents" \
     "*.pdf"
@@ -976,7 +977,7 @@ echo ""
 # HQLA Holdings (High-Quality Liquid Assets)
 upload_single_files \
     "$GENERATED_DATA_DIR/lcr" \
-    "LIQI_RAW_STAGE_HQLA_HOLDINGS" \
+    "LIQI_RAW_ST_HQLA_HOLDINGS" \
     "REP_RAW_001" \
     "LCR HQLA Holdings" \
     "hqla_holdings_*.csv"
@@ -984,7 +985,7 @@ upload_single_files \
 # Deposit Balances (for net cash outflow calculation)
 upload_single_files \
     "$GENERATED_DATA_DIR/lcr" \
-    "LIQI_RAW_STAGE_DEPOSIT_BALANCES" \
+    "LIQI_RAW_ST_DEPOSIT_BALANCES" \
     "REP_RAW_001" \
     "LCR Deposit Balances" \
     "deposit_balances_*.csv"
@@ -993,10 +994,10 @@ upload_single_files \
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for LCR data..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+        USE DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};
         USE SCHEMA REP_RAW_001;
-        SELECT SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_STREAM_HQLA_FILES') AS hqla_stream_has_data,
-               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_STREAM_DEPOSIT_FILES') AS deposit_stream_has_data;
+        SELECT SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_HQLA_FILES') AS hqla_stream_has_data,
+               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_DEPOSIT_FILES') AS deposit_stream_has_data;
     " > /dev/null 2>&1
 fi
 
@@ -1058,7 +1059,7 @@ elif [[ $FAILED_UPLOADS -eq 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. Monitor task execution:"
-    echo "     SHOW TASKS IN DATABASE AAA_DEV_SYNTHETIC_BANK;"
+    echo "     SHOW TASKS IN DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};"
     echo ""
     echo "  2. Check data loading:"
     echo "     SELECT COUNT(*) FROM [schema].[table];"
@@ -1067,7 +1068,7 @@ elif [[ $FAILED_UPLOADS -eq 0 ]]; then
     echo "     LIST @[stage_name];"
     echo ""
     echo "  4. Check streams with data:"
-    echo "     SHOW STREAMS IN DATABASE AAA_DEV_SYNTHETIC_BANK;"
+    echo "     SHOW STREAMS IN DATABASE ${SOURCE_DATABASE:-AAA_DEV_SYNTHETIC_BANK};"
     echo ""
     echo "Data is now ready for automated processing by Snowflake tasks!"
 else

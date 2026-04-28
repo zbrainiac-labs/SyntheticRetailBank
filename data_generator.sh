@@ -43,7 +43,7 @@ echo "  ✓ Commodity trades (energy, metals, agricultural)"
 echo "  ✓ FINMA LCR data (HQLA holdings & deposit balances)"
 echo ""
 
-./venv/bin/python main.py \
+./venv/bin/python generators/main.py \
     --customers $NUM_CUSTOMERS \
     --anomaly-rate 3.0 \
     --period $PERIOD \
@@ -86,7 +86,7 @@ echo "  - Output: $OUTPUT_DIR/lcr/"
 echo ""
 
 # Link deposits to actual customers from master data
-./venv/bin/python lcr_data_generator.py \
+./venv/bin/python generators/lcr_data_generator.py \
     --days 90 \
     --customer-file "$OUTPUT_DIR/master_data/customers.csv" \
     --output-dir "$OUTPUT_DIR/lcr"

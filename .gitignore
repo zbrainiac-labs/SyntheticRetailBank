@@ -1,7 +1,8 @@
 /.idea/
 /generated_data/
 /venv/
-/deploy-with-stream-fix.sh
-/fix-streams-after-upload.sql
-/docs/showcase_customer_data_management copy.md
-/CUSTOMER_LIFECYCLE_INTEGRATION.md
+__pycache__/
+.DS_Store
+out/
+output/
+.scannerwork/
