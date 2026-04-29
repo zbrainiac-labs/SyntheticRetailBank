@@ -483,7 +483,7 @@ Examples:
         actual_num_customers = len(customer_ids)
     else:
         actual_num_customers = args.customers
-        print(f"Generating synthetic customer IDs (no customer file provided)")
+        print("Generating synthetic customer IDs (no customer file provided)")
     
     # Initialize generator
     generator = FINMALCRDataGenerator(
@@ -506,11 +506,11 @@ Examples:
     print(f"   - Deposit balances: {total_deposits:,} records ({args.days} days)")
     print(f"   - Customers: {actual_num_customers:,}{'*' if customer_ids else ''}")
     if customer_ids:
-        print(f"   - Linked to: actual customer base (referential integrity)")
+        print("   - Linked to: actual customer base (referential integrity)")
     print(f"   - Target LCR: ~{args.target_lcr:.1f}% (calibrated for 90-110% range)")
     print(f"   - Date range: {start_date.isoformat()} to {(start_date + timedelta(days=args.days-1)).isoformat()}")
     print(f"   - Files created: {args.days * 2} ({args.days} HQLA + {args.days} deposit files)")
-    print(f"   - For FINMA Circular 2015/2 compliance and Basel III monitoring")
+    print("   - For FINMA Circular 2015/2 compliance and Basel III monitoring")
 
 
 if __name__ == '__main__':

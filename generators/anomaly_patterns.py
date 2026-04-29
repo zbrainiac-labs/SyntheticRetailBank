@@ -76,7 +76,7 @@ class AnomalyPatternGenerator:
         ]
         
         counterparties = []
-        for i in range(random.randint(1, 3)):
+        for _ in range(random.randint(1, 3)):
             pattern = random.choice(suspicious_patterns)
             account_num = f"{random.randint(1000000, 9999999):07d}"
             counterparties.append(f"{pattern}{account_num}")
@@ -93,7 +93,7 @@ class AnomalyPatternGenerator:
         )
         return normal_amount * multiplier
     
-    def should_apply_anomaly(self, customer_id: str, anomaly_chars: Dict[str, Any], 
+    def should_apply_anomaly(self, _customer_id: str, anomaly_chars: Dict[str, Any],
                            transaction_date: datetime) -> Tuple[bool, List[AnomalyType]]:
         """Determine if anomaly should be applied to a transaction on a given date"""
         anomaly_start = anomaly_chars["anomaly_start_date"]

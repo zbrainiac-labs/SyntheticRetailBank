@@ -732,7 +732,7 @@ def main():
                     'total_trades': len(fi_trades),
                     'bonds': bond_count,
                     'swaps': swap_count,
-                    'total_notional_chf': total_notional,
+                    'total_notional_ch': total_notional,
                     'output_dir': str(fi_output_dir),
                     'files_created': len(files_created)
                 }
@@ -830,7 +830,7 @@ def main():
                 commodity_results = {
                     'total_trades': len(commodity_trades),
                     'commodity_types': commodity_types,
-                    'total_value_chf': total_value,
+                    'total_value_ch': total_value,
                     'output_dir': str(commodity_output_dir),
                     'files_created': len(files_created)
                 }
@@ -864,7 +864,7 @@ def main():
                 
                 # Check if customer updates directory exists, otherwise set to None
                 if not Path(customer_updates_dir).exists():
-                    print(f"⚠️  Customer updates directory not found, will use only address updates and random events")
+                    print("⚠️  Customer updates directory not found, will use only address updates and random events")
                     customer_updates_dir = None
                 
                 lifecycle_generator = CustomerLifecycleGenerator(
@@ -885,7 +885,7 @@ def main():
                     'status_file': str(Path(output_dir) / 'customer_status.csv')
                 }
                 
-                print(f"✅ Customer lifecycle events generated successfully")
+                print("✅ Customer lifecycle events generated successfully")
                 print(f"📁 Events directory: {lifecycle_results['events_dir']}")
                 print(f"📁 Status file: {lifecycle_results['status_file']}")
                 
@@ -921,99 +921,99 @@ def main():
         
         # Handle both full and minimal generation modes
         if results.get('minimal_mode', False):
-            print(f"✅ Minimal customer data generation: SUCCESS")
+            print("✅ Minimal customer data generation: SUCCESS")
             print(f"   - Customers: {results['total_customers']} ({results['anomalous_customers']} anomalous)")
-            print(f"   - Mode: Exclusive generation (only requested entities)")
+            print("   - Mode: Exclusive generation (only requested entities)")
         else:
-            print(f"✅ Banking data generation: SUCCESS")
+            print("✅ Banking data generation: SUCCESS")
             print(f"   - Customers: {results['total_customers']} ({results['anomalous_customers']} anomalous)")
             print(f"   - Transactions: {results['total_transactions']}")
             print(f"   - Files: {results['daily_file_count']} daily files + 5 master files")
         
         if args.generate_swift and swift_results:
-            print(f"✅ SWIFT message generation: SUCCESS")
+            print("✅ SWIFT message generation: SUCCESS")
             print(f"   - SWIFT customers: {swift_results['summary']['configuration']['swift_customers']}")
             print(f"   - Message pairs: {swift_results['successful_pairs']}")
             print(f"   - XML files: {swift_results['successful_pairs'] * 2}")
             print(f"   - Transaction volume: €{swift_results['total_volume']:,.2f}")
             print(f"   - Anomaly customers with SWIFT: {swift_results['summary']['generation_stats']['anomaly_customers_with_swift']}")
         elif args.generate_swift:
-            print(f"❌ SWIFT message generation: FAILED")
+            print("❌ SWIFT message generation: FAILED")
         else:
-            print(f"⏭️  SWIFT message generation: SKIPPED (use --generate-swift to enable)")
+            print("⏭️  SWIFT message generation: SKIPPED (use --generate-swift to enable)")
         
         if args.generate_pep and pep_results:
-            print(f"✅ PEP data generation: SUCCESS")
+            print("✅ PEP data generation: SUCCESS")
             print(f"   - PEP records: {pep_results['total_records']}")
             print(f"   - Risk levels: {', '.join([f'{k}:{v}' for k, v in pep_results['risk_levels'].items()])}")
             print(f"   - Categories: {', '.join([f'{k}:{v}' for k, v in pep_results['categories'].items()])}")
         elif args.generate_pep:
-            print(f"❌ PEP data generation: FAILED")
+            print("❌ PEP data generation: FAILED")
         else:
-            print(f"⏭️  PEP data generation: SKIPPED (use --generate-pep to enable)")
+            print("⏭️  PEP data generation: SKIPPED (use --generate-pep to enable)")
         
         if args.generate_mortgage_emails and mortgage_results:
-            print(f"✅ Mortgage email generation: SUCCESS")
+            print("✅ Mortgage email generation: SUCCESS")
             print(f"   - Customers: {mortgage_results['customers']}")
             print(f"   - Total emails: {mortgage_results['total_emails']} (3 types per customer)")
         elif args.generate_mortgage_emails:
-            print(f"❌ Mortgage email generation: FAILED")
+            print("❌ Mortgage email generation: FAILED")
         else:
-            print(f"⏭️  Mortgage email generation: SKIPPED (use --generate-mortgage-emails to enable)")
+            print("⏭️  Mortgage email generation: SKIPPED (use --generate-mortgage-emails to enable)")
         
         if args.generate_address_updates and address_update_results:
-            print(f"✅ Address update generation: SUCCESS")
+            print("✅ Address update generation: SUCCESS")
             print(f"   - Update files: {address_update_results['files_generated']}")
-            print(f"   - For SCD Type 2 processing")
+            print("   - For SCD Type 2 processing")
         elif args.generate_address_updates:
-            print(f"❌ Address update generation: FAILED")
+            print("❌ Address update generation: FAILED")
         else:
-            print(f"⏭️  Address update generation: SKIPPED (use --generate-address-updates to enable)")
+            print("⏭️  Address update generation: SKIPPED (use --generate-address-updates to enable)")
         
         if (args.generate_customer_updates or args.generate_customer_snapshot) and customer_update_results:
-            print(f"✅ Customer update generation: SUCCESS")
+            print("✅ Customer update generation: SUCCESS")
             if customer_update_results.get('snapshot_file'):
-                print(f"   - Initial snapshot: customer_snapshot_initial.csv")
+                print("   - Initial snapshot: customer_snapshot_initial.csv")
             if customer_update_results.get('update_files_generated', 0) > 0:
                 print(f"   - Update files: {customer_update_results['update_files_generated']}")
-            print(f"   - For SCD Type 2 processing")
+            print("   - For SCD Type 2 processing")
         elif args.generate_customer_updates or args.generate_customer_snapshot:
-            print(f"❌ Customer update generation: FAILED")
+            print("❌ Customer update generation: FAILED")
         else:
-            print(f"⏭️  Customer update generation: SKIPPED (use --generate-customer-updates to enable)")
+            print("⏭️  Customer update generation: SKIPPED (use --generate-customer-updates to enable)")
         
         if args.generate_fixed_income and fixed_income_results:
-            print(f"✅ Fixed income generation: SUCCESS")
+            print("✅ Fixed income generation: SUCCESS")
             print(f"   - Total trades: {fixed_income_results['total_trades']}")
             print(f"   - Bonds: {fixed_income_results['bonds']}, Swaps: {fixed_income_results['swaps']}")
             print(f"   - Total Notional: CHF {fixed_income_results['total_notional_chf']:,.2f}")
             print(f"   - Files created: {fixed_income_results['files_created']} (one per trade date)")
         elif args.generate_fixed_income:
-            print(f"❌ Fixed income generation: FAILED")
+            print("❌ Fixed income generation: FAILED")
         else:
-            print(f"⏭️  Fixed income generation: SKIPPED (use --generate-fixed-income to enable)")
+            print("⏭️  Fixed income generation: SKIPPED (use --generate-fixed-income to enable)")
         
         if args.generate_commodities and commodity_results:
-            print(f"✅ Commodity generation: SUCCESS")
+            print("✅ Commodity generation: SUCCESS")
             print(f"   - Total trades: {commodity_results['total_trades']}")
             commodity_summary = ', '.join([f"{k}:{v}" for k, v in commodity_results['commodity_types'].items()])
             print(f"   - Types: {commodity_summary}")
             print(f"   - Total Value: CHF {commodity_results['total_value_chf']:,.2f}")
             print(f"   - Files created: {commodity_results['files_created']} (one per trade date)")
         elif args.generate_commodities:
-            print(f"❌ Commodity generation: FAILED")
+            print("❌ Commodity generation: FAILED")
         else:
-            print(f"⏭️  Commodity generation: SKIPPED (use --generate-commodities to enable)")
+            print("⏭️  Commodity generation: SKIPPED (use --generate-commodities to enable)")
         
         if args.generate_lifecycle and lifecycle_results:
-            print(f"✅ Customer lifecycle generation: SUCCESS")
-            print(f"   - Events: customer_events/ (date-based files)")
-            print(f"   - Status file: customer_status.csv")
-            print(f"   - For churn prediction and lifecycle analytics")
+            print("✅ Customer lifecycle generation: SUCCESS")
+            print("   - Events: customer_events/ (date-based files)")
+            print("   - Status file: customer_status.csv")
+            print("   - For churn prediction and lifecycle analytics")
         elif args.generate_lifecycle:
-            print(f"❌ Customer lifecycle generation: FAILED")
+            print("❌ Customer lifecycle generation: FAILED")
         else:
-            print(f"⏭️  Customer lifecycle generation: SKIPPED (use --generate-lifecycle to enable)")
+            print("⏭️  Customer lifecycle generation: SKIPPED (use --generate-lifecycle to enable)")
         
         print(f"\n📁 Output directory: {Path(config.output_directory).absolute()}")
         if args.generate_swift and swift_results:

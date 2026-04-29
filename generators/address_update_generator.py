@@ -155,34 +155,28 @@ class AddressUpdateGenerator:
         """Generate EMEA-specific address components"""
         
         # Country-specific address generation
-        if country == 'Netherlands':
+        if country in ['Netherlands', 'Italy']:
             street_address = f"{fake_local.street_name()} {random.randint(1, 200)}"
             city = fake_local.city()
-            state = fake_local.state() if hasattr(fake_local, 'state') else ''  # Dutch provinces
+            state = fake_local.state() if hasattr(fake_local, 'state') else ''
             zipcode = fake_local.postcode()
             
         elif country == 'Germany':
             street_address = f"{fake_local.street_name()} {random.randint(1, 150)}"
             city = fake_local.city()
-            state = fake_local.state() if hasattr(fake_local, 'state') else ''  # German states
+            state = fake_local.state() if hasattr(fake_local, 'state') else ''
             zipcode = fake_local.postcode()
             
         elif country == 'France':
             street_address = f"{random.randint(1, 200)} {fake_local.street_name()}"
             city = fake_local.city()
-            state = fake_local.state() if hasattr(fake_local, 'state') else ''  # French regions
+            state = fake_local.state() if hasattr(fake_local, 'state') else ''
             zipcode = fake_local.postcode()
             
         elif country == 'United Kingdom':
             street_address = f"{random.randint(1, 200)} {fake_local.street_name()}"
             city = fake_local.city()
-            state = fake_local.county() if hasattr(fake_local, 'county') else ''  # UK counties
-            zipcode = fake_local.postcode()
-            
-        elif country == 'Italy':
-            street_address = f"{fake_local.street_name()} {random.randint(1, 200)}"
-            city = fake_local.city()
-            state = fake_local.state() if hasattr(fake_local, 'state') else ''  # Italian regions
+            state = fake_local.county() if hasattr(fake_local, 'county') else ''
             zipcode = fake_local.postcode()
             
         elif country in ['Sweden', 'Norway', 'Denmark']:

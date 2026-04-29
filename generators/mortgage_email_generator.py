@@ -292,7 +292,7 @@ class MortgageEmailGenerator:
         
         status = "Under Review" if risk_factors else "Pre-approved"
         
-        email_content = f"""Subject: Mortgage Application Confirmation - {mortgage.application_id}
+        email_content = """Subject: Mortgage Application Confirmation - {mortgage.application_id}
 
 Dear {mortgage.customer.first_name} {mortgage.customer.family_name},
 
@@ -340,7 +340,7 @@ NEXT STEPS
 =========="""
 
         if status == "Pre-approved":
-            email_content += f"""
+            email_content += """
 🎉 Congratulations! Your application shows strong financial indicators and is pre-approved for further processing.
 
 Next steps:
@@ -351,7 +351,7 @@ Next steps:
 Your dedicated loan officer will contact you within 2 business days to discuss the next steps.
 """
         else:
-            email_content += f"""
+            email_content += """
 Your application is currently under review. We may need additional documentation due to:
 {chr(10).join('• ' + factor for factor in risk_factors)}
 
@@ -361,7 +361,7 @@ Our underwriting team will review your application and contact you within 3-5 bu
 3. Next steps in the approval process
 """
 
-        email_content += f"""
+        email_content += """
 IMPORTANT INFORMATION
 =====================
 • Your application is protected by banking privacy regulations
@@ -453,7 +453,7 @@ CONFIDENTIAL: This email contains sensitive financial information. Please do not
             risk_level = "HIGH"
             recommendation = "MANUAL REVIEW - Underwriter escalation required"
 
-        email_content = f"""Subject: [INTERNAL] Mortgage Application Review - {mortgage.application_id} - {risk_level} RISK
+        email_content = """Subject: [INTERNAL] Mortgage Application Review - {mortgage.application_id} - {risk_level} RISK
 
 To: underwriting@aaasyntheticbank.com
 Cc: sarah.mitchell@aaasyntheticbank.com, risk@aaasyntheticbank.com
@@ -508,14 +508,14 @@ RISK ASSESSMENT
 ==============="""
 
         if risk_factors:
-            email_content += f"""
+            email_content += """
 Risk Factors Identified:
 {chr(10).join('• ' + factor for factor in risk_factors)}
 """
         else:
             email_content += "\n✅ No significant risk factors identified"
 
-        email_content += f"""
+        email_content += """
 
 PROCESSING REQUIREMENTS
 ======================="""
@@ -557,7 +557,7 @@ Estimated Processing Time: 15-21 business days
 ESCALATION: Senior Underwriter approval required
 """
 
-        email_content += f"""
+        email_content += """
 COMPLIANCE NOTES
 ================
 • Customer due diligence {'⚠️ ENHANCED' if mortgage.customer.has_anomaly else '✅ STANDARD'}
@@ -592,9 +592,14 @@ Not for customer distribution.
         if mortgage.credit_score < 650: risk_score += 3
         if mortgage.customer.has_anomaly: risk_score += 3
         
-        complexity = "COMPLEX" if risk_score >= 5 else "STANDARD" if risk_score <= 2 else "MODERATE"
+        if risk_score >= 5:
+            complexity = "COMPLEX"
+        elif risk_score <= 2:
+            complexity = "STANDARD"
+        else:
+            complexity = "MODERATE"
         
-        email_content = f"""Subject: Loan Assignment - {mortgage.application_id} - {complexity} Case
+        email_content = """Subject: Loan Assignment - {mortgage.application_id} - {complexity} Case
 
 To: sarah.mitchell@aaasyntheticbank.com
 From: assignments@aaasyntheticbank.com
@@ -631,7 +636,7 @@ I wanted to personally introduce myself as your dedicated loan officer and answe
 
 Based on your application for {mortgage.loan_amount:,.0f} {currency}, I can see you're looking to {mortgage.purpose.lower()} for the property at {mortgage.address.street_address} in {mortgage.address.city}.
 
-{f'I do want to mention that we may need some additional documentation due to your credit score being below our preferred threshold. This is quite common and nothing to be concerned about - we just want to ensure we have the complete picture of your financial situation.' if mortgage.credit_score < 650 else 'Your application looks very strong, and I expect a smooth approval process.'}
+{'I do want to mention that we may need some additional documentation due to your credit score being below our preferred threshold. This is quite common and nothing to be concerned about - we just want to ensure we have the complete picture of your financial situation.' if mortgage.credit_score < 650 else 'Your application looks very strong, and I expect a smooth approval process.'}
 
 When would be a convenient time for you to discuss the next steps? I have availability this week on..."
 
@@ -642,8 +647,8 @@ KEY DISCUSSION POINTS
 □ Explain the appraisal process
 □ Review loan terms and interest rate
 □ Discuss closing timeline (typically 30-45 days)
-{f'□ Address credit score concerns tactfully' if mortgage.credit_score < 650 else ''}
-{f'□ Explain enhanced verification process due to account history' if mortgage.customer.has_anomaly else ''}
+{'□ Address credit score concerns tactfully' if mortgage.credit_score < 650 else ''}
+{'□ Explain enhanced verification process due to account history' if mortgage.customer.has_anomaly else ''}
 
 DOCUMENTATION CHECKLIST
 ========================
@@ -682,7 +687,7 @@ EXPECTED CHALLENGES
 • Consider cross-selling other bank products
 """
 
-        email_content += f"""
+        email_content += """
 CONTACT SCHEDULE
 ================
 □ Initial contact: Within 24 hours

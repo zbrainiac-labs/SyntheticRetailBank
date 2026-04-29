@@ -27,7 +27,7 @@ class GeneratorConfig:
     
     # Currency configuration
     default_currency: str = "USD"
-    available_currencies: List[str] = None
+    available_currencies: Optional[List[str]] = None
     
     # Amount configuration
     min_transaction_amount: float = 10.0
@@ -116,7 +116,7 @@ class GeneratorConfig:
                 f.write('test')
             os.remove(test_file)
         except (OSError, PermissionError) as e:
-            raise ValueError(f"output_directory must be writable: {e}")
+            raise ValueError(f"output_directory must be writable: {e}") from e
         
         # Initialize derived attributes after validation
         if self.start_date is None:

@@ -246,7 +246,7 @@ class SWIFTGenerator:
         except FileNotFoundError:
             raise FileNotFoundError(f"Customer file not found: {customer_file_path}")
         except Exception as e:
-            raise Exception(f"Error loading customers: {e}")
+            raise RuntimeError(f"Error loading customers: {e}") from e
     
     def select_swift_customers(self, customers: List[Dict], percentage: float = 30.0) -> List[Dict]:
         """Select a percentage of customers for SWIFT message generation"""
@@ -278,7 +278,7 @@ class SWIFTGenerator:
         total_target = int(num_customers * avg_messages)
         
         # Distribute messages with some randomness
-        for i in range(num_customers):
+        for _ in range(num_customers):
             if random.random() < 0.6:  # 60% get 1 message
                 messages = 1
             elif random.random() < 0.8:  # 20% get 2 messages  
@@ -409,7 +409,7 @@ class SWIFTGenerator:
                 f'--status-reason "Customer {customer["customer_id"]} payment processed successfully"',
                 f'--instructing-agent-bic {creditor["bic"]}',
                 f'--instructed-agent-bic {debtor["bic"]}',
-                f'--delay-minutes "1-45"',  # Simulate 1-45 minute processing delay
+                '--delay-minutes "1-45"',  # Simulate 1-45 minute processing delay
                 f'--output "messages/{pacs002_filename}"'
             ]
             
@@ -490,7 +490,7 @@ class SWIFTGenerator:
         Returns:
             Dictionary with generation statistics and results
         """
-        print(f"\n🏦 Generating SWIFT messages for synthetic bank customers...")
+        print("\n🏦 Generating SWIFT messages for synthetic bank customers...")
         print(f"📊 Target: {customer_percentage}% of customers with avg {avg_messages} messages each")
         
         # Load customers
@@ -519,7 +519,7 @@ class SWIFTGenerator:
         
         for i, customer in enumerate(swift_customers):
             message_count = messages_per_customer[i]
-            for msg_num in range(message_count):
+            for _ in range(message_count):
                 # Select random counterparty from all customers (different from current customer)
                 available_counterparties = [c for c in customers if c['customer_id'] != customer['customer_id']]
                 if available_counterparties:
@@ -593,7 +593,6 @@ class SWIFTGenerator:
             raise
             
         finally:
-            # Final statistics
             end_time = time.time()
             duration = end_time - start_time
             
@@ -601,7 +600,7 @@ class SWIFTGenerator:
             failed_pairs = self.error_counter.value
             total_processed = successful_pairs + failed_pairs
             
-            print(f"\n🎉 SWIFT Generation Complete!")
+            print("\n🎉 SWIFT Generation Complete!")
             print(f"✅ Successful pairs: {successful_pairs:,}")
             print(f"❌ Failed pairs: {failed_pairs:,}")
             print(f"📊 Total processed: {total_processed:,}/{len(jobs):,}")
@@ -615,39 +614,6 @@ class SWIFTGenerator:
                 print(f"🚀 Average speed: {successful_pairs*2/duration:.1f} messages/second")
             print(f"📁 Files generated: {successful_pairs*2:,} XML files")
             
-            # Create comprehensive summary
-            summary = {
-                "generated_at": datetime.now().isoformat(),
-                "configuration": {
-                    "customer_file": customer_file_path,
-                    "total_customers": len(customers),
-                    "customer_percentage": customer_percentage,
-                    "swift_customers": len(swift_customers),
-                    "avg_messages_target": avg_messages,
-                    "actual_avg_messages": actual_avg,
-                    "output_directory": output_dir,
-                    "working_directory": working_dir
-                },
-                "generation_stats": {
-                    "target_jobs": len(jobs),
-                    "successful_pairs": successful_pairs,
-                    "failed_pairs": failed_pairs,
-                    "success_rate_percent": round(successful_pairs/total_processed*100, 2) if total_processed > 0 else 0,
-                    "total_transaction_volume_eur": round(total_volume, 2),
-                    "duration_seconds": round(duration, 1),
-                    "messages_per_second": round(successful_pairs*2/duration, 1) if duration > 0 else 0,
-                    "total_xml_files": successful_pairs * 2,
-                    "unique_customers_with_swift": len(set(r.get('customer_id') for r in results if r['status'] == 'success')),
-                    "anomaly_customers_with_swift": len([r for r in results if r.get('has_anomaly', False) and r['status'] == 'success'])
-                },
-                "customer_breakdown": {
-                    "anomaly_customers": len([c for c in swift_customers if c['has_anomaly']]),
-                    "normal_customers": len([c for c in swift_customers if not c['has_anomaly']])
-                },
-                "sample_results": results[:50]  # Sample for analysis
-            }
-            
-            # Clean up temporary messages directory
             messages_dir = Path(working_dir) / "messages"
             if messages_dir.exists():
                 try:
@@ -656,12 +622,43 @@ class SWIFTGenerator:
                     print(f"🧹 Cleaned up temporary messages directory: {messages_dir}")
                 except Exception as e:
                     print(f"⚠️  Warning: Could not clean up messages directory: {e}")
-            
-            return {
-                "summary": summary,
-                "results": results,
-                "swift_customers": swift_customers,
-                "total_volume": total_volume,
-                "successful_pairs": successful_pairs,
-                "failed_pairs": failed_pairs
-            }
+        
+        summary = {
+            "generated_at": datetime.now().isoformat(),
+            "configuration": {
+                "customer_file": customer_file_path,
+                "total_customers": len(customers),
+                "customer_percentage": customer_percentage,
+                "swift_customers": len(swift_customers),
+                "avg_messages_target": avg_messages,
+                "actual_avg_messages": actual_avg,
+                "output_directory": output_dir,
+                "working_directory": working_dir
+            },
+            "generation_stats": {
+                "target_jobs": len(jobs),
+                "successful_pairs": self.success_counter.value,
+                "failed_pairs": self.error_counter.value,
+                "success_rate_percent": round(self.success_counter.value/(self.success_counter.value + self.error_counter.value)*100, 2) if (self.success_counter.value + self.error_counter.value) > 0 else 0,
+                "total_transaction_volume_eur": round(total_volume, 2),
+                "duration_seconds": 0,
+                "messages_per_second": 0,
+                "total_xml_files": self.success_counter.value * 2,
+                "unique_customers_with_swift": len(set(r.get('customer_id') for r in results if r['status'] == 'success')),
+                "anomaly_customers_with_swift": len([r for r in results if r.get('has_anomaly', False) and r['status'] == 'success'])
+            },
+            "customer_breakdown": {
+                "anomaly_customers": len([c for c in swift_customers if c['has_anomaly']]),
+                "normal_customers": len([c for c in swift_customers if not c['has_anomaly']])
+            },
+            "sample_results": results[:50]
+        }
+        
+        return {
+            "summary": summary,
+            "results": results,
+            "swift_customers": swift_customers,
+            "total_volume": total_volume,
+            "successful_pairs": self.success_counter.value,
+            "failed_pairs": self.error_counter.value
+        }

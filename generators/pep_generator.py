@@ -90,7 +90,7 @@ class PEPGenerator:
             ],
             'CLOSE_ASSOCIATE': [
                 'Business Partner', 'Close Friend', 'Financial Advisor', 'Legal Counsel',
-                'Campaign Manager', 'Chief of Staff', 'Personal Assistant'
+                'Campaign Manager', 'Chief of Staf', 'Personal Assistant'
             ]
         }
         
@@ -116,7 +116,7 @@ class PEPGenerator:
             'FOREIGN': {'medium_risk': ['Ambassador'], 'low_risk': ['Consul', 'Attaché']},
             'INTERNATIONAL_ORG': {'critical_risk': ['Secretary-General', 'President', 'Managing Director'], 'high_risk': ['Commissioner', 'Director']},
             'FAMILY_MEMBER': {'medium_risk': ['Spouse', 'Child'], 'low_risk': ['Parent', 'Sibling']},
-            'CLOSE_ASSOCIATE': {'low_risk': ['Business Partner', 'Advisor'], 'medium_risk': ['Campaign Manager', 'Chief of Staff']}
+            'CLOSE_ASSOCIATE': {'low_risk': ['Business Partner', 'Advisor'], 'medium_risk': ['Campaign Manager', 'Chief of Staf']}
         }
     
     def _load_existing_customers(self, customer_file: str):
@@ -155,8 +155,8 @@ class PEPGenerator:
             (first_name[:-1] if first_name.endswith('e') and len(first_name) > 4 else first_name, last_name),
             (first_name, last_name[:-1] if last_name.endswith('e') and len(last_name) > 4 else last_name),
             # Common letter substitutions
-            (first_name.replace('ph', 'f').replace('c', 'k', 1), last_name),
-            (first_name, last_name.replace('ph', 'f').replace('c', 'k', 1)),
+            (first_name.replace('ph', '').replace('c', 'k', 1), last_name),
+            (first_name, last_name.replace('ph', '').replace('c', 'k', 1)),
             # Prefix variations
             (first_name.replace('van ', ''), last_name),
             (first_name, last_name.replace('van ', '')),
@@ -280,7 +280,7 @@ class PEPGenerator:
             # Parse date of birth
             try:
                 date_of_birth = datetime.strptime(from_existing_customer['date_of_birth'], '%Y-%m-%d').date()
-            except:
+            except (ValueError, KeyError):
                 date_of_birth = None
             
             # Higher chance of being family member or close associate for existing customers
@@ -444,10 +444,10 @@ def main():
     generator.save_to_csv(pep_records, str(output_file))
     
     # Display summary
-    print(f"\n🎯 **PEP DATA GENERATION SUMMARY**")
+    print("\n🎯 **PEP DATA GENERATION SUMMARY**")
     print(f"📊 Total Records: {len(pep_records)}")
     print(f"📁 Output File: {output_file}")
-    print(f"")
+    print("")
     
     # Category breakdown
     categories = {}
@@ -463,17 +463,17 @@ def main():
     for category, count in sorted(categories.items()):
         print(f"   {category}: {count}")
     
-    print(f"")
+    print("")
     print("⚠️ **Risk Level Distribution:**")
     for risk, count in sorted(risk_levels.items()):
         print(f"   {risk}: {count}")
     
-    print(f"")
+    print("")
     print("📈 **Status Distribution:**")
     for status, count in sorted(statuses.items()):
         print(f"   {status}: {count}")
     
-    print(f"")
+    print("")
     print("🔗 **Sample Reference Links:**")
     for i, record in enumerate(pep_records[:3]):
         print(f"   {record.full_name}: {record.reference_link}")

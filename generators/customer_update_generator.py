@@ -137,7 +137,7 @@ class CustomerUpdateGenerator:
             
             current_date += timedelta(days=1)
         
-        print(f"✅ Customer update generation complete")
+        print("✅ Customer update generation complete")
     
     def _generate_customer_update(self, customer_id: str, update_date: datetime) -> Dict[str, Any]:
         """

@@ -265,9 +265,7 @@ class CommodityTradeGenerator(BaseGenerator):
         self.fx_rates = fx_rates
         self.start_date = start_date
         self.end_date = end_date
-        # self.fake is already initialized by BaseGenerator._init_random_state()
         
-        # Build account lookup
         self.customer_accounts = {}
         for account in accounts:
             cust_id = account['customer_id']

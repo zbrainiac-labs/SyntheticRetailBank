@@ -43,7 +43,7 @@ class FileGenerator:
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
         
-        print(f"📁 Created directory structure:")
+        print("📁 Created directory structure:")
         print(f"   • {self.master_data_dir.name}/ - Customer and account master data")
         print(f"   • {self.payment_transactions_dir.name}/ - Daily payment transaction files")
         print(f"   • {self.equity_trades_dir.name}/ - Daily equity trade files")
@@ -140,7 +140,7 @@ class FileGenerator:
         transaction_counts = result['counts']
         
         # Print sample of daily counts (first 12 days)
-        for date_str in sorted(list(transaction_counts.keys()))[:12]:
+        for date_str in sorted(transaction_counts.keys())[:12]:
             print(f"  {date_str}: {transaction_counts[date_str]} transactions")
         
         if len(transaction_counts) > 12:
@@ -156,7 +156,7 @@ class FileGenerator:
         investment_accounts = [acc for acc in accounts if acc.account_type == 'INVESTMENT']
         
         # Get customers who have investment accounts (these will be our trading customers)
-        trading_customer_ids = set(acc.customer_id for acc in investment_accounts)
+        trading_customer_ids = {acc.customer_id for acc in investment_accounts}
         trading_customers = [cust for cust in customers if cust.customer_id in trading_customer_ids]
         
         print(f"Found {len(investment_accounts)} investment accounts for {len(trading_customers)} trading customers")
@@ -188,10 +188,6 @@ class FileGenerator:
         print(f"Base currency: {equity_summary['base_currency']}")
         print(f"Markets: {', '.join(equity_summary['markets'])}")
         
-        # DDL generation removed - managed manually in structure/ directory
-        # Legacy SQL files removed - using new structure/ directory approach
-        
-        # Generate summary report
         summary_file = self._generate_summary_report(
             customers, anomalous_customers, all_transactions, daily_files, accounts, fx_rates, equity_summary, additional_results,
             employees, assignments
@@ -358,7 +354,7 @@ class FileGenerator:
                     comm = additional_results['commodities']
                     f.write(f"  Commodity trades: {comm.get('total_trades', 0)}\n")
                 if 'lifecycle' in additional_results and additional_results['lifecycle']:
-                    f.write(f"  Customer lifecycle events: Generated\n")
+                    f.write("  Customer lifecycle events: Generated\n")
             
             f.write("\n")
             
@@ -407,7 +403,7 @@ class FileGenerator:
                     f.write(f"  Avg clients per advisor: {avg_clients:.1f}\n")
                 
                 # Count countries covered
-                countries_covered = len(set(e.country for e in employees if e.position_level == 'CLIENT_ADVISOR'))
+                countries_covered = len({e.country for e in employees if e.position_level == 'CLIENT_ADVISOR'})
                 f.write(f"  Countries covered: {countries_covered}\n")
                 f.write("\n")
             
@@ -457,23 +453,23 @@ class FileGenerator:
                 f.write(f"  {customer.customer_id}: {customer.first_name} {customer.family_name}\n")
             
             f.write("\nFILES GENERATED:\n")
-            f.write(f"📁 Master Data (master_data/):\n")
-            f.write(f"  customers.csv\n")
-            f.write(f"  customer_addresses.csv\n")
-            f.write(f"  accounts.csv\n")
+            f.write("📁 Master Data (master_data/):\n")
+            f.write("  customers.csv\n")
+            f.write("  customer_addresses.csv\n")
+            f.write("  accounts.csv\n")
             if employees and assignments:
-                f.write(f"  employees.csv\n")
-                f.write(f"  client_assignments.csv\n")
+                f.write("  employees.csv\n")
+                f.write("  client_assignments.csv\n")
             
-            f.write(f"\n📁 FX Rates (fx_rates/):\n")
-            f.write(f"  fx_rates.csv\n")
+            f.write("\n📁 FX Rates (fx_rates/):\n")
+            f.write("  fx_rates.csv\n")
             
-            f.write(f"\n📁 Payment Transactions (payment_transactions/):\n")
+            f.write("\n📁 Payment Transactions (payment_transactions/):\n")
             for daily_file in daily_files:
                 filename = os.path.basename(daily_file)
                 f.write(f"  {filename}\n")
             
-            f.write(f"\n📁 Equity Trades (equity_trades/):\n")
+            f.write("\n📁 Equity Trades (equity_trades/):\n")
             # List equity trade files
             for trade_file in self.equity_trades_dir.glob("trades_*.csv"):
                 f.write(f"  {trade_file.name}\n")
@@ -482,8 +478,7 @@ class FileGenerator:
             # Add additional generator files if provided
             if additional_results:
                 if 'swift' in additional_results and additional_results['swift']:
-                    swift = additional_results['swift']
-                    f.write(f"\n📁 SWIFT Messages (swift_messages/):\n")
+                    f.write("\n📁 SWIFT Messages (swift_messages/):\n")
                     swift_dir = self.output_dir / "swift_messages"
                     if swift_dir.exists():
                         swift_files = sorted(swift_dir.glob("*.xml"))[:10]  # Show first 10
@@ -494,11 +489,11 @@ class FileGenerator:
                             f.write(f"  ... ({total_files - 10} more files)\n")
                 
                 if 'pep' in additional_results and additional_results['pep']:
-                    f.write(f"\n📁 PEP Data (master_data/):\n")
-                    f.write(f"  pep_data.csv\n")
+                    f.write("\n📁 PEP Data (master_data/):\n")
+                    f.write("  pep_data.csv\n")
                 
                 if 'mortgage' in additional_results and additional_results['mortgage']:
-                    f.write(f"\n📁 Mortgage Emails (emails/):\n")
+                    f.write("\n📁 Mortgage Emails (emails/):\n")
                     email_dir = self.output_dir / "emails"
                     if email_dir.exists():
                         email_files = sorted(email_dir.glob("*.txt"))[:10]  # Show first 10
@@ -509,37 +504,37 @@ class FileGenerator:
                             f.write(f"  ... ({total_files - 10} more files)\n")
                 
                 if 'address_updates' in additional_results and additional_results['address_updates']:
-                    f.write(f"\n📁 Address Updates (master_data/address_updates/):\n")
+                    f.write("\n📁 Address Updates (master_data/address_updates/):\n")
                     addr_dir = self.master_data_dir / "address_updates"
                     if addr_dir.exists():
                         for addr_file in sorted(addr_dir.glob("customer_addresses_*.csv")):
                             f.write(f"  {addr_file.name}\n")
                 
                 if 'fixed_income' in additional_results and additional_results['fixed_income']:
-                    f.write(f"\n📁 Fixed Income Trades (fixed_income_trades/):\n")
+                    f.write("\n📁 Fixed Income Trades (fixed_income_trades/):\n")
                     fi_dir = self.output_dir / "fixed_income_trades"
                     if fi_dir.exists():
                         for fi_file in sorted(fi_dir.glob("*.csv")):
                             f.write(f"  {fi_file.name}\n")
                 
                 if 'commodity' in additional_results and additional_results['commodity']:
-                    f.write(f"\n📁 Commodity Trades (commodity_trades/):\n")
+                    f.write("\n📁 Commodity Trades (commodity_trades/):\n")
                     comm_dir = self.output_dir / "commodity_trades"
                     if comm_dir.exists():
                         for comm_file in sorted(comm_dir.glob("*.csv")):
                             f.write(f"  {comm_file.name}\n")
                 
                 if 'lifecycle' in additional_results and additional_results['lifecycle']:
-                    f.write(f"\n📁 Customer Lifecycle Events (master_data/):\n")
-                    f.write(f"  customer_events/ (date-based files)\n")
-                    f.write(f"  customer_status.csv\n")
+                    f.write("\n📁 Customer Lifecycle Events (master_data/):\n")
+                    f.write("  customer_events/ (date-based files)\n")
+                    f.write("  customer_status.csv\n")
             
-            f.write(f"\n📁 Reports (reports/):\n")
-            f.write(f"  generation_summary.txt\n")
+            f.write("\n📁 Reports (reports/):\n")
+            f.write("  generation_summary.txt\n")
             
-            f.write(f"\n📁 Database Setup:\n")
-            f.write(f"  Database schema definitions are managed in the structure/ directory\n")
-            f.write(f"  See structure/README_DEPLOYMENT.md for deployment instructions\n")
+            f.write("\n📁 Database Setup:\n")
+            f.write("  Database schema definitions are managed in the structure/ directory\n")
+            f.write("  See structure/README_DEPLOYMENT.md for deployment instructions\n")
         
         print(f"Summary report saved to: {summary_file}")
         return str(summary_file)
@@ -587,7 +582,7 @@ class FileGenerator:
                 comm = additional_results['commodity']
                 insert_lines.append(f"  Commodity trades: {comm.get('total_trades', 0)}\n")
             if 'lifecycle' in additional_results and additional_results['lifecycle']:
-                insert_lines.append(f"  Customer lifecycle events: Generated\n")
+                insert_lines.append("  Customer lifecycle events: Generated\n")
             
             # Insert the lines after equity trades line
             lines = lines[:equity_line_idx+1] + insert_lines + lines[equity_line_idx+1:]
@@ -650,7 +645,7 @@ class FileGenerator:
         with open(summary_file, 'w', encoding='utf-8') as f:
             f.writelines(lines)
         
-        print(f"✅ Summary report updated with additional generator results")
+        print("✅ Summary report updated with additional generator results")
     
     def clean_output_directory(self) -> None:
         """Clean the output directory of previously generated files (selective cleaning)"""

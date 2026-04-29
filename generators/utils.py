@@ -31,7 +31,7 @@ class GeneratorUtils:
                         # Handle dict or list objects
                         writer.writerow(row)
         except Exception as e:
-            raise Exception(f"Failed to write CSV file {filepath}: {e}")
+            raise OSError(f"Failed to write CSV file {filepath}: {e}") from e
     
     @staticmethod
     def get_headers_from_dataclass(dataclass_instance: Any) -> List[str]:

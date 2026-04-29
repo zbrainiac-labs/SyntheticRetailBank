@@ -5,8 +5,8 @@ Generates client advisors, team leaders, and super team leaders based on actual 
 import csv
 import random
 import math
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass, field
 from faker import Faker
 
@@ -187,10 +187,10 @@ class EmployeeGenerator(BaseGenerator):
         print(f"\n👔 Creating {count} Super Team Leader(s)...")
         super_leaders = []
         
-        for i in range(count):
+        for _ in range(count):
             emp = self._create_employee(
                 position_level="SUPER_TEAM_LEADER",
-                country="Switzerland",  # Corporate HQ
+                country="Switzerland",
                 region="EMEA",
                 manager_id=None
             )
@@ -239,7 +239,7 @@ class EmployeeGenerator(BaseGenerator):
         Returns:
             List of advisor employees with customers pre-assigned
         """
-        print(f"\n💼 Creating Client Advisors...")
+        print("\n💼 Creating Client Advisors...")
         advisors = []
         
         # Sort countries by customer count (largest first) for even distribution
@@ -287,7 +287,7 @@ class EmployeeGenerator(BaseGenerator):
         position_level: str,
         country: str,
         region: str,
-        manager_id: str
+        manager_id: Optional[str]
     ) -> Employee:
         """
         Create a single employee with realistic attributes
@@ -332,7 +332,7 @@ class EmployeeGenerator(BaseGenerator):
             performance_rating=round(random.uniform(2.5, 5.0), 2),
             languages_spoken=self._get_languages(country),
             certifications=self._get_certifications(position_level),
-            insert_timestamp_utc=datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            insert_timestamp_utc=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         )
         
         self.employees.append(employee)
@@ -340,7 +340,7 @@ class EmployeeGenerator(BaseGenerator):
     
     def _assign_customers_to_advisors(self, advisors: List[Employee]):
         """Create assignment records for customer-advisor relationships"""
-        print(f"\n📝 Creating customer-advisor assignments...")
+        print("\n📝 Creating customer-advisor assignments...")
         assignment_counter = 1
         
         for advisor in advisors:
@@ -354,7 +354,7 @@ class EmployeeGenerator(BaseGenerator):
                     assignment_end_date="",  # Current assignment (no end date)
                     assignment_reason="INITIAL_ONBOARDING",
                     is_current=True,
-                    insert_timestamp_utc=datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+                    insert_timestamp_utc=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
                 )
                 self.assignments.append(assignment)
                 assignment_counter += 1
@@ -439,7 +439,7 @@ class EmployeeGenerator(BaseGenerator):
                     emp.insert_timestamp_utc
                 ])
         
-        print(f"   ✓ Employees written successfully")
+        print("   ✓ Employees written successfully")
     
     def write_assignments_to_csv(self, filename: str):
         """Write client-advisor assignments to CSV file"""
@@ -468,5 +468,5 @@ class EmployeeGenerator(BaseGenerator):
                     assignment.insert_timestamp_utc
                 ])
         
-        print(f"   ✓ Assignments written successfully")
+        print("   ✓ Assignments written successfully")
 

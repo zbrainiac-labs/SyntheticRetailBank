@@ -100,7 +100,6 @@ class CustomerGenerator(BaseGenerator):
             'Finland': 'EUR',
         }
         
-        # self.fake is already initialized by BaseGenerator._init_random_state()
         self.customers: List[Customer] = []
         self.customer_addresses: List[CustomerAddress] = []
     

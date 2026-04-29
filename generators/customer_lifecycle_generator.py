@@ -23,7 +23,7 @@ import json
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 
 from base_generator import init_random_seed
@@ -61,7 +61,7 @@ class CustomerStatus:
 class CustomerLifecycleGenerator:
     """Generates customer lifecycle events and status history"""
     
-    def __init__(self, customer_file: str, address_updates_dir: str, output_dir: str, customer_updates_dir: str = None, seed: int = 42):
+    def __init__(self, customer_file: str, address_updates_dir: str, output_dir: str, customer_updates_dir: Optional[str] = None, seed: int = 42):
         self.customer_file = customer_file
         self.address_updates_dir = Path(address_updates_dir)
         self.customer_updates_dir = Path(customer_updates_dir) if customer_updates_dir else None
@@ -173,7 +173,7 @@ class CustomerLifecycleGenerator:
         """
         if not self.customer_updates_dir or not self.customer_updates_dir.exists():
             print(f"⚠️  Customer updates directory not found or not specified: {self.customer_updates_dir}")
-            print(f"   Skipping data-driven customer update events...")
+            print("   Skipping data-driven customer update events...")
             return
         
         update_files = sorted(self.customer_updates_dir.glob("customer_updates_*.csv"))
@@ -450,7 +450,7 @@ class CustomerLifecycleGenerator:
                     requires_review=False,
                     review_status='NOT_REQUIRED',
                     review_date='',
-                    notes=f"Employment details changed"
+                    notes="Employment details changed"
                 )
             else:
                 # Unknown event type, skip
@@ -521,7 +521,7 @@ class CustomerLifecycleGenerator:
         return events
     
     def _generate_specific_event(self, event_id_num: int, customer_id: str, 
-                                  event_type: str, event_date: datetime) -> LifecycleEvent:
+                                  event_type: str, event_date: datetime) -> Optional[LifecycleEvent]:
         """Generate a specific event type"""
         
         channel = random.choices(self.channels, weights=self.channel_weights)[0]

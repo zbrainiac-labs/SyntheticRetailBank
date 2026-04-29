@@ -692,7 +692,7 @@ class SWIFTMessageGenerator:
         root = Element("Document")
         root.set("xmlns", self.namespace)
         
-        fit_to_fi_cct = SubElement(root, "FIToFICstmrCdtTrf")
+        fit_to_fi_cct = SubElement(root, "FIToFICstmrCdtTr")
         
         # Group Header
         grp_hdr = SubElement(fit_to_fi_cct, "GrpHdr")
@@ -711,7 +711,7 @@ class SWIFTMessageGenerator:
             SubElement(grp_hdr, "IntrBkSttlmDt").text = message.group_header.interbank_settlement_date.isoformat()
         
         # Settlement Information
-        sttlm_inf = SubElement(grp_hdr, "SttlmInf")
+        sttlm_inf = SubElement(grp_hdr, "SttlmIn")
         SubElement(sttlm_inf, "SttlmMtd").text = message.group_header.settlement_information.settlement_method
         
         # Add clearing system information (for both INDA and CLRG methods)
@@ -739,7 +739,7 @@ class SWIFTMessageGenerator:
         
         # Credit Transfer Transaction Information
         for cdt_trf_tx_inf in message.credit_transfer_transaction_information:
-            tx_inf = SubElement(fit_to_fi_cct, "CdtTrfTxInf")
+            tx_inf = SubElement(fit_to_fi_cct, "CdtTrfTxIn")
             
             # Payment Identification
             pmt_id = SubElement(tx_inf, "PmtId")
@@ -750,7 +750,7 @@ class SWIFTMessageGenerator:
             
             # Payment Type Information (CBPR+ compliance)
             if cdt_trf_tx_inf.payment_type_information:
-                pmt_tp_inf = SubElement(tx_inf, "PmtTpInf")
+                pmt_tp_inf = SubElement(tx_inf, "PmtTpIn")
                 
                 if cdt_trf_tx_inf.payment_type_information.instruction_priority:
                     SubElement(pmt_tp_inf, "InstrPrty").text = cdt_trf_tx_inf.payment_type_information.instruction_priority
@@ -821,7 +821,7 @@ class SWIFTMessageGenerator:
             
             # Remittance Information
             if cdt_trf_tx_inf.remittance_information:
-                rmt_inf = SubElement(tx_inf, "RmtInf")
+                rmt_inf = SubElement(tx_inf, "RmtIn")
                 if cdt_trf_tx_inf.remittance_information.unstructured:
                     for ustrd in cdt_trf_tx_inf.remittance_information.unstructured:
                         SubElement(rmt_inf, "Ustrd").text = ustrd
@@ -883,7 +883,7 @@ class SWIFTMessageGenerator:
                 
                 if tx_inf_and_sts.status_reason_information:
                     for reason in tx_inf_and_sts.status_reason_information:
-                        sts_rsn_inf = SubElement(tx_inf_element, "StsRsnInf")
+                        sts_rsn_inf = SubElement(tx_inf_element, "StsRsnIn")
                         SubElement(sts_rsn_inf, "Rsn").text = reason
                 
                 if tx_inf_and_sts.acceptance_date_time:
@@ -1025,7 +1025,7 @@ class SWIFTMessageGenerator:
         doc_elem.set("xmlns", self.namespace)
         
         # Generate the PACS.008 content (reuse existing logic)
-        fit_to_fi_cct = SubElement(doc_elem, "FIToFICstmrCdtTrf")
+        fit_to_fi_cct = SubElement(doc_elem, "FIToFICstmrCdtTr")
         
         # Group Header
         grp_hdr = SubElement(fit_to_fi_cct, "GrpHdr")
@@ -1041,7 +1041,7 @@ class SWIFTMessageGenerator:
             ttl_amt.text = message.group_header.total_interbank_settlement_amount.to_xml_string()
         
         # Settlement Information
-        sttlm_inf = SubElement(grp_hdr, "SttlmInf")
+        sttlm_inf = SubElement(grp_hdr, "SttlmIn")
         SubElement(sttlm_inf, "SttlmMtd").text = message.group_header.settlement_information.settlement_method
         
         if message.group_header.settlement_information.settlement_method == "CLRG":
@@ -1050,7 +1050,7 @@ class SWIFTMessageGenerator:
         
         # Add transaction information (simplified for BAH wrapper)
         for cdt_trf_tx_inf in message.credit_transfer_transaction_information:
-            tx_inf = SubElement(fit_to_fi_cct, "CdtTrfTxInf")
+            tx_inf = SubElement(fit_to_fi_cct, "CdtTrfTxIn")
             
             # Payment Identification
             pmt_id = SubElement(tx_inf, "PmtId")
@@ -1059,7 +1059,7 @@ class SWIFTMessageGenerator:
             
             # Payment Type Information
             if cdt_trf_tx_inf.payment_type_information:
-                pmt_tp_inf = SubElement(tx_inf, "PmtTpInf")
+                pmt_tp_inf = SubElement(tx_inf, "PmtTpIn")
                 if cdt_trf_tx_inf.payment_type_information.service_level:
                     svc_lvl = SubElement(pmt_tp_inf, "SvcLvl")
                     SubElement(svc_lvl, "Cd").text = cdt_trf_tx_inf.payment_type_information.service_level.code
@@ -1089,7 +1089,7 @@ class SWIFTMessageGenerator:
             
             # Remittance information
             if cdt_trf_tx_inf.remittance_information:
-                rmt_inf = SubElement(tx_inf, "RmtInf")
+                rmt_inf = SubElement(tx_inf, "RmtIn")
                 if cdt_trf_tx_inf.remittance_information.unstructured:
                     for ustrd in cdt_trf_tx_inf.remittance_information.unstructured:
                         SubElement(rmt_inf, "Ustrd").text = ustrd
@@ -1678,13 +1678,13 @@ def extract_ids(pacs008_file):
         
         # Example command to generate corresponding PACS.002
         if msg_id and end_to_end_id:
-            click.echo(f"\n💡 To generate a corresponding PACS.002:")
-            click.echo(f"python swift_message_generator.py generate-pacs002 \\")
-            click.echo(f"  --from-pacs008 \"{pacs008_file}\" \\")
-            click.echo(f"  --transaction-status ACCP \\")
-            click.echo(f"  --status-reason \"Payment processed successfully\" \\")
-            click.echo(f"  --instructing-agent-bic BNPAFRPP \\")
-            click.echo(f"  --instructed-agent-bic DEUTDEFF")
+            click.echo("\n💡 To generate a corresponding PACS.002:")
+            click.echo("python swift_message_generator.py generate-pacs002 \\")
+            click.echo("  --from-pacs008 \"{pacs008_file}\" \\")
+            click.echo("  --transaction-status ACCP \\")
+            click.echo("  --status-reason \"Payment processed successfully\" \\")
+            click.echo("  --instructing-agent-bic BNPAFRPP \\")
+            click.echo("  --instructed-agent-bic DEUTDEFF")
             
     except Exception as e:
         click.echo(f"❌ Error extracting IDs: {e}", err=True)
