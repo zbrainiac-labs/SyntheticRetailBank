@@ -7,7 +7,7 @@ on:
 
 jobs:
   pipeline:
-    uses: zBrainiac/DataOpsBackbone/.github/workflows/dataops-pipeline.yml@main
+    uses: zbrainiac-labs/DataOpsBackbone/.github/workflows/dataops-pipeline.yml@main
     with:
       SOURCE_DATABASE: AAA_DEV_SYNTHETIC_BANK
       SOURCE_SCHEMA: CRM_RAW_001
