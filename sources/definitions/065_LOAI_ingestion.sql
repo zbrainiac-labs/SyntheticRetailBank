@@ -121,7 +121,7 @@ DEFINE TABLE {{ db }}.{{ loa_raw }}.LOAI_RAW_TB_EMAIL_INBOUND_LOAN_EXTRACT_FLAT 
     DTI_RATIO_PCT NUMBER(5,2) COMMENT 'Debt-to-Income ratio percentage',
 
     EXTRACTION_SUCCESS BOOLEAN COMMENT 'TRUE if extraction successful',
-     RAW_EXTRACTED_DATA VARIANT COMMENT 'Complete raw JSON for debugging'
+    RAW_EXTRACTED_DATA VARIANT COMMENT 'Complete raw JSON for debugging'
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Flattened loan data with typed columns from AI_EXTRACT. Ready for business logic and reporting.';
@@ -179,7 +179,7 @@ INSERT INTO {{ db }}.{{ loa_raw }}.LOAI_RAW_TB_EMAIL_INBOUND_LOAN_EXTRACT_FLAT (
     LTV_RATIO_PCT,
     DTI_RATIO_PCT,
     EXTRACTION_SUCCESS,
-     RAW_EXTRACTED_DATA
+    RAW_EXTRACTED_DATA
 )
 SELECT 
     s.FILE_NAME,
