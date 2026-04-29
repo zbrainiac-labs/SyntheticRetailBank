@@ -732,7 +732,7 @@ def main():
                     'total_trades': len(fi_trades),
                     'bonds': bond_count,
                     'swaps': swap_count,
-                    'total_notional_ch': total_notional,
+                    'total_notional_chf': total_notional,
                     'output_dir': str(fi_output_dir),
                     'files_created': len(files_created)
                 }

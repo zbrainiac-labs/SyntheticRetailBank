@@ -546,11 +546,13 @@ class FixedIncomeTradeGenerator(BaseGenerator):
     def generate(self) -> Dict[str, Any]:
         """Generate fixed income trades - implementation of abstract method"""
         trades = self.generate_trades()
+        total_notional = sum(t.notional_amount for t in trades)
         return {
             'trades': trades,
             'total_trades': len(trades),
             'bonds': len([t for t in trades if t.instrument_type == 'BOND']),
-            'swaps': len([t for t in trades if t.instrument_type == 'IRS'])
+            'swaps': len([t for t in trades if t.instrument_type == 'IRS']),
+            'total_notional_chf': total_notional,
         }
 
 
