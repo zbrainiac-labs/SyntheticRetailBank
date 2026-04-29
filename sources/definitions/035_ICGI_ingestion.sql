@@ -1,3 +1,7 @@
+/*
+ * 035_ICGI_ingestion.sql
+ * SWIFT/ICG raw ingestion: ISO20022 messages, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
     DIRECTORY = (
         ENABLE = TRUE
@@ -8,7 +12,7 @@ DEFINE STAGE {{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
 DEFINE TABLE {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES (
     FILE_NAME   STRING COMMENT 'Original source file name for audit trail, correlation with external systems, and operational troubleshooting. Enables traceability back to source systems and message routing verification.',
     LOAD_TS     TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP COMMENT 'System ingestion timestamp for data lineage tracking, SLA monitoring, and processing performance analysis. Critical for operational dashboards and regulatory reporting timelines.',
-    RAW_XML     VARIANT COMMENT 'Complete SWIFT ISO20022 XML message content preserved as VARIANT for flexible schema evolution, compliance archival, and comprehensive downstream parsing. Supports all current and future ISO20022 message types with full fidelity preservation.'
+     RAW_XML    VARIANT COMMENT 'Complete SWIFT ISO20022 XML message content preserved as VARIANT for flexible schema evolution, compliance archival, and comprehensive downstream parsing. Supports all current and future ISO20022 message types with full fidelity preservation.'
 )
 CHANGE_TRACKING = TRUE
 COMMENT = 'Master repository for raw SWIFT ISO20022 XML messages supporting interbank clearing and settlement operations. Stores PACS.008 customer credit transfer instructions, PACS.002 payment status reports, and future message types in native XML format. Provides foundation for downstream business logic processing, regulatory compliance analysis, operational monitoring, and audit trail maintenance. Optimized for high-volume message ingestion with comprehensive metadata capture.';

@@ -1,3 +1,7 @@
+/*
+ * 020_REFI_ingestion.sql
+ * Reference data raw ingestion: FX rates, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ ref_raw }}.REFI_RAW_ST_FX_RATES
     DIRECTORY = (
         ENABLE = TRUE

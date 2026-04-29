@@ -1,3 +1,7 @@
+/*
+ * 015_EMPI_ingestion.sql
+ * Employee raw ingestion: employees, client assignments, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES
     DIRECTORY = (
         ENABLE = TRUE

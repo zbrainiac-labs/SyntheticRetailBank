@@ -1,3 +1,7 @@
+/*
+ * 040_EQTI_ingestion.sql
+ * Equity raw ingestion: trades, market data, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ eqt_raw }}.EQTI_RAW_ST_TRADES
     DIRECTORY = (
         ENABLE = TRUE

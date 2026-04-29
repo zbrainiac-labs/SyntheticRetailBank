@@ -1,3 +1,7 @@
+/*
+ * 011_ACCI_ingestion.sql
+ * Account raw ingestion: accounts, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ crm_raw }}.ACCI_RAW_ST_ACCOUNTS
     DIRECTORY = (
         ENABLE = TRUE

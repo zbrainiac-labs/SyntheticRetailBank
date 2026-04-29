@@ -1,3 +1,7 @@
+/*
+ * 000_infrastructure.sql
+ * Infrastructure: schemas and tags
+ */
 DEFINE SCHEMA {{ db }}.{{ cmd_raw }}
     COMMENT = 'Commodity raw data - energy, metals, agricultural trades';
 

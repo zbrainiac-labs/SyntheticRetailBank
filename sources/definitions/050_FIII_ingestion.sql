@@ -1,3 +1,7 @@
+/*
+ * 050_FIII_ingestion.sql
+ * Fixed income raw ingestion: trades, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ fii_raw }}.FIII_RAW_ST_TRADES
     DIRECTORY = (
         ENABLE = TRUE

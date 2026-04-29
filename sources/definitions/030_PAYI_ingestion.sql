@@ -1,3 +1,7 @@
+/*
+ * 030_PAYI_ingestion.sql
+ * Payment raw ingestion: transactions, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ pay_raw }}.PAYI_RAW_ST_TRANSACTIONS
     DIRECTORY = (
         ENABLE = TRUE

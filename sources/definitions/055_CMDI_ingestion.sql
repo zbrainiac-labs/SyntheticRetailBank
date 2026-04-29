@@ -1,3 +1,7 @@
+/*
+ * 055_CMDI_ingestion.sql
+ * Commodity raw ingestion: trades, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ cmd_raw }}.CMDI_RAW_ST_TRADES
     DIRECTORY = (
         ENABLE = TRUE

@@ -1,3 +1,7 @@
+/*
+ * 060_LIQI_ingestion.sql
+ * Liquidity raw ingestion: LCR, HQLA, deposits, stages, tasks
+ */
 DEFINE TABLE {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_ELIGIBILITY (
     ASSET_TYPE VARCHAR(50) PRIMARY KEY COMMENT 'Unique HQLA asset type code (e.g., CASH_SNB, GOVT_BOND_CHF). Used to classify treasury holdings and determine regulatory treatment. Key for joining with holdings data.',
     ASSET_NAME VARCHAR(200) NOT NULL COMMENT 'Descriptive name of the asset type for reporting and user interface display. Human-readable classification used in Treasury dashboards and FINMA submissions.',

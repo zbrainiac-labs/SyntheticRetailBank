@@ -1,3 +1,7 @@
+/*
+ * 010_CRMI_ingestion.sql
+ * CRM raw ingestion: customers, addresses, stages, tasks
+ */
 DEFINE STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS
     DIRECTORY = (
         ENABLE = TRUE
