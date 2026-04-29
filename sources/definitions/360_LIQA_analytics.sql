@@ -1,3 +1,7 @@
+/*
+ * 360_LIQA_analytics.sql
+ * Liquidity analytics: LCR computation and monitoring
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_HQLA(
     AS_OF_DATE DATE COMMENT 'Reporting date for HQLA positions (daily COB snapshot). Primary time dimension for portfolio composition analysis, asset allocation monitoring, and strategic rebalancing decisions. Used for time-series analysis of HQLA mix evolution and regulatory level distribution trends.',
     HQLA_LEVEL VARCHAR(10) COMMENT 'Basel III HQLA regulatory level classification: L1 (highest quality, 0% haircut), L2A (high quality, 15% haircut), L2B (acceptable quality, 50% haircut). Primary grouping dimension for regulatory reporting, cap rule monitoring, and portfolio quality assessment. Critical for automated compliance validation.',

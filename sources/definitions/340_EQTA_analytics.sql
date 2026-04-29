@@ -1,3 +1,7 @@
+/*
+ * 340_EQTA_analytics.sql
+ * Equity analytics: portfolio positions and performance
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_TRADE_SUMMARY(
     TRADE_ID VARCHAR(50) COMMENT 'Unique trade identifier from FIX protocol execution report. Used for trade reconciliation, audit trail, and linking to settlement systems. Primary key for trade-level analysis and regulatory reporting (MiFID II transaction reporting).',
     TRADE_DATE TIMESTAMP_NTZ COMMENT 'Exact timestamp when trade was executed on exchange (UTC). Used for intraday analysis, execution quality measurement (VWAP comparison), and regulatory time-stamping requirements. Critical for best execution analysis and market timing studies.',

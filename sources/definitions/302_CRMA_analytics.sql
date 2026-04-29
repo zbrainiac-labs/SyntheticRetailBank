@@ -1,3 +1,7 @@
+/*
+ * 302_CRMA_analytics.sql
+ * CRM analytics: customer aggregation, sanctions screening
+ */
 DEFINE VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_ENRICHED AS
 SELECT 
     "Sr No.",

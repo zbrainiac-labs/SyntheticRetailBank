@@ -1,3 +1,7 @@
+/*
+ * 355_CMDA_analytics.sql
+ * Commodity analytics: trade processing and risk
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ cmd_agg }}.CMDA_AGG_DT_TRADE_SUMMARY(
     TRADE_ID VARCHAR(50) COMMENT 'Unique trade identifier',
     TRADE_DATE TIMESTAMP_NTZ COMMENT 'Trade execution timestamp',

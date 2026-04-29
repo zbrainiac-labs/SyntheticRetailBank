@@ -1,3 +1,7 @@
+/*
+ * 361_LIQA_reporting.sql
+ * Liquidity reporting: regulatory views and alerts
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_DAILY(
     AS_OF_DATE DATE COMMENT 'Reporting date for LCR calculation (daily COB snapshot). Primary time dimension for regulatory reporting to SNB and intraday liquidity monitoring. Used for time-series compliance tracking and historical breach analysis.',
     BANK_ID VARCHAR(20) COMMENT 'Bank identifier for regulatory reporting (SYNTH-CH-999). Used for multi-entity consolidation in group structures and SNB submission identification. Static identifier for this synthetic bank.',

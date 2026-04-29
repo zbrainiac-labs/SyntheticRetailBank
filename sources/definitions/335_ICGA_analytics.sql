@@ -1,3 +1,7 @@
+/*
+ * 335_ICGA_analytics.sql
+ * SWIFT/ICG analytics: message parsing and enrichment
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.ICGA_AGG_DT_SWIFT_PACS008(
     SOURCE_FILENAME VARCHAR(200) COMMENT 'Original XML file name for audit trail and message correlation',
     SOURCE_LOAD_TIMESTAMP TIMESTAMP_NTZ COMMENT 'System ingestion timestamp for data lineage and processing tracking',

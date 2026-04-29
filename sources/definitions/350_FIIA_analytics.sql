@@ -1,3 +1,7 @@
+/*
+ * 350_FIIA_analytics.sql
+ * Fixed income analytics: bond analytics and risk metrics
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ fii_agg }}.FIIA_AGG_DT_TRADE_SUMMARY(
     TRADE_ID VARCHAR(50) COMMENT 'Unique trade identifier',
     TRADE_DATE TIMESTAMP_NTZ COMMENT 'Trade execution timestamp',

@@ -1,3 +1,7 @@
+/*
+ * 330_PAYA_analytics.sql
+ * Payment analytics: transaction analysis and anomaly detection
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES(
     TRANSACTION_ID VARCHAR(50) COMMENT 'Unique identifier for each payment transaction',
     ACCOUNT_ID VARCHAR(30) COMMENT 'Account identifier for transaction allocation and behavioral analysis',

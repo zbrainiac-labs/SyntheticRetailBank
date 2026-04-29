@@ -1,3 +1,7 @@
+/*
+ * 311_ACCA_analytics.sql
+ * Account analytics: account aggregation and enrichment
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS(
     ACCOUNT_ID VARCHAR(30) COMMENT 'Unique account identifier for transaction allocation and balance tracking',
     ACCOUNT_TYPE VARCHAR(20) COMMENT 'Type of account (CHECKING/SAVINGS/BUSINESS/INVESTMENT)',

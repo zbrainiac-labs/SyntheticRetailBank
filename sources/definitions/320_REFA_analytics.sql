@@ -1,3 +1,7 @@
+/*
+ * 320_REFA_analytics.sql
+ * Reference analytics: FX rate processing
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ ref_agg }}.REFA_AGG_DT_FX_RATES_ENHANCED(
     DATE DATE COMMENT 'Date of the FX rate observation for time series analysis',
     FROM_CURRENCY VARCHAR(3) COMMENT 'Source currency code (ISO 4217) for currency conversion',
