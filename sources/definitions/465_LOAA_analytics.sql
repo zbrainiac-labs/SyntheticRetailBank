@@ -1,3 +1,7 @@
+/*
+ * 465_LOAA_analytics.sql
+ * Loan analytics: application processing and scoring
+ */
 DEFINE TABLE {{ db }}.{{ loa_agg }}.LOAA_AGG_TB_APPLICATIONS (
     APPLICATION_ID VARCHAR(50) PRIMARY KEY COMMENT 'Unique application identifier (APP_*)',
     CUSTOMER_ID VARCHAR(30) COMMENT 'FK to {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360',

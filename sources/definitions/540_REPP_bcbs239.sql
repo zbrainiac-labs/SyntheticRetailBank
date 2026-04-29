@@ -1,3 +1,7 @@
+/*
+ * 540_REPP_bcbs239.sql
+ * BCBS 239 reporting: data aggregation and risk compliance
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_BCBS239_RISK_AGGREGATION(
     RISK_TYPE VARCHAR(50) COMMENT 'Risk category classification (CREDIT/MARKET/OPERATIONAL/LIQUIDITY) for regulatory reporting',
     BUSINESS_LINE VARCHAR(50) COMMENT 'Business line identifier for risk allocation and management reporting',

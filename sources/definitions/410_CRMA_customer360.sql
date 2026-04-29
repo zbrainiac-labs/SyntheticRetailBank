@@ -1,3 +1,7 @@
+/*
+ * 410_CRMA_customer360.sql
+ * CRM Customer 360: unified customer view and lifecycle
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for address lookup (CUST_XXXXX format)',
     STREET_ADDRESS VARCHAR(200) COMMENT 'Current street address for customer correspondence',

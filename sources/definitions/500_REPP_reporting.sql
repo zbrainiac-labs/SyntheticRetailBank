@@ -1,3 +1,7 @@
+/*
+ * 500_REPP_reporting.sql
+ * Regulatory reporting: risk, compliance, and supervisory views
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CUSTOMER_SUMMARY(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Unique customer identifier for relationship management (CUST_XXXXX format)',
     FULL_NAME VARCHAR(201) COMMENT 'Customer full name (First + Last) for reporting and compliance',

@@ -1,3 +1,7 @@
+/*
+ * 520_REPP_credit_risk.sql
+ * Credit risk reporting: IRB, PD/LGD, expected loss
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_IRB_CUSTOMER_RATINGS(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for credit risk assessment',
     FULL_NAME VARCHAR(201) COMMENT 'Customer name for credit reporting',

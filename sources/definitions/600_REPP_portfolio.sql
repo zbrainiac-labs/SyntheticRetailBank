@@ -1,3 +1,7 @@
+/*
+ * 600_REPP_portfolio.sql
+ * Portfolio performance: return attribution and benchmarking
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_PORTFOLIO_PERFORMANCE(
     ACCOUNT_ID VARCHAR(30) COMMENT 'Account identifier for portfolio tracking',
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for relationship management',

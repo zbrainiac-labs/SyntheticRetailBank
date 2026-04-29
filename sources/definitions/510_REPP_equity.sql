@@ -1,3 +1,7 @@
+/*
+ * 510_REPP_equity.sql
+ * Equity reporting: portfolio and trading views
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_EQUITY_SUMMARY(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for portfolio analysis',
     ACCOUNT_ID VARCHAR(30) COMMENT 'Account identifier for position tracking',

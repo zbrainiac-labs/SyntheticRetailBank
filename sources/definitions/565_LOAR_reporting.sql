@@ -1,3 +1,7 @@
+/*
+ * 565_LOAR_reporting.sql
+ * Loan reporting: portfolio, delinquency, compliance views
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.LOAR_AGG_DT_PORTFOLIO_SUMMARY (
     AS_OF_DATE DATE COMMENT 'Reporting date for snapshot',
     PRODUCT_TYPE VARCHAR(50) COMMENT 'Product type: MORTGAGE, PERSONAL_LOAN',

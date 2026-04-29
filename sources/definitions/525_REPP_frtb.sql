@@ -1,3 +1,7 @@
+/*
+ * 525_REPP_frtb.sql
+ * FRTB reporting: market risk and capital requirements
+ */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_FRTB_RISK_POSITIONS(
     RISK_CLASS VARCHAR(20) COMMENT 'EQUITY, FX, INTEREST_RATE, COMMODITY, CREDIT_SPREAD',
     RISK_BUCKET VARCHAR(30) COMMENT 'Risk bucket within risk class',

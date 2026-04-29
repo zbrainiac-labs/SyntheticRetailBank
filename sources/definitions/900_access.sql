@@ -1,3 +1,7 @@
+/*
+ * 900_access.sql
+ * Access control: role-based grants
+ */
 GRANT USAGE ON DATABASE {{ db }} TO ROLE PUBLIC;
 
 GRANT USAGE ON SCHEMA {{ db }}.{{ cmd_agg }} TO ROLE PUBLIC;

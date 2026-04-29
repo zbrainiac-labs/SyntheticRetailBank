@@ -1,3 +1,7 @@
+/*
+ * 415_EMPA_analytics.sql
+ * Employee analytics: team performance and workload
+ */
 DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_EMPLOYEE_HIERARCHY
 COMMENT = 'Recursive employee hierarchy showing full organizational structure with paths and levels'
 AS
