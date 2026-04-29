@@ -830,7 +830,7 @@ def main():
                 commodity_results = {
                     'total_trades': len(commodity_trades),
                     'commodity_types': commodity_types,
-                    'total_value_ch': total_value,
+                    'total_value_chf': total_value,
                     'output_dir': str(commodity_output_dir),
                     'files_created': len(files_created)
                 }
