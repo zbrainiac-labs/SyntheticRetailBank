@@ -292,7 +292,7 @@ class MortgageEmailGenerator:
         
         status = "Under Review" if risk_factors else "Pre-approved"
         
-        email_content = """Subject: Mortgage Application Confirmation - {mortgage.application_id}
+        email_content = f"""Subject: Mortgage Application Confirmation - {mortgage.application_id}
 
 Dear {mortgage.customer.first_name} {mortgage.customer.family_name},
 
@@ -340,7 +340,7 @@ NEXT STEPS
 =========="""
 
         if status == "Pre-approved":
-            email_content += """
+            email_content += f"""
 🎉 Congratulations! Your application shows strong financial indicators and is pre-approved for further processing.
 
 Next steps:
@@ -351,7 +351,7 @@ Next steps:
 Your dedicated loan officer will contact you within 2 business days to discuss the next steps.
 """
         else:
-            email_content += """
+            email_content += f"""
 Your application is currently under review. We may need additional documentation due to:
 {chr(10).join('• ' + factor for factor in risk_factors)}
 
@@ -361,7 +361,7 @@ Our underwriting team will review your application and contact you within 3-5 bu
 3. Next steps in the approval process
 """
 
-        email_content += """
+        email_content += f"""
 IMPORTANT INFORMATION
 =====================
 • Your application is protected by banking privacy regulations
@@ -453,7 +453,7 @@ CONFIDENTIAL: This email contains sensitive financial information. Please do not
             risk_level = "HIGH"
             recommendation = "MANUAL REVIEW - Underwriter escalation required"
 
-        email_content = """Subject: [INTERNAL] Mortgage Application Review - {mortgage.application_id} - {risk_level} RISK
+        email_content = f"""Subject: [INTERNAL] Mortgage Application Review - {mortgage.application_id} - {risk_level} RISK
 
 To: underwriting@aaasyntheticbank.com
 Cc: sarah.mitchell@aaasyntheticbank.com, risk@aaasyntheticbank.com
@@ -508,20 +508,20 @@ RISK ASSESSMENT
 ==============="""
 
         if risk_factors:
-            email_content += """
+            email_content += f"""
 Risk Factors Identified:
 {chr(10).join('• ' + factor for factor in risk_factors)}
 """
         else:
             email_content += "\n✅ No significant risk factors identified"
 
-        email_content += """
+        email_content += f"""
 
 PROCESSING REQUIREMENTS
 ======================="""
 
         if risk_level == "LOW":
-            email_content += """
+            email_content += f"""
 □ Standard income verification
 □ Property appraisal
 □ Title search
@@ -531,7 +531,7 @@ PROCESSING REQUIREMENTS
 Estimated Processing Time: 5-7 business days
 """
         elif risk_level == "MEDIUM":
-            email_content += """
+            email_content += f"""
 □ Enhanced income verification (2 years tax returns)
 □ Property appraisal (may require second opinion)
 □ Employment verification letter
@@ -543,7 +543,7 @@ Estimated Processing Time: 5-7 business days
 Estimated Processing Time: 10-14 business days
 """
         else:
-            email_content += """
+            email_content += f"""
 □ Manual underwriter review REQUIRED
 □ Full financial audit (3 years tax returns)
 □ Property appraisal + second opinion
@@ -557,7 +557,7 @@ Estimated Processing Time: 15-21 business days
 ESCALATION: Senior Underwriter approval required
 """
 
-        email_content += """
+        email_content += f"""
 COMPLIANCE NOTES
 ================
 • Customer due diligence {'⚠️ ENHANCED' if mortgage.customer.has_anomaly else '✅ STANDARD'}
@@ -599,7 +599,7 @@ Not for customer distribution.
         else:
             complexity = "MODERATE"
         
-        email_content = """Subject: Loan Assignment - {mortgage.application_id} - {complexity} Case
+        email_content = f"""Subject: Loan Assignment - {mortgage.application_id} - {complexity} Case
 
 To: sarah.mitchell@aaasyntheticbank.com
 From: assignments@aaasyntheticbank.com
@@ -664,7 +664,7 @@ EXPECTED CHALLENGES
 ==================="""
 
         if complexity == "COMPLEX":
-            email_content += """
+            email_content += f"""
 ⚠️ This is a complex case requiring extra attention:
 • Below-average credit score may require manual underwriting
 • Enhanced documentation will be needed
@@ -673,13 +673,13 @@ EXPECTED CHALLENGES
 • Consider offering consultation on credit improvement
 """
         elif complexity == "MODERATE":
-            email_content += """
+            email_content += f"""
 • Standard processing with some additional documentation
 • May need to explain slightly higher rates or longer timeline
 • Good opportunity for relationship building
 """
         else:
-            email_content += """
+            email_content += f"""
 ✅ Straightforward case:
 • Strong financial profile
 • Standard processing expected
@@ -687,7 +687,7 @@ EXPECTED CHALLENGES
 • Consider cross-selling other bank products
 """
 
-        email_content += """
+        email_content += f"""
 CONTACT SCHEDULE
 ================
 □ Initial contact: Within 24 hours
