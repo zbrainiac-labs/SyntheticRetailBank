@@ -50,5 +50,5 @@ DEFINE SCHEMA {{ db }}.{{ ref_agg }}
 DEFINE SCHEMA {{ db }}.{{ rep_agg }}
     COMMENT = 'Reporting aggregation - FINMA LCR, BCBS239, FRTB';
 
-DEFINE TAG {{ db }}.PUBLIC.SENSITIVITY_LEVEL
+DEFINE TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL
     COMMENT = 'Data sensitivity classification: restricted | top_secret';
