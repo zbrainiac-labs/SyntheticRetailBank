@@ -20,8 +20,8 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS(
     CURRENCY_GROUP VARCHAR(20) COMMENT 'Currency grouping for reporting (MAJOR_EUROPEAN/USD_BASE/OTHER_EUROPEAN/OTHER)',
     AGGREGATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'Timestamp when aggregation processing was performed',
     AGGREGATION_TYPE VARCHAR(20) COMMENT 'Type of aggregation processing (1:1_COPY_FROM_RAW)',
-    SOURCE_TABLE VARCHAR(50) COMMENT 'Source table reference for data lineage (CRM_RAW_001.ACCI_RAW_TB_ACCOUNTS)'
-) COMMENT = '1:1 aggregation of account master data from raw layer (CRM_RAW_001.ACCI_RAW_TB_ACCOUNTS). Provides clean aggregation layer access for downstream analytics, balance calculations, and reporting. Maintains real-time refresh for data currency while serving as bridge between raw data and analytical data products.'
+    SOURCE_TABLE VARCHAR(50) COMMENT 'Source table reference for data lineage (CRM_RAW_v001.ACCI_RAW_TB_ACCOUNTS)'
+) COMMENT = '1:1 aggregation of account master data from raw layer (CRM_RAW_v001.ACCI_RAW_TB_ACCOUNTS). Provides clean aggregation layer access for downstream analytics, balance calculations, and reporting. Maintains real-time refresh for data currency while serving as bridge between raw data and analytical data products.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT 
@@ -88,7 +88,7 @@ SELECT
 
     CURRENT_TIMESTAMP() AS AGGREGATION_TIMESTAMP,
     '1:1_COPY_FROM_RAW' AS AGGREGATION_TYPE,
-    'CRM_RAW_001.ACCI_RAW_TB_ACCOUNTS' AS SOURCE_TABLE
+    'CRM_RAW_v001.ACCI_RAW_TB_ACCOUNTS' AS SOURCE_TABLE
 
 FROM {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS
 WHERE 1=1 

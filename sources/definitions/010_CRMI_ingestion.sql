@@ -67,7 +67,7 @@ DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
     CONSTRAINT PK_CRMI_RAW_TB_ADDRESSES PRIMARY KEY (CUSTOMER_ID, INSERT_TIMESTAMP_UTC)
 )
 CHANGE_TRACKING = TRUE
-COMMENT = 'Customer address base table with append-only structure (SCD Type 2). Multiple records per customer are allowed, uniquely identified by (CUSTOMER_ID, INSERT_TIMESTAMP_UTC). Dynamic tables in CRM_AGG_001 provide current and historical views.';
+COMMENT = 'Customer address base table with append-only structure (SCD Type 2). Multiple records per customer are allowed, uniquely identified by (CUSTOMER_ID, INSERT_TIMESTAMP_UTC). Dynamic tables in CRM_AGG_v001 provide current and historical views.';
 
 DEFINE TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
     EXPOSED_PERSON_ID VARCHAR(50) NOT NULL COMMENT 'Unique PEP identifier',

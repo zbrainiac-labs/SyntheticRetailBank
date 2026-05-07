@@ -268,7 +268,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_ACCOUNT_BALANCES(
     RECENT_TRANSACTIONS_30D NUMBER(10,0) COMMENT 'Number of transactions in last 30 days',
     RECENT_BALANCE_CHANGE_30D_BASE DECIMAL(18,2) COMMENT 'Net balance change in last 30 days (base currency)',
     BALANCE_CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'Timestamp when balance calculation was performed'
-) COMMENT = 'Real-time account balance calculation system with enhanced FX rate integration. Provides current balances for ALL customer accounts using enhanced exchange rates with analytics from REF_AGG_001.REFA_AGG_DT_FX_RATES_ENHANCED. Shows all accounts including those with zero balances. Uses direct account-to-transaction mapping (no allocation logic needed). Multi-currency conversion, balance tracking, and comprehensive financial reporting.'
+) COMMENT = 'Real-time account balance calculation system with enhanced FX rate integration. Provides current balances for ALL customer accounts using enhanced exchange rates with analytics from REF_AGG_v001.REFA_AGG_DT_FX_RATES_ENHANCED. Shows all accounts including those with zero balances. Uses direct account-to-transaction mapping (no allocation logic needed). Multi-currency conversion, balance tracking, and comprehensive financial reporting.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 WITH all_accounts AS (

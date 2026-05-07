@@ -16,7 +16,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_TRADE_SUMMARY(
     SIDE_DESCRIPTION VARCHAR(4) COMMENT 'Human-readable trade direction (BUY/SELL) for reporting and client communication. Derived from SIDE field. Used in client statements, trade confirmations, and portfolio reports for clarity.',
     QUANTITY NUMBER(15,4) COMMENT 'Number of shares or units traded. Used for position size calculation, volume analysis, and liquidity assessment. Supports fractional shares for modern trading platforms. Critical for portfolio weight calculations.',
     PRICE NUMBER(18,4) COMMENT 'Execution price per share in trade currency. Used for trade valuation, average cost calculation, and execution quality analysis (vs benchmark prices). Precision supports high-value securities and FX rates.',
-    CURRENCY VARCHAR(3) COMMENT 'Trade currency per ISO 4217 (USD, EUR, CHF, GBP). Used for multi-currency portfolio reporting, FX exposure analysis, and currency hedging decisions. Links to REF_RAW_001 for FX conversion to base currency.',
+    CURRENCY VARCHAR(3) COMMENT 'Trade currency per ISO 4217 (USD, EUR, CHF, GBP). Used for multi-currency portfolio reporting, FX exposure analysis, and currency hedging decisions. Links to REF_RAW_v001 for FX conversion to base currency.',
     GROSS_AMOUNT NUMBER(18,2) COMMENT 'Total trade value before commission in trade currency (Quantity × Price). Used for broker settlement, order value limits validation, and gross exposure calculations. Negative for sells (cash in), positive for buys (cash out).',
     COMMISSION NUMBER(12,4) COMMENT 'Trading commission charged by broker in trade currency. Used for cost analysis, broker comparison, and net return calculation. Impacts customer profitability and influences broker selection strategy.',
     NET_AMOUNT NUMBER(18,2) COMMENT 'Net settlement amount after commission in trade currency (Gross_Amount + Commission). Actual cash impact to customer account. Used for cash settlement, account balance updates, and customer invoicing.',
@@ -105,7 +105,7 @@ ORDER BY t.TRADE_DATE DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_PORTFOLIO_POSITIONS(
     ACCOUNT_ID VARCHAR(30) COMMENT 'Investment account identifier. Primary dimension for position aggregation. Links to account master data for account type classification and custody arrangements. Used for account-level performance reporting and margin calculations.',
-    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer owner of the account. Foreign key to CRM_RAW_001 for customer profile integration. Enables customer-level portfolio consolidation across multiple accounts and relationship-based investment advisory.',
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer owner of the account. Foreign key to CRM_RAW_v001 for customer profile integration. Enables customer-level portfolio consolidation across multiple accounts and relationship-based investment advisory.',
     SYMBOL VARCHAR(20) COMMENT 'Stock ticker symbol for the security. Used for position identification, market data lookup, and client reporting. Enables symbol-level exposure analysis and sector concentration monitoring.',
     ISIN VARCHAR(12) COMMENT 'International Securities Identification Number per ISO 6166. Global unique security identifier for cross-border positions, corporate actions processing, and regulatory reporting. Used for securities master reconciliation.',
     CURRENCY VARCHAR(3) COMMENT 'Original trading currency for this position per ISO 4217. Used for currency-specific performance calculation and FX exposure analysis. Positions in same security but different currencies tracked separately.',
@@ -212,7 +212,7 @@ GROUP BY t.ACCOUNT_ID, t.CUSTOMER_ID, t.SYMBOL, t.ISIN, t.CURRENCY
 ORDER BY t.ACCOUNT_ID, t.SYMBOL;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_CUSTOMER_ACTIVITY(
-    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier. Foreign key to CRM_RAW_001 for profile integration. Primary dimension for customer behavior analysis, relationship management scoring, and personalized service delivery.',
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier. Foreign key to CRM_RAW_v001 for profile integration. Primary dimension for customer behavior analysis, relationship management scoring, and personalized service delivery.',
     TOTAL_TRADES NUMBER(10,0) COMMENT 'Lifetime total number of trade executions across all accounts. Primary activity metric for customer engagement scoring, commission revenue potential, and service tier assignment. Used for active vs passive investor classification.',
     TOTAL_BUY_TRADES NUMBER(10,0) COMMENT 'Count of buy-side trades. Indicates portfolio accumulation behavior and capital deployment activity. Used with sell trades to calculate buy/sell ratio for understanding investment style (accumulator vs trader).',
     TOTAL_SELL_TRADES NUMBER(10,0) COMMENT 'Count of sell-side trades. Indicates liquidation frequency and profit-taking behavior. High sell activity suggests tactical trading; low suggests buy-and-hold strategy. Used for customer behavior profiling.',

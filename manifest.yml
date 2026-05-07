@@ -5,12 +5,12 @@ default_target: 'DEV'
 targets:
   DEV:
     account_identifier: SFSEEUROPE-ZS28104
-    project_name: 'AAA_DEV_SYNTHETIC_BANK.PUBLIC.SYNTHETIC_RETAIL_BANK'
+    project_name: 'AAA_DEV_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK'
     project_owner: CICD
     templating_config: 'DEV'
   PROD:
     account_identifier: SFSEEUROPE-ZS28104
-    project_name: 'AAA_PRD_SYNTHETIC_BANK.PUBLIC.SYNTHETIC_RETAIL_BANK'
+    project_name: 'AAA_PRD_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK'
     project_owner: CICD
     templating_config: 'PROD'
 
@@ -19,22 +19,22 @@ templating:
     db: 'AAA_DEV_SYNTHETIC_BANK'
     wh: 'MD_TEST_WH'
     lag: '60 MINUTE'
-    cmd_raw: 'CMD_RAW_001'
-    cmd_agg: 'CMD_AGG_001'
-    crm_raw: 'CRM_RAW_001'
-    crm_agg: 'CRM_AGG_001'
-    eqt_raw: 'EQT_RAW_001'
-    eqt_agg: 'EQT_AGG_001'
-    fii_raw: 'FII_RAW_001'
-    fii_agg: 'FII_AGG_001'
-    loa_raw: 'LOA_RAW_001'
-    loa_agg: 'LOA_AGG_001'
-    pay_raw: 'PAY_RAW_001'
-    pay_agg: 'PAY_AGG_001'
-    ref_raw: 'REF_RAW_001'
-    ref_agg: 'REF_AGG_001'
-    rep_raw: 'REP_RAW_001'
-    rep_agg: 'REP_AGG_001'
+    cmd_raw: 'CMD_RAW_v001'
+    cmd_agg: 'CMD_AGG_v001'
+    crm_raw: 'CRM_RAW_v001'
+    crm_agg: 'CRM_AGG_v001'
+    eqt_raw: 'EQT_RAW_v001'
+    eqt_agg: 'EQT_AGG_v001'
+    fii_raw: 'FII_RAW_v001'
+    fii_agg: 'FII_AGG_v001'
+    loa_raw: 'LOA_RAW_v001'
+    loa_agg: 'LOA_AGG_v001'
+    pay_raw: 'PAY_RAW_v001'
+    pay_agg: 'PAY_AGG_v001'
+    ref_raw: 'REF_RAW_v001'
+    ref_agg: 'REF_AGG_v001'
+    rep_raw: 'REP_RAW_v001'
+    rep_agg: 'REP_AGG_v001'
   configurations:
     DEV:
       db: 'AAA_DEV_SYNTHETIC_BANK'
