@@ -10,7 +10,7 @@ jobs:
     uses: zbrainiac-labs/DataOpsBackbone/.github/workflows/dataops-pipeline.yml@main
     with:
       SOURCE_DATABASE: AAA_DEV_SYNTHETIC_BANK
-      SOURCE_SCHEMA: AAA_DCM
+      SOURCE_SCHEMA: AAA_RAW_v001
       DCM_PROJECT_IDENTIFIER: AAA_DEV_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK
       DCM_TARGET: DEV
       CLONE_PER_BUILD: true
