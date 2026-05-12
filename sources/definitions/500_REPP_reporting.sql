@@ -4,7 +4,6 @@
  */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CUSTOMER_SUMMARY(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Unique customer identifier for relationship management (CUST_XXXXX format)',
-
     HAS_ANOMALY BOOLEAN COMMENT 'Flag indicating if customer has anomalous behavior patterns',
     ONBOARDING_DATE DATE COMMENT 'Date when customer relationship was established',
     TOTAL_ACCOUNTS NUMBER(10,0) COMMENT 'Number of accounts held by customer',
