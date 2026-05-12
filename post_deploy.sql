@@ -1467,7 +1467,6 @@ LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
     ON p.CUSTOMER_ID = c.CUSTOMER_ID
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii
     ON p.CUSTOMER_ID = pii.CUSTOMER_ID;
-  ON p.CUSTOMER_ID = c.CUSTOMER_ID;
 
 CREATE OR REPLACE VIEW REPA_SV_PORTFOLIO_PERFORMANCE
 COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (portfolio subset)'
@@ -1682,34 +1681,26 @@ relationships (
 
 facts (
   advisors.EMPLOYEE_ID as EMPLOYEE_ID comment='Employee ID | advisor ID | employee number | staff ID | advisor code | employee identifier',
-  advisors.FULL_NAME as FULL_NAME comment='Full name | advisor name | employee name | complete name',
-  advisors.FIRST_NAME as FIRST_NAME comment='First name | given name | forename | personal name',
-  advisors.FAMILY_NAME as FAMILY_NAME comment='Family name | last name | surname | family surname | last surname',
-  advisors.EMAIL as EMAIL comment='Email address | email | advisor email | contact email | work email | business email',
-  advisors.PHONE as PHONE comment='Phone number | telephone | mobile | contact number | phone | cell phone | mobile number',
-  advisors.DATE_OF_BIRTH as DATE_OF_BIRTH comment='Date of birth | DOB | birth date | birthday | birthdate',
-  
+  advisors.ADVISOR_NAME as ADVISOR_NAME comment='Advisor full name | advisor name | employee name | complete name',
+  advisors.TEAM_LEADER_NAME as TEAM_LEADER_NAME comment='Team leader name | manager name | supervisor name',
   advisors.HIRE_DATE as HIRE_DATE comment='Hire date | start date | employment start | join date | onboarding date | employment date',
-  
-  advisors.MANAGER_EMPLOYEE_ID as MANAGER_EMPLOYEE_ID comment='Manager ID | supervisor ID | manager identifier | reports to ID | manager employee ID',
-  
+  advisors.TENURE_DAYS as TENURE_DAYS comment='Tenure in days | days employed | employment duration | service length',
+  advisors.TEAM_LEADER_ID as TEAM_LEADER_ID comment='Team leader ID | manager ID | supervisor ID | reports to ID',
   advisors.LANGUAGES_SPOKEN as LANGUAGES_SPOKEN comment='Languages spoken | language skills | multilingual | languages | language proficiency',
-  advisors.CERTIFICATIONS as CERTIFICATIONS comment='Certifications | professional certifications | qualifications | credentials | licenses',
-  
   advisors.TOTAL_CLIENTS as TOTAL_CLIENTS comment='Total clients | number of clients | client count | assigned clients | customer portfolio',
-  advisors.TOTAL_AUM as TOTAL_AUM 
-    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value')
-    comment='Total AUM managed by advisor. Primary metric for advisor performance ranking',
+  advisors.TOTAL_PORTFOLIO_VALUE as TOTAL_PORTFOLIO_VALUE
+    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value', 'total AUM')
+    comment='Total portfolio value managed by advisor. Primary metric for advisor performance ranking',
   advisors.AVG_CLIENT_BALANCE as AVG_CLIENT_BALANCE comment='Average client balance | mean client balance | typical client value | avg portfolio size',
-  advisors.ACTIVE_CLIENTS as ACTIVE_CLIENTS comment='Active clients | current clients | active portfolio | active customer count',
-  advisors.CLOSED_CLIENTS as CLOSED_CLIENTS comment='Closed clients | churned clients | lost clients | departed customers',
-  advisors.CLIENT_RETENTION_RATE as CLIENT_RETENTION_RATE comment='Client retention rate | retention percentage | client loyalty | retention ratio',
-  advisors.TOTAL_ACCOUNTS_MANAGED as TOTAL_ACCOUNTS_MANAGED comment='Total accounts managed | account count | managed accounts | accounts under management',
-  advisors.TOTAL_CHECKING_BALANCE as TOTAL_CHECKING_BALANCE comment='Total checking balance | checking AUM | checking portfolio | checking assets',
-  advisors.TOTAL_SAVINGS_BALANCE as TOTAL_SAVINGS_BALANCE comment='Total savings balance | savings AUM | savings portfolio | savings assets',
-  advisors.TOTAL_INVESTMENT_BALANCE as TOTAL_INVESTMENT_BALANCE comment='Total investment balance | investment AUM | investment portfolio | investment assets',
+  advisors.MAX_CLIENT_BALANCE as MAX_CLIENT_BALANCE comment='Maximum client balance | highest client balance | largest client value',
   advisors.HIGH_RISK_CLIENTS as HIGH_RISK_CLIENTS comment='High risk clients | risky customers | high risk portfolio | elevated risk clients',
-  advisors.PREMIUM_CLIENTS as PREMIUM_CLIENTS comment='Premium clients | platinum clients | VIP clients | high value clients | premium tier customers'
+  advisors.HIGH_RISK_PERCENTAGE as HIGH_RISK_PERCENTAGE comment='High risk percentage | risk ratio | high risk proportion',
+  advisors.TOTAL_CLIENT_ACCOUNTS as TOTAL_CLIENT_ACCOUNTS comment='Total client accounts | account count | managed accounts | accounts under management',
+  advisors.AVG_ACCOUNTS_PER_CLIENT as AVG_ACCOUNTS_PER_CLIENT comment='Average accounts per client | accounts per customer | avg account count',
+  advisors.TOTAL_TRANSACTIONS as TOTAL_TRANSACTIONS comment='Total transactions | transaction count | all transactions | transaction volume',
+  advisors.AVG_TRANSACTIONS_PER_CLIENT as AVG_TRANSACTIONS_PER_CLIENT comment='Average transactions per client | txn per customer | activity rate',
+  advisors.CRITICAL_RISK_CLIENTS as CRITICAL_RISK_CLIENTS comment='Critical risk clients | highest risk clients | critical risk count',
+  advisors.CAPACITY_UTILIZATION_PCT as CAPACITY_UTILIZATION_PCT comment='Capacity utilization | workload percentage | capacity used | utilization rate'
 )
 
 dimensions (
@@ -1722,15 +1713,14 @@ dimensions (
   advisors.EMPLOYMENT_STATUS AS EMPLOYMENT_STATUS 
     WITH SYNONYMS = ('status', 'active', 'employment status', 'work status')
     COMMENT = 'Employment status (ACTIVE, INACTIVE). Use for filtering active advisors',
-  advisors.POSITION_LEVEL AS POSITION_LEVEL 
-    WITH SYNONYMS = ('tier', 'level', 'advisor tier', 'position level', 'seniority')
-    COMMENT = 'Position level or advisor tier. Use for performance comparison by seniority',
   advisors.PERFORMANCE_RATING AS PERFORMANCE_RATING 
     WITH SYNONYMS = ('rating', 'performance', 'performance rating', 'advisor rating')
     COMMENT = 'Performance rating. Use for identifying top performers',
-  
-  advisors.OFFICE_LOCATION AS OFFICE_LOCATION 
-    COMMENT = 'Office location for branch-level analysis'
+  advisors.WORKLOAD_STATUS AS WORKLOAD_STATUS 
+    WITH SYNONYMS = ('workload', 'capacity status', 'load status')
+    COMMENT = 'Workload status (e.g. OVERLOADED, BALANCED). Use for capacity planning',
+  advisors.HIGH_RISK_CLIENTS_CLASSIFICATION AS HIGH_RISK_CLIENTS_CLASSIFICATION 
+    COMMENT = 'Risk classification bucket for risk-based advisor analysis'
 )
 
 metrics (
@@ -1738,25 +1728,19 @@ metrics (
     WITH SYNONYMS = ('number of advisors', 'advisor count', 'how many advisors', 'total advisors', 'headcount')
     COMMENT = 'Count of advisors.
                EXAMPLES: "How many advisors by region?" → COUNT(EMPLOYEE_ID) GROUP BY REGION',
-  advisors.TOTAL_AUM_SUM AS SUM(advisors.TOTAL_AUM)
+  advisors.TOTAL_PORTFOLIO_SUM AS SUM(advisors.TOTAL_PORTFOLIO_VALUE)
     WITH SYNONYMS = ('total AUM', 'total assets', 'total managed assets', 'sum of AUM')
-    COMMENT = 'Sum of all AUM managed by advisors. DEFAULT for advisor rankings.
-               EXAMPLES: "Show me top 10 advisors by total AUM" → ORDER BY TOTAL_AUM DESC LIMIT 10
-                        "Total AUM by region" → SUM(TOTAL_AUM) GROUP BY REGION
-                        "Which advisors manage most assets?" → ORDER BY TOTAL_AUM DESC',
-  advisors.AVG_AUM AS AVG(advisors.TOTAL_AUM)
+    COMMENT = 'Sum of all portfolio value managed by advisors. DEFAULT for advisor rankings.
+               EXAMPLES: "Show me top 10 advisors by AUM" → ORDER BY TOTAL_PORTFOLIO_VALUE DESC LIMIT 10',
+  advisors.AVG_PORTFOLIO AS AVG(advisors.TOTAL_PORTFOLIO_VALUE)
     WITH SYNONYMS = ('average AUM', 'mean AUM', 'typical AUM', 'avg assets per advisor')
-    COMMENT = 'Average AUM per advisor. Use for productivity benchmarking.
-               EXAMPLES: "Average AUM by position level" → AVG(TOTAL_AUM) GROUP BY POSITION_LEVEL',
+    COMMENT = 'Average portfolio value per advisor. Use for productivity benchmarking.',
   advisors.TOTAL_CLIENTS_SUM AS SUM(advisors.TOTAL_CLIENTS)
     WITH SYNONYMS = ('total clients', 'sum of clients', 'all clients', 'total customer count')
-    COMMENT = 'Total number of clients managed by all advisors.
-               EXAMPLES: "Total clients by advisor" → SUM(TOTAL_CLIENTS) or use TOTAL_CLIENTS directly',
-  advisors.AVG_RETENTION AS AVG(advisors.CLIENT_RETENTION_RATE)
-    WITH SYNONYMS = ('average retention', 'mean retention', 'typical retention', 'avg retention rate')
-    COMMENT = 'Average client retention rate. Use for retention analysis.
-               EXAMPLES: "Which advisors have highest retention?" → ORDER BY CLIENT_RETENTION_RATE DESC
-                        "Average retention by region" → AVG(CLIENT_RETENTION_RATE) GROUP BY REGION'
+    COMMENT = 'Total number of clients managed by all advisors.',
+  advisors.AVG_CAPACITY AS AVG(advisors.CAPACITY_UTILIZATION_PCT)
+    WITH SYNONYMS = ('average utilization', 'mean capacity', 'typical utilization')
+    COMMENT = 'Average capacity utilization. Use for workforce planning.'
 );
 
 SELECT 'EMPA_SV_EMPLOYEE_ADVISOR created successfully! Advisor relationship management view ready.' AS STATUS;
