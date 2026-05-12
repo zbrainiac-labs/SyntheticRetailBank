@@ -189,8 +189,8 @@ Examples:
     parser.add_argument(
         "--swift-generator-script",
         type=str,
-        default="swift_message_generator.py",
-        help="Path to SWIFT message generator script (default: swift_message_generator.py)"
+        default="generators/swift_message_generator.py",
+        help="Path to SWIFT message generator script (default: generators/swift_message_generator.py)"
     )
     
     parser.add_argument(
@@ -433,31 +433,8 @@ def main():
         print("\nStarting data generation...")
         start_time = datetime.now()
         
-        # Check if user specified any specific generation flags (exclusive mode)
-        specific_generation_requested = any([
-            args.generate_swift,
-            args.generate_pep,
-            args.generate_mortgage_emails,
-            args.generate_address_updates,
-            args.generate_customer_updates,
-            args.generate_customer_snapshot,
-            args.generate_fixed_income,
-            args.generate_commodities,
-            args.generate_lifecycle,
-            args.generate_employees
-        ])
-        
-        # Generate basic files only if no specific generation was requested
-        # OR if specific generators need customer/account data as dependencies
-        if not specific_generation_requested:
-            # Default mode: generate all basic files
-            print("\nGenerating basic files...")
-            results = file_generator.generate_all_files()
-        else:
-            # Exclusive mode: generate only customer master data (required dependency)
-            print("\n⚙️  Specific generation mode: generating ONLY requested entities")
-            print("   (Minimal customer data will be generated as dependency)")
-            results = file_generator.generate_minimal_files()
+        print("\nGenerating base files (customers, accounts, FX rates, transactions, equity trades)...")
+        results = file_generator.generate_all_files()
         
         # Generate SWIFT messages if requested
         swift_results = None

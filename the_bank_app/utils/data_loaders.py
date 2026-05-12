@@ -21,7 +21,7 @@ def load_customer_360():
         
         query = """
             SELECT *
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             ORDER BY CUSTOMER_ID
         """
         
@@ -60,7 +60,7 @@ def load_high_risk_customers():
                 REQUIRES_EXPOSED_PERSON_REVIEW,
                 REQUIRES_SANCTIONS_REVIEW,
                 HIGH_RISK_CUSTOMER
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             WHERE HIGH_RISK_CUSTOMER = TRUE
                OR REQUIRES_EXPOSED_PERSON_REVIEW = TRUE
                OR REQUIRES_SANCTIONS_REVIEW = TRUE
@@ -91,7 +91,7 @@ def load_risk_distribution():
                 OVERALL_RISK_RATING,
                 COUNT(*) as CUSTOMER_COUNT,
                 AVG(OVERALL_RISK_SCORE) as AVG_RISK_SCORE
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             GROUP BY OVERALL_RISK_RATING
             ORDER BY AVG_RISK_SCORE DESC
         """
@@ -121,7 +121,7 @@ def load_pep_sanctions_summary():
                 COUNT(*) as COUNT,
                 AVG(EXPOSED_PERSON_MATCH_ACCURACY_PERCENT) as AVG_ACCURACY,
                 SUM(CASE WHEN REQUIRES_EXPOSED_PERSON_REVIEW THEN 1 ELSE 0 END) as REQUIRES_REVIEW
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             GROUP BY EXPOSED_PERSON_MATCH_TYPE
             ORDER BY COUNT DESC
         """
@@ -132,7 +132,7 @@ def load_pep_sanctions_summary():
                 COUNT(*) as COUNT,
                 AVG(SANCTIONS_MATCH_ACCURACY_PERCENT) as AVG_ACCURACY,
                 SUM(CASE WHEN REQUIRES_SANCTIONS_REVIEW THEN 1 ELSE 0 END) as REQUIRES_REVIEW
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             GROUP BY SANCTIONS_MATCH_TYPE
             ORDER BY COUNT DESC
         """
@@ -167,7 +167,7 @@ def load_account_tier_distribution():
                 AVG(SAVINGS_ACCOUNTS) as AVG_SAVINGS,
                 AVG(BUSINESS_ACCOUNTS) as AVG_BUSINESS,
                 AVG(INVESTMENT_ACCOUNTS) as AVG_INVESTMENT
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             GROUP BY ACCOUNT_TIER
             ORDER BY CUSTOMER_COUNT DESC
         """
@@ -197,7 +197,7 @@ def load_geographic_distribution():
                 COUNT(*) as CUSTOMER_COUNT,
                 COUNT(DISTINCT ACCOUNT_TIER) as TIER_DIVERSITY,
                 AVG(OVERALL_RISK_SCORE) as AVG_RISK_SCORE
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             GROUP BY COUNTRY
             ORDER BY CUSTOMER_COUNT DESC
         """
@@ -321,7 +321,7 @@ def load_lending_portfolio():
                 RISK_CLASSIFICATION,
                 ACCOUNT_TIER,
                 TOTAL_ACCOUNTS
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             ORDER BY CUSTOMER_ID
         """
         
@@ -357,7 +357,7 @@ def load_wealth_portfolios():
                 AVG_AUM_PER_CLIENT,
                 PERFORMANCE_RATING,
                 REGION
-            FROM EMPA_AGG_DT_ADVISOR_PERFORMANCE
+            FROM EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED
             ORDER BY TOTAL_AUM DESC
         """
         
@@ -381,7 +381,7 @@ def load_advisor_performance():
         
         query = """
             SELECT *
-            FROM EMPA_AGG_DT_ADVISOR_PERFORMANCE
+            FROM EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED
         """
         
         df = session.sql(query).to_pandas()
@@ -417,7 +417,7 @@ def load_sanctions_matches():
                 SANCTIONS_MATCH_ACCURACY_PERCENT,
                 REQUIRES_SANCTIONS_REVIEW,
                 OVERALL_SANCTIONS_RISK
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             WHERE SANCTIONS_MATCH_TYPE != 'NO_MATCH'
             ORDER BY SANCTIONS_MATCH_ACCURACY_PERCENT DESC
         """
@@ -461,7 +461,7 @@ def load_advisor_capacity():
                 HIGH_RISK_CLIENTS,
                 PERFORMANCE_RATING,
                 EMPLOYMENT_STATUS
-            FROM EMPA_AGG_DT_ADVISOR_PERFORMANCE
+            FROM EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED
             ORDER BY AVAILABLE_CAPACITY DESC
         """
         
@@ -521,7 +521,7 @@ def load_pep_matches():
                 EXPOSED_PERSON_MATCH_ACCURACY_PERCENT,
                 REQUIRES_EXPOSED_PERSON_REVIEW,
                 OVERALL_EXPOSED_PERSON_RISK
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             WHERE EXPOSED_PERSON_MATCH_TYPE != 'NO_MATCH'
             ORDER BY EXPOSED_PERSON_MATCH_ACCURACY_PERCENT DESC
         """
@@ -554,7 +554,7 @@ def load_kyc_completeness():
                 SUM(CASE WHEN EMPLOYER IS NOT NULL THEN 1 ELSE 0 END) as EMPLOYER_COMPLETE,
                 ROUND(AVG(CASE WHEN EMAIL IS NOT NULL THEN 100 ELSE 0 END), 2) as EMAIL_PCT,
                 ROUND(AVG(CASE WHEN PHONE IS NOT NULL THEN 100 ELSE 0 END), 2) as PHONE_PCT
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
             GROUP BY COUNTRY
             ORDER BY TOTAL_CUSTOMERS DESC
         """
@@ -594,7 +594,7 @@ def load_data_quality_metrics():
                 ROUND((COUNT(PHONE) * 100.0 / COUNT(*)), 2) as PHONE_COMPLETENESS,
                 ROUND((COUNT(DATE_OF_BIRTH) * 100.0 / COUNT(*)), 2) as DOB_COMPLETENESS,
                 ROUND((COUNT(STREET_ADDRESS) * 100.0 / COUNT(*)), 2) as ADDRESS_COMPLETENESS
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
         """
         
         df = session.sql(query).to_pandas()
@@ -630,7 +630,7 @@ def load_compliance_risk_summary():
                 SUM(CASE WHEN REQUIRES_SANCTIONS_REVIEW THEN 1 ELSE 0 END) as SANCTIONS_REVIEWS_NEEDED,
                 COALESCE(SUM(CASE WHEN HAS_ANOMALY THEN 1 ELSE 0 END), 0) as ANOMALY_COUNT,
                 ROUND(AVG(OVERALL_RISK_SCORE), 2) as AVG_RISK_SCORE
-            FROM CRMA_AGG_DT_CUSTOMER_360
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
         """
         
         df = session.sql(query).to_pandas()
@@ -734,7 +734,7 @@ def load_high_churn_risk_customers():
                 c.EMAIL,
                 c.PHONE
             FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE l
-            LEFT JOIN CRMA_AGG_DT_CUSTOMER_360 c ON l.CUSTOMER_ID = c.CUSTOMER_ID
+            LEFT JOIN CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON l.CUSTOMER_ID = c.CUSTOMER_ID
             WHERE l.CHURN_PROBABILITY > 70
             ORDER BY l.CHURN_PROBABILITY DESC
         """
@@ -773,7 +773,7 @@ def load_premium_at_risk():
                 c.PHONE,
                 c.PREFERRED_CONTACT_METHOD
             FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE l
-            LEFT JOIN CRMA_AGG_DT_CUSTOMER_360 c ON l.CUSTOMER_ID = c.CUSTOMER_ID
+            LEFT JOIN CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON l.CUSTOMER_ID = c.CUSTOMER_ID
             WHERE c.ACCOUNT_TIER IN ('GOLD', 'PLATINUM')
               AND l.CHURN_PROBABILITY > 70
             ORDER BY l.CHURN_PROBABILITY DESC
@@ -813,7 +813,7 @@ def load_dormant_accounts():
                 c.PHONE,
                 c.TOTAL_ACCOUNTS
             FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE l
-            LEFT JOIN CRMA_AGG_DT_CUSTOMER_360 c ON l.CUSTOMER_ID = c.CUSTOMER_ID
+            LEFT JOIN CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON l.CUSTOMER_ID = c.CUSTOMER_ID
             WHERE l.DAYS_SINCE_LAST_TRANSACTION > 180
               AND l.LIFECYCLE_STAGE IN ('DORMANT', 'DECLINING')
             ORDER BY l.DAYS_SINCE_LAST_TRANSACTION DESC
@@ -1321,7 +1321,7 @@ def load_loan_customer_summary():
                 c.REQUIRES_SANCTIONS_REVIEW,
                 c.REQUIRES_EXPOSED_PERSON_REVIEW
             FROM REP_AGG_001.LOAR_AGG_DT_CUSTOMER_LOAN_SUMMARY cls
-            LEFT JOIN CRM_AGG_001.CRMA_AGG_DT_CUSTOMER_360 c ON cls.CUSTOMER_ID = c.CUSTOMER_ID
+            LEFT JOIN CRM_AGG_V001.CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON cls.CUSTOMER_ID = c.CUSTOMER_ID
             WHERE cls.TOTAL_APPLICATIONS > 0
             ORDER BY cls.TOTAL_APPROVED_AMOUNT DESC
             LIMIT 100

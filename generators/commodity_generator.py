@@ -517,7 +517,7 @@ class CommodityTradeGenerator(BaseGenerator):
         trades_by_date = defaultdict(list)
         for trade in trades:
             # Extract date from timestamp (format: 'YYYY-MM-DD HH:MM:SS')
-            trade_date = trade.trade_date.split(' ')[0]  # Get 'YYYY-MM-DD' part
+            trade_date = trade.trade_date.split('T')[0].split(' ')[0]
             trades_by_date[trade_date].append(trade)
         
         # Get field names from dataclass

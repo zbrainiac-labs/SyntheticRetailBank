@@ -174,7 +174,7 @@ class ThreadSafeCounter:
 class SWIFTGenerator:
     """SWIFT Message Generator for synthetic bank customers"""
     
-    def __init__(self, swift_generator_script: str = "swift_message_generator.py", seed: int = 42):
+    def __init__(self, swift_generator_script: str = "generators/swift_message_generator.py", seed: int = 42):
         """
         Initialize SWIFT generator
         

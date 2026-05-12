@@ -4,7 +4,7 @@
  */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CUSTOMER_SUMMARY(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Unique customer identifier for relationship management (CUST_XXXXX format)',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer full name (First + Last) for reporting and compliance',
+
     HAS_ANOMALY BOOLEAN COMMENT 'Flag indicating if customer has anomalous behavior patterns',
     ONBOARDING_DATE DATE COMMENT 'Date when customer relationship was established',
     TOTAL_ACCOUNTS NUMBER(10,0) COMMENT 'Number of accounts held by customer',
@@ -21,7 +21,7 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
     c.CUSTOMER_ID,
-    CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME) AS FULL_NAME,
+
     c.HAS_ANOMALY,
     c.ONBOARDING_DATE,
     COUNT(a.ACCOUNT_ID) AS TOTAL_ACCOUNTS,
@@ -35,7 +35,7 @@ SELECT
 FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
 LEFT JOIN {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS a ON c.CUSTOMER_ID = a.CUSTOMER_ID
 LEFT JOIN {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES t ON c.CUSTOMER_ID = t.CUSTOMER_ID
-GROUP BY c.CUSTOMER_ID, c.FIRST_NAME, c.FAMILY_NAME, c.HAS_ANOMALY, c.ONBOARDING_DATE;
+GROUP BY c.CUSTOMER_ID, c.HAS_ANOMALY, c.ONBOARDING_DATE;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_DAILY_TRANSACTION_SUMMARY(
     TRANSACTION_DATE DATE COMMENT 'Business date for daily reporting and trend analysis',
@@ -222,7 +222,7 @@ ORDER BY SETTLEMENT_DATE DESC, SETTLEMENT_TOTAL_AMOUNT DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_ANOMALY_ANALYSIS(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for compliance tracking',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer name for investigation reports',
+
     IS_ANOMALOUS_CUSTOMER BOOLEAN COMMENT 'Customer-level anomaly flag from profiling',
     TOTAL_TRANSACTIONS NUMBER(10,0) COMMENT 'Total transaction count for baseline comparison',
     ANOMALOUS_TRANSACTIONS NUMBER(10,0) COMMENT 'Count of flagged transactions',
@@ -235,7 +235,7 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
     c.CUSTOMER_ID,                                               -- Customer identifier for compliance tracking
-    CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME) AS FULL_NAME,       -- Customer name for investigation reports
+       -- Customer name for investigation reports
     c.HAS_ANOMALY AS IS_ANOMALOUS_CUSTOMER,                      -- Customer-level anomaly flag from profiling
     COUNT(t.TRANSACTION_ID) AS TOTAL_TRANSACTIONS,               -- Total transaction count for baseline comparison
     COUNT(CASE WHEN t.DESCRIPTION LIKE '%[%]%' THEN 1 END) AS ANOMALOUS_TRANSACTIONS, -- Count of flagged transactions
@@ -247,7 +247,7 @@ SELECT
         END, ', ') AS ANOMALY_TYPES                              -- Types of anomalies detected for investigation
 FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
 LEFT JOIN {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_TRANSACTION_ANOMALIES t ON c.CUSTOMER_ID = t.CUSTOMER_ID
-GROUP BY c.CUSTOMER_ID, c.FIRST_NAME, c.FAMILY_NAME, c.HAS_ANOMALY
+GROUP BY c.CUSTOMER_ID, c.HAS_ANOMALY
 HAVING COUNT(t.TRANSACTION_ID) > 0
 ORDER BY ANOMALY_PERCENTAGE DESC, ANOMALOUS_AMOUNT DESC;
 
@@ -334,7 +334,7 @@ ORDER BY BOOKING_DATE DESC, SETTLEMENT_DAYS DESC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LIFECYCLE_ANOMALIES(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer full name',
+
     LIFECYCLE_EVENT_ID VARCHAR(50) COMMENT 'Lifecycle event that triggered review',
     EVENT_TYPE VARCHAR(30) COMMENT 'Type of lifecycle event',
     EVENT_DATE DATE COMMENT 'Date of lifecycle event',
@@ -354,7 +354,7 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
     c.CUSTOMER_ID,
-    CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME) AS FULL_NAME,
+
 
     e.EVENT_ID AS LIFECYCLE_EVENT_ID,
     e.EVENT_TYPE,
@@ -411,3 +411,17 @@ LEFT JOIN LATERAL (
 WHERE DATEDIFF(DAY, prev_txn.LAST_TXN_BEFORE_EVENT, e.EVENT_DATE) > 30
 
 ORDER BY AML_RISK_LEVEL DESC, ANOMALY_SCORE DESC;
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_CUSTOMER_SUMMARY_ENRICHED
+COMMENT = 'Late enrichment: Customer summary + PII vault for name display.'
+AS
+SELECT s.*, pii.FULL_NAME
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CUSTOMER_SUMMARY s
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii ON s.CUSTOMER_ID = pii.CUSTOMER_ID;
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_ANOMALY_ENRICHED
+COMMENT = 'Late enrichment: Anomaly analysis + PII vault for investigation name display.'
+AS
+SELECT s.*, pii.FULL_NAME
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_ANOMALY_ANALYSIS s
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii ON s.CUSTOMER_ID = pii.CUSTOMER_ID;

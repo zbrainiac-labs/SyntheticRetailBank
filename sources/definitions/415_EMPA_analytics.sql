@@ -2,15 +2,39 @@
  * 415_EMPA_analytics.sql
  * Employee analytics: team performance and workload
  */
+
+/*
+ * EMPLOYEE PII VAULT (Late Enrichment Pattern)
+ */
+DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII(
+    EMPLOYEE_ID VARCHAR(20) COMMENT 'Employee identifier (PK)',
+    FIRST_NAME VARCHAR(100) COMMENT 'Employee first name (PII)',
+    FAMILY_NAME VARCHAR(100) COMMENT 'Employee family/last name (PII)',
+    FULL_NAME VARCHAR(201) COMMENT 'Employee full name (PII)',
+    DATE_OF_BIRTH DATE COMMENT 'Employee date of birth (PII)',
+    EMAIL VARCHAR(255) COMMENT 'Employee email address (PII)',
+    PHONE VARCHAR(50) COMMENT 'Employee phone number (PII)'
+)
+TARGET_LAG = '{{ lag }}'
+WAREHOUSE = {{ wh }}
+COMMENT = 'PII vault: centralized employee personal data for late enrichment pattern.'
+AS
+SELECT
+    EMPLOYEE_ID,
+    FIRST_NAME,
+    FAMILY_NAME,
+    FIRST_NAME || ' ' || FAMILY_NAME AS FULL_NAME,
+    DATE_OF_BIRTH,
+    EMAIL,
+    PHONE
+FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE;
+
 DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_EMPLOYEE_HIERARCHY
-COMMENT = 'Recursive employee hierarchy showing full organizational structure with paths and levels'
+COMMENT = 'Recursive employee hierarchy (PII removed). Join to EMPI_AGG_DT_EMPLOYEE_PII for names.'
 AS
 WITH RECURSIVE hierarchy AS (
     SELECT 
         EMPLOYEE_ID,                                                   
-        FIRST_NAME,                                                    
-        FAMILY_NAME,                                                   
-        FIRST_NAME || ' ' || FAMILY_NAME as FULL_NAME,               
         POSITION_LEVEL,                                                
         MANAGER_EMPLOYEE_ID,                                           
         COUNTRY,                                                       
@@ -20,11 +44,8 @@ WITH RECURSIVE hierarchy AS (
         PERFORMANCE_RATING,                                            
         1 as HIERARCHY_LEVEL,                                         
         EMPLOYEE_ID as ROOT_SUPER_LEADER_ID,                          
-        NULL as ROOT_SUPER_LEADER_NAME,                               
         NULL as TEAM_LEADER_ID,                                       
-        NULL as TEAM_LEADER_NAME,                                     
-        CAST(EMPLOYEE_ID AS VARCHAR(1000)) as HIERARCHY_PATH,        
-        CAST(FIRST_NAME || ' ' || FAMILY_NAME AS VARCHAR(1000)) as HIERARCHY_PATH_NAMES 
+        CAST(EMPLOYEE_ID AS VARCHAR(1000)) as HIERARCHY_PATH        
     FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE
     WHERE POSITION_LEVEL = 'SUPER_TEAM_LEADER'
 
@@ -32,9 +53,6 @@ WITH RECURSIVE hierarchy AS (
 
     SELECT 
         e.EMPLOYEE_ID,                                                
-        e.FIRST_NAME,                                                 
-        e.FAMILY_NAME,                                                
-        e.FIRST_NAME || ' ' || e.FAMILY_NAME,                        
         e.POSITION_LEVEL,                                             
         e.MANAGER_EMPLOYEE_ID,                                        
         e.COUNTRY,                                                    
@@ -44,31 +62,21 @@ WITH RECURSIVE hierarchy AS (
         e.PERFORMANCE_RATING,                                         
         h.HIERARCHY_LEVEL + 1,                                       
         h.ROOT_SUPER_LEADER_ID,                                      
-        h.ROOT_SUPER_LEADER_NAME,                                    
         CASE 
             WHEN e.POSITION_LEVEL = 'CLIENT_ADVISOR' THEN e.MANAGER_EMPLOYEE_ID
             ELSE h.TEAM_LEADER_ID
         END,                                                         
-        CASE 
-            WHEN e.POSITION_LEVEL = 'CLIENT_ADVISOR' THEN 
-                (SELECT FIRST_NAME || ' ' || FAMILY_NAME 
-                 FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE 
-                 WHERE EMPLOYEE_ID = e.MANAGER_EMPLOYEE_ID)
-            ELSE h.TEAM_LEADER_NAME
-        END,                                                         
-        h.HIERARCHY_PATH || ' > ' || e.EMPLOYEE_ID,                 
-        h.HIERARCHY_PATH_NAMES || ' > ' || e.FIRST_NAME || ' ' || e.FAMILY_NAME 
+        h.HIERARCHY_PATH || ' > ' || e.EMPLOYEE_ID                 
     FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE e
     INNER JOIN hierarchy h ON e.MANAGER_EMPLOYEE_ID = h.EMPLOYEE_ID
 )
 SELECT * FROM hierarchy;
 
 DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ORGANIZATIONAL_CHART
-COMMENT = 'Flat organizational chart with manager relationships and direct report counts'
+COMMENT = 'Flat organizational chart (PII removed). Join to EMPI_AGG_DT_EMPLOYEE_PII for names.'
 AS
 SELECT 
     e.EMPLOYEE_ID,                                                    
-    e.FIRST_NAME || ' ' || e.FAMILY_NAME as EMPLOYEE_NAME,           
     e.POSITION_LEVEL,                                                 
     e.COUNTRY,                                                        
     e.REGION,                                                         
@@ -79,7 +87,6 @@ SELECT
     e.PERFORMANCE_RATING,                                             
     e.LANGUAGES_SPOKEN,                                               
     e.MANAGER_EMPLOYEE_ID,                                            
-    m.FIRST_NAME || ' ' || m.FAMILY_NAME as MANAGER_NAME,            
     m.POSITION_LEVEL as MANAGER_POSITION,                            
     (SELECT COUNT(*) 
      FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE 
@@ -93,7 +100,6 @@ LEFT JOIN {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE m ON e.MANAGER_EMPLOYEE_ID
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE(
     EMPLOYEE_ID VARCHAR(20) COMMENT 'Advisor identifier for performance tracking and compensation',
-    ADVISOR_NAME VARCHAR(201) COMMENT 'Full name for leaderboards and recognition programs',
     COUNTRY VARCHAR(50) COMMENT 'Location for regional performance benchmarking',
     REGION VARCHAR(50) COMMENT 'Broader region for cross-market comparison',
     HIRE_DATE DATE COMMENT 'Start date for experience-weighted metrics',
@@ -103,7 +109,6 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE(
     LANGUAGES_SPOKEN VARCHAR(200) COMMENT 'Language skills for multicultural client service quality',
 
     TEAM_LEADER_ID VARCHAR(20) COMMENT 'Team leader for escalation and support',
-    TEAM_LEADER_NAME VARCHAR(201) COMMENT 'Team leader name for coaching accountability',
 
     TOTAL_CLIENTS NUMBER(10,0) COMMENT 'Current client count for workload and revenue calculations',
     HIGH_RISK_CLIENTS NUMBER(10,0) COMMENT 'High-risk clients requiring enhanced monitoring',
@@ -135,7 +140,6 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT 
     e.EMPLOYEE_ID,                                                    
-    e.FIRST_NAME || ' ' || e.FAMILY_NAME as ADVISOR_NAME,            
     e.COUNTRY,                                                        
     e.REGION,                                                         
     e.HIRE_DATE,                                                      
@@ -145,7 +149,6 @@ SELECT
     e.LANGUAGES_SPOKEN,                                               
 
     e.MANAGER_EMPLOYEE_ID as TEAM_LEADER_ID,                         
-    m.FIRST_NAME || ' ' || m.FAMILY_NAME as TEAM_LEADER_NAME,        
 
     COUNT(DISTINCT a.CUSTOMER_ID) as TOTAL_CLIENTS,                  
     COUNT(DISTINCT CASE WHEN c.HAS_ANOMALY THEN a.CUSTOMER_ID END) as HIGH_RISK_CLIENTS, 
@@ -189,13 +192,12 @@ LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c360
     ON a.CUSTOMER_ID = c360.CUSTOMER_ID
 WHERE e.POSITION_LEVEL = 'CLIENT_ADVISOR'
 GROUP BY 
-    e.EMPLOYEE_ID, e.FIRST_NAME, e.FAMILY_NAME, e.COUNTRY, e.REGION, 
+    e.EMPLOYEE_ID, e.COUNTRY, e.REGION, 
     e.HIRE_DATE, e.EMPLOYMENT_STATUS, e.PERFORMANCE_RATING, e.LANGUAGES_SPOKEN,
-    e.MANAGER_EMPLOYEE_ID, m.FIRST_NAME, m.FAMILY_NAME;
+    e.MANAGER_EMPLOYEE_ID;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_PORTFOLIO_BY_ADVISOR(
     ADVISOR_EMPLOYEE_ID VARCHAR(20) COMMENT 'Advisor ID for portfolio performance attribution',
-    ADVISOR_NAME VARCHAR(201) COMMENT 'Full name for wealth management reporting',
     COUNTRY VARCHAR(50) COMMENT 'Location for local market AUM tracking',
     REGION VARCHAR(50) COMMENT 'Region for divisional AUM aggregation',
 
@@ -220,7 +222,6 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT 
     a.ADVISOR_EMPLOYEE_ID,                                            
-    e.FIRST_NAME || ' ' || e.FAMILY_NAME as ADVISOR_NAME,            
     e.COUNTRY,                                                        
     e.REGION,                                                         
 
@@ -244,17 +245,15 @@ FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT a
 JOIN {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE e ON a.ADVISOR_EMPLOYEE_ID = e.EMPLOYEE_ID
 JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c360 ON a.CUSTOMER_ID = c360.CUSTOMER_ID
 WHERE a.IS_CURRENT = TRUE
-GROUP BY a.ADVISOR_EMPLOYEE_ID, e.FIRST_NAME, e.FAMILY_NAME, e.COUNTRY, e.REGION;
+GROUP BY a.ADVISOR_EMPLOYEE_ID, e.COUNTRY, e.REGION;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_TEAM_LEADER_DASHBOARD(
     TEAM_LEADER_ID VARCHAR(20) COMMENT 'Team leader ID for management reporting',
-    TEAM_LEADER_NAME VARCHAR(201) COMMENT 'Full name for leadership dashboards',
     REGION VARCHAR(50) COMMENT 'Geographic region for divisional P and L',
     HIRE_DATE DATE COMMENT 'Start date for leadership tenure tracking',
     TL_PERFORMANCE_RATING DECIMAL(3,2) COMMENT 'Leader own rating for correlation with team outcomes',
 
     SUPER_LEADER_ID VARCHAR(20) COMMENT 'Super leader for executive roll-ups',
-    SUPER_LEADER_NAME VARCHAR(201) COMMENT 'Super leader name for organizational reporting',
 
     TOTAL_ADVISORS NUMBER(10,0) COMMENT 'Total advisors for span-of-control analysis',
     ACTIVE_ADVISORS NUMBER(10,0) COMMENT 'Active headcount for capacity planning',
@@ -282,13 +281,11 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT 
     tl.EMPLOYEE_ID as TEAM_LEADER_ID,                                 
-    tl.FIRST_NAME || ' ' || tl.FAMILY_NAME as TEAM_LEADER_NAME,      
     tl.REGION,                                                        
     tl.HIRE_DATE,                                                     
     tl.PERFORMANCE_RATING as TL_PERFORMANCE_RATING,                   
 
     tl.MANAGER_EMPLOYEE_ID as SUPER_LEADER_ID,                       
-    stl.FIRST_NAME || ' ' || stl.FAMILY_NAME as SUPER_LEADER_NAME,  
 
     COUNT(DISTINCT adv.EMPLOYEE_ID) as TOTAL_ADVISORS,               
     COUNT(DISTINCT CASE WHEN adv.EMPLOYMENT_STATUS = 'ACTIVE' THEN adv.EMPLOYEE_ID END) as ACTIVE_ADVISORS, 
@@ -321,8 +318,8 @@ LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c ON a.CUSTOMER_ID
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c360 ON a.CUSTOMER_ID = c360.CUSTOMER_ID
 WHERE tl.POSITION_LEVEL = 'TEAM_LEADER'
 GROUP BY 
-    tl.EMPLOYEE_ID, tl.FIRST_NAME, tl.FAMILY_NAME, tl.REGION, tl.HIRE_DATE, 
-    tl.PERFORMANCE_RATING, tl.MANAGER_EMPLOYEE_ID, stl.FIRST_NAME, stl.FAMILY_NAME;
+    tl.EMPLOYEE_ID, tl.REGION, tl.HIRE_DATE, 
+    tl.PERFORMANCE_RATING, tl.MANAGER_EMPLOYEE_ID;
 
 DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_CURRENT_ASSIGNMENTS
 COMMENT = 'Current active client-advisor assignments with customer and advisor details'
@@ -331,18 +328,15 @@ SELECT
     a.ASSIGNMENT_ID,                                                  
 
     a.CUSTOMER_ID,                                                    
-    c.FIRST_NAME || ' ' || c.FAMILY_NAME as CUSTOMER_NAME,           
     c360.COUNTRY as CUSTOMER_COUNTRY,                                 
     c.HAS_ANOMALY as IS_HIGH_RISK_CUSTOMER,                          
 
     a.ADVISOR_EMPLOYEE_ID,                                            
-    e.FIRST_NAME || ' ' || e.FAMILY_NAME as ADVISOR_NAME,            
     e.COUNTRY as ADVISOR_COUNTRY,                                     
     e.REGION as ADVISOR_REGION,                                       
     e.PERFORMANCE_RATING as ADVISOR_RATING,                           
 
     e.MANAGER_EMPLOYEE_ID as TEAM_LEADER_ID,                         
-    tl.FIRST_NAME || ' ' || tl.FAMILY_NAME as TEAM_LEADER_NAME,     
 
     a.ASSIGNMENT_START_DATE,                                          
     DATEDIFF(day, a.ASSIGNMENT_START_DATE, CURRENT_DATE()) as ASSIGNMENT_DURATION_DAYS, 
@@ -370,10 +364,8 @@ SELECT
     a.ASSIGNMENT_ID,                                                  
 
     a.CUSTOMER_ID,                                                    
-    c.FIRST_NAME || ' ' || c.FAMILY_NAME as CUSTOMER_NAME,           
 
     a.ADVISOR_EMPLOYEE_ID,                                            
-    e.FIRST_NAME || ' ' || e.FAMILY_NAME as ADVISOR_NAME,            
     e.COUNTRY as ADVISOR_COUNTRY,                                     
 
     a.ASSIGNMENT_START_DATE,                                          
@@ -440,19 +432,11 @@ WHERE e.POSITION_LEVEL = 'CLIENT_ADVISOR'
 GROUP BY e.COUNTRY, e.REGION;
 
 DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISORS
-COMMENT = 'Alias view for {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE to match semantic view references'
+COMMENT = 'Advisor view (PII removed). Join to EMPI_AGG_DT_EMPLOYEE_PII for names.'
 AS SELECT 
     EMPLOYEE_ID,
-    ADVISOR_NAME AS FULL_NAME,
-    ADVISOR_NAME AS FIRST_NAME,
-    ADVISOR_NAME AS FAMILY_NAME,
-    NULL AS EMAIL,
-    NULL AS PHONE,
-    NULL AS DATE_OF_BIRTH,
     HIRE_DATE,
     TEAM_LEADER_ID AS MANAGER_EMPLOYEE_ID,
-    LANGUAGES_SPOKEN,
-    NULL AS CERTIFICATIONS,
     TOTAL_CLIENTS,
     TOTAL_PORTFOLIO_VALUE AS TOTAL_AUM,
     AVG_CLIENT_BALANCE,
@@ -460,15 +444,31 @@ AS SELECT
     0 AS CLOSED_CLIENTS,
     CASE WHEN TOTAL_CLIENTS > 0 THEN 100.0 ELSE 0 END AS CLIENT_RETENTION_RATE,
     TOTAL_CLIENT_ACCOUNTS AS TOTAL_ACCOUNTS_MANAGED,
-    NULL AS TOTAL_CHECKING_BALANCE,
-    NULL AS TOTAL_SAVINGS_BALANCE,
-    NULL AS TOTAL_INVESTMENT_BALANCE,
     HIGH_RISK_CLIENTS,
-    0 AS PREMIUM_CLIENTS,
     COUNTRY,
     REGION,
     EMPLOYMENT_STATUS,
-    NULL AS POSITION_LEVEL,
-    PERFORMANCE_RATING,
-    NULL AS OFFICE_LOCATION
+    PERFORMANCE_RATING
 FROM {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE;
+
+DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED
+COMMENT = 'Late enrichment: Advisor performance + employee PII vault for name display.'
+AS
+SELECT
+    a.*,
+    pii.FULL_NAME AS ADVISOR_NAME,
+    mgr_pii.FULL_NAME AS TEAM_LEADER_NAME
+FROM {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE a
+LEFT JOIN {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII pii ON a.EMPLOYEE_ID = pii.EMPLOYEE_ID
+LEFT JOIN {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII mgr_pii ON a.TEAM_LEADER_ID = mgr_pii.EMPLOYEE_ID;
+
+DEFINE VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_TEAM_DASHBOARD_ENRICHED
+COMMENT = 'Late enrichment: Team leader dashboard + employee PII vault for name display.'
+AS
+SELECT
+    t.*,
+    pii.FULL_NAME AS TEAM_LEADER_NAME,
+    sl_pii.FULL_NAME AS SUPER_LEADER_NAME
+FROM {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_TEAM_LEADER_DASHBOARD t
+LEFT JOIN {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII pii ON t.TEAM_LEADER_ID = pii.EMPLOYEE_ID
+LEFT JOIN {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII sl_pii ON t.SUPER_LEADER_ID = sl_pii.EMPLOYEE_ID;

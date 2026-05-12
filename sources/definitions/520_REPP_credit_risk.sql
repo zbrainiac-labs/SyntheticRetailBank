@@ -4,7 +4,7 @@
  */
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_IRB_CUSTOMER_RATINGS(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for credit risk assessment',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer name for credit reporting',
+
     ONBOARDING_DATE DATE COMMENT 'Customer relationship start date for vintage analysis',
     CREDIT_RATING VARCHAR(3) COMMENT 'Internal credit rating (AAA to D scale)',
     PD_1_YEAR DECIMAL(8,2) COMMENT 'Probability of Default over 1 year horizon (%)',
@@ -27,7 +27,7 @@ TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
 SELECT
     c.CUSTOMER_ID,
-    CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME) AS FULL_NAME,
+
     c.ONBOARDING_DATE,
     CASE
         WHEN c.HAS_ANOMALY = TRUE THEN 'CCC'
@@ -322,3 +322,10 @@ LEFT JOIN {{ db }}.{{ rep_agg }}.REPP_AGG_DT_CUSTOMER_RATING_HISTORY h
     ON r.CUSTOMER_ID = h.CUSTOMER_ID
     AND h.EFFECTIVE_DATE = CURRENT_DATE - 1
 GROUP BY r.PORTFOLIO_SEGMENT;
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_IRB_ENRICHED
+COMMENT = 'Late enrichment: IRB customer ratings + PII vault for name display.'
+AS
+SELECT s.*, pii.FULL_NAME
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_IRB_CUSTOMER_RATINGS s
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii ON s.CUSTOMER_ID = pii.CUSTOMER_ID;

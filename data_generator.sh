@@ -9,7 +9,7 @@ echo "=================================================="
 echo ""
 
 # Configuration
-NUM_CUSTOMERS=${1:-20}  # Default 20, can override with first argument
+NUM_CUSTOMERS=${1:-5000}  # Default 5000, can override with first argument
 OUTPUT_DIR="generated_data"
 PERIOD=19  # 19 months for full dormancy and churn testing
 
@@ -141,6 +141,21 @@ fi
 # PEP data
 if [ ! -f "${OUTPUT_DIR}/master_data/pep_data.csv" ]; then
     echo "   ❌  pep_data.csv not found"
+fi
+
+if [ ! -d "${OUTPUT_DIR}/payment_transactions" ]; then
+    echo "   ❌ payment_transactions/ directory not found"
+    VALIDATION_PASSED=false
+fi
+
+if [ ! -d "${OUTPUT_DIR}/equity_trades" ]; then
+    echo "   ❌ equity_trades/ directory not found"
+    VALIDATION_PASSED=false
+fi
+
+if [ ! -d "${OUTPUT_DIR}/fx_rates" ]; then
+    echo "   ❌ fx_rates/ directory not found"
+    VALIDATION_PASSED=false
 fi
 
 # Count directory files

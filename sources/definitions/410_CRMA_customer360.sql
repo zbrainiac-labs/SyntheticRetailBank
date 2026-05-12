@@ -2,36 +2,100 @@
  * 410_CRMA_customer360.sql
  * CRM Customer 360: unified customer view and lifecycle
  */
-DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT(
-    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for address lookup (CUST_XXXXX format)',
-    STREET_ADDRESS VARCHAR(200) COMMENT 'Current street address for customer correspondence',
-    CITY VARCHAR(100) COMMENT 'Current city for customer location and compliance',
-    STATE VARCHAR(100) COMMENT 'Current state/region for regulatory jurisdiction',
-    ZIPCODE VARCHAR(20) COMMENT 'Current postal code for address validation',
-    COUNTRY VARCHAR(50) COMMENT 'Current country for regulatory and tax purposes',
-    CURRENT_FROM TIMESTAMP_NTZ COMMENT 'Date when this address became current/effective',
-    IS_CURRENT BOOLEAN COMMENT 'Boolean flag indicating this is the current address (always TRUE)'
-) 
-TARGET_LAG = '{{ lag }}' 
+
+/*
+ * PII VAULT TABLES (Late Enrichment Pattern)
+ * Centralized PII storage at AGG level. All downstream DTs reference CUSTOMER_ID only.
+ * PII is joined back at display time via secure enrichment views.
+ */
+DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII(
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier (PK)',
+    FIRST_NAME VARCHAR(100) COMMENT 'Customer first name (PII)',
+    FAMILY_NAME VARCHAR(100) COMMENT 'Customer family/last name (PII)',
+    FULL_NAME VARCHAR(201) COMMENT 'Customer full name (PII)',
+    DATE_OF_BIRTH DATE COMMENT 'Customer date of birth (PII)',
+    EMAIL VARCHAR(255) COMMENT 'Customer email address (PII)',
+    PHONE VARCHAR(50) COMMENT 'Customer phone number (PII)',
+    EMPLOYER VARCHAR(200) COMMENT 'Current employer (PII)',
+    POSITION VARCHAR(100) COMMENT 'Current job position/title (PII)',
+    EMPLOYMENT_TYPE VARCHAR(30) COMMENT 'Current employment type',
+    PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Preferred contact method'
+)
+TARGET_LAG = '{{ lag }}'
 WAREHOUSE = {{ wh }}
-COMMENT = 'Current/latest address for each customer. Operational view with one record per customer showing the most recent address based on INSERT_TIMESTAMP_UTC. Used for real-time customer lookups and front-end applications.'
+COMMENT = 'PII vault: centralized customer personal data for late enrichment pattern. Protected by masking and row access policies. All downstream DTs carry only CUSTOMER_ID.'
 AS
-SELECT 
+SELECT
+    CUSTOMER_ID,
+    FIRST_NAME,
+    FAMILY_NAME,
+    CONCAT(FIRST_NAME, ' ', FAMILY_NAME) AS FULL_NAME,
+    DATE_OF_BIRTH,
+    EMAIL,
+    PHONE,
+    EMPLOYER,
+    POSITION,
+    EMPLOYMENT_TYPE,
+    PREFERRED_CONTACT_METHOD
+FROM (
+    SELECT
+        CUSTOMER_ID, FIRST_NAME, FAMILY_NAME, DATE_OF_BIRTH, EMAIL, PHONE,
+        EMPLOYER, POSITION, EMPLOYMENT_TYPE, PREFERRED_CONTACT_METHOD,
+        ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) AS rn
+    FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER
+) ranked
+WHERE rn = 1;
+
+DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII(
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier (FK)',
+    STREET_ADDRESS VARCHAR(200) COMMENT 'Current street address (PII)',
+    CITY VARCHAR(100) COMMENT 'Current city (PII)',
+    STATE VARCHAR(100) COMMENT 'Current state/region (PII)',
+    ZIPCODE VARCHAR(20) COMMENT 'Current postal code (PII)',
+    COUNTRY VARCHAR(50) COMMENT 'Current country',
+    ADDRESS_EFFECTIVE_DATE TIMESTAMP_NTZ COMMENT 'Date when current address became effective'
+)
+TARGET_LAG = '{{ lag }}'
+WAREHOUSE = {{ wh }}
+COMMENT = 'PII vault: centralized customer address data for late enrichment pattern. One row per customer (latest address).'
+AS
+SELECT
     CUSTOMER_ID,
     STREET_ADDRESS,
     CITY,
     STATE,
     ZIPCODE,
     COUNTRY,
+    INSERT_TIMESTAMP_UTC AS ADDRESS_EFFECTIVE_DATE
+FROM (
+    SELECT
+        CUSTOMER_ID, STREET_ADDRESS, CITY, STATE, ZIPCODE, COUNTRY, INSERT_TIMESTAMP_UTC,
+        ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) AS rn
+    FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES
+) ranked
+WHERE rn = 1;
+
+/*
+ * ADDRESSES (PII removed -- only CUSTOMER_ID + COUNTRY retained)
+ */
+DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT(
+    CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for address lookup (CUST_XXXXX format)',
+    COUNTRY VARCHAR(50) COMMENT 'Current country for regulatory and tax purposes',
+    CURRENT_FROM TIMESTAMP_NTZ COMMENT 'Date when this address became current/effective',
+    IS_CURRENT BOOLEAN COMMENT 'Boolean flag indicating this is the current address (always TRUE)'
+) 
+TARGET_LAG = '{{ lag }}' 
+WAREHOUSE = {{ wh }}
+COMMENT = 'Current address metadata per customer. PII (street, city, zipcode) stored in CRMI_AGG_DT_ADDRESS_PII vault. Join on CUSTOMER_ID for full address.'
+AS
+SELECT 
+    CUSTOMER_ID,
+    COUNTRY,
     INSERT_TIMESTAMP_UTC AS CURRENT_FROM,
     TRUE AS IS_CURRENT
 FROM (
     SELECT 
         CUSTOMER_ID,
-        STREET_ADDRESS,
-        CITY,
-        STATE,
-        ZIPCODE,
         COUNTRY,
         INSERT_TIMESTAMP_UTC,
         ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) as rn
@@ -41,10 +105,6 @@ WHERE rn = 1;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_HISTORY(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for address history tracking',
-    STREET_ADDRESS VARCHAR(200) COMMENT 'Historical street address for compliance audit trail',
-    CITY VARCHAR(100) COMMENT 'Historical city for location tracking and analysis',
-    STATE VARCHAR(100) COMMENT 'Historical state/region for regulatory compliance',
-    ZIPCODE VARCHAR(20) COMMENT 'Historical postal code for address validation',
     COUNTRY VARCHAR(50) COMMENT 'Historical country for regulatory and tax compliance',
     VALID_FROM DATE COMMENT 'Start date when this address was effective (SCD Type 2)',
     VALID_TO DATE COMMENT 'End date when this address was superseded (NULL if current)',
@@ -53,14 +113,10 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_HISTORY(
 ) 
 TARGET_LAG = '{{ lag }}' 
 WAREHOUSE = {{ wh }}
-COMMENT = 'SCD Type 2 address history with VALID_FROM/VALID_TO effective date ranges. Converts append-only base table into proper slowly changing dimension for compliance reporting, historical analysis, and point-in-time customer address queries.'
+COMMENT = 'SCD Type 2 address history metadata. PII (street, city, zipcode) stored in CRMI_AGG_DT_ADDRESS_PII vault.'
 AS
 SELECT 
     CUSTOMER_ID,
-    STREET_ADDRESS,
-    CITY,
-    STATE,
-    ZIPCODE,
     COUNTRY,
     INSERT_TIMESTAMP_UTC::DATE AS VALID_FROM,
     CASE 
@@ -79,21 +135,11 @@ ORDER BY CUSTOMER_ID, INSERT_TIMESTAMP_UTC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for lookup (CUST_XXXXX format)',
-    FIRST_NAME VARCHAR(100) COMMENT 'Customer first name',
-    FAMILY_NAME VARCHAR(100) COMMENT 'Customer family/last name',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer full name (First + Last)',
-    DATE_OF_BIRTH DATE COMMENT 'Customer date of birth',
     ONBOARDING_DATE DATE COMMENT 'Date when customer relationship was established',
     REPORTING_CURRENCY VARCHAR(3) COMMENT 'Customer reporting currency',
     HAS_ANOMALY BOOLEAN COMMENT 'Flag for anomalous transaction patterns',
-    EMPLOYER VARCHAR(200) COMMENT 'Current employer',
-    POSITION VARCHAR(100) COMMENT 'Current job position/title',
-    EMPLOYMENT_TYPE VARCHAR(30) COMMENT 'Current employment type',
     INCOME_RANGE VARCHAR(30) COMMENT 'Current income range bracket',
     ACCOUNT_TIER VARCHAR(30) COMMENT 'Current account tier',
-    EMAIL VARCHAR(255) COMMENT 'Customer email address',
-    PHONE VARCHAR(50) COMMENT 'Customer phone number',
-    PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Preferred contact method',
     RISK_CLASSIFICATION VARCHAR(20) COMMENT 'Risk classification',
     CREDIT_SCORE_BAND VARCHAR(20) COMMENT 'Credit score band',
     CURRENT_FROM TIMESTAMP_NTZ COMMENT 'Date when these attributes became current/effective',
@@ -101,25 +147,15 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT(
 ) 
 TARGET_LAG = '{{ lag }}' 
 WAREHOUSE = {{ wh }}
-COMMENT = 'Current/latest customer attributes for each customer. Operational view with one record per customer showing the most recent state based on INSERT_TIMESTAMP_UTC. Used for real-time customer lookups and front-end applications.'
+COMMENT = 'Current customer attributes (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault. Join on CUSTOMER_ID for full profile.'
 AS
 SELECT 
     CUSTOMER_ID,
-    FIRST_NAME,
-    FAMILY_NAME,
-    CONCAT(FIRST_NAME, ' ', FAMILY_NAME) AS FULL_NAME,
-    DATE_OF_BIRTH,
     ONBOARDING_DATE,
     REPORTING_CURRENCY,
     HAS_ANOMALY,
-    EMPLOYER,
-    POSITION,
-    EMPLOYMENT_TYPE,
     INCOME_RANGE,
     ACCOUNT_TIER,
-    EMAIL,
-    PHONE,
-    PREFERRED_CONTACT_METHOD,
     RISK_CLASSIFICATION,
     CREDIT_SCORE_BAND,
     INSERT_TIMESTAMP_UTC AS CURRENT_FROM,
@@ -127,20 +163,11 @@ SELECT
 FROM (
     SELECT 
         CUSTOMER_ID,
-        FIRST_NAME,
-        FAMILY_NAME,
-        DATE_OF_BIRTH,
         ONBOARDING_DATE,
         REPORTING_CURRENCY,
         HAS_ANOMALY,
-        EMPLOYER,
-        POSITION,
-        EMPLOYMENT_TYPE,
         INCOME_RANGE,
         ACCOUNT_TIER,
-        EMAIL,
-        PHONE,
-        PREFERRED_CONTACT_METHOD,
         RISK_CLASSIFICATION,
         CREDIT_SCORE_BAND,
         INSERT_TIMESTAMP_UTC,
@@ -151,21 +178,11 @@ WHERE rn = 1;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_HISTORY(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for history tracking',
-    FIRST_NAME VARCHAR(100) COMMENT 'Customer first name (immutable)',
-    FAMILY_NAME VARCHAR(100) COMMENT 'Customer family/last name (immutable)',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer full name',
-    DATE_OF_BIRTH DATE COMMENT 'Customer date of birth (immutable)',
     ONBOARDING_DATE DATE COMMENT 'Customer onboarding date (immutable)',
     REPORTING_CURRENCY VARCHAR(3) COMMENT 'Customer reporting currency',
     HAS_ANOMALY BOOLEAN COMMENT 'Anomaly flag',
-    EMPLOYER VARCHAR(200) COMMENT 'Historical employer',
-    POSITION VARCHAR(100) COMMENT 'Historical job position',
-    EMPLOYMENT_TYPE VARCHAR(30) COMMENT 'Historical employment type',
     INCOME_RANGE VARCHAR(30) COMMENT 'Historical income range',
     ACCOUNT_TIER VARCHAR(30) COMMENT 'Historical account tier',
-    EMAIL VARCHAR(255) COMMENT 'Historical email address',
-    PHONE VARCHAR(50) COMMENT 'Historical phone number',
-    PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Historical contact method',
     RISK_CLASSIFICATION VARCHAR(20) COMMENT 'Historical risk classification',
     CREDIT_SCORE_BAND VARCHAR(20) COMMENT 'Historical credit score band',
     VALID_FROM DATE COMMENT 'Start date when these attributes were effective (SCD Type 2)',
@@ -175,25 +192,15 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_HISTORY(
 ) 
 TARGET_LAG = '{{ lag }}' 
 WAREHOUSE = {{ wh }}
-COMMENT = 'SCD Type 2 customer attribute history with VALID_FROM/VALID_TO effective date ranges. Tracks changes to mutable attributes (employment, account tier, contact info) over time. Used for compliance reporting, historical analysis, and point-in-time customer attribute queries.'
+COMMENT = 'SCD Type 2 customer attribute history (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault.'
 AS
 SELECT 
     CUSTOMER_ID,
-    FIRST_NAME,
-    FAMILY_NAME,
-    CONCAT(FIRST_NAME, ' ', FAMILY_NAME) AS FULL_NAME,
-    DATE_OF_BIRTH,
     ONBOARDING_DATE,
     REPORTING_CURRENCY,
     HAS_ANOMALY,
-    EMPLOYER,
-    POSITION,
-    EMPLOYMENT_TYPE,
     INCOME_RANGE,
     ACCOUNT_TIER,
-    EMAIL,
-    PHONE,
-    PREFERRED_CONTACT_METHOD,
     RISK_CLASSIFICATION,
     CREDIT_SCORE_BAND,
     INSERT_TIMESTAMP_UTC::DATE AS VALID_FROM,
@@ -213,9 +220,6 @@ ORDER BY CUSTOMER_ID, INSERT_TIMESTAMP_UTC;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Customer identifier for lifecycle tracking',
-    FIRST_NAME VARCHAR(100) COMMENT 'Customer first name',
-    FAMILY_NAME VARCHAR(100) COMMENT 'Customer family/last name',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer full name',
     ONBOARDING_DATE DATE COMMENT 'Date when customer relationship was established',
     CUSTOMER_AGE_DAYS NUMBER(10,0) COMMENT 'Number of days since customer onboarding',
     CUSTOMER_AGE_MONTHS NUMBER(10,2) COMMENT 'Number of months since customer onboarding',
@@ -242,9 +246,6 @@ COMMENT = 'Customer lifecycle analysis combining master data with lifecycle even
 AS
 SELECT 
     c.CUSTOMER_ID,
-    c.FIRST_NAME,
-    c.FAMILY_NAME,
-    c.FULL_NAME,
     c.ONBOARDING_DATE,
     DATEDIFF(day, c.ONBOARDING_DATE, CURRENT_DATE()) AS CUSTOMER_AGE_DAYS,
     ROUND(DATEDIFF(day, c.ONBOARDING_DATE, CURRENT_DATE()) / 30.44, 2) AS CUSTOMER_AGE_MONTHS,
@@ -282,32 +283,18 @@ FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
 LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT evt
     ON c.CUSTOMER_ID = evt.CUSTOMER_ID
 GROUP BY 
-    c.CUSTOMER_ID, c.FIRST_NAME, c.FAMILY_NAME, c.FULL_NAME, c.ONBOARDING_DATE
+    c.CUSTOMER_ID, c.ONBOARDING_DATE
 ORDER BY c.CUSTOMER_ID;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360(
     CUSTOMER_ID VARCHAR(30) COMMENT 'Unique customer identifier for relationship management',
-    FIRST_NAME VARCHAR(100) COMMENT 'Customer first name for identification and compliance',
-    FAMILY_NAME VARCHAR(100) COMMENT 'Customer family/last name for identification and compliance',
-    FULL_NAME VARCHAR(201) COMMENT 'Customer full name (First + Last) for reporting',
-    DATE_OF_BIRTH DATE COMMENT 'Customer date of birth for identity verification',
     ONBOARDING_DATE DATE COMMENT 'Date when customer relationship was established',
     REPORTING_CURRENCY VARCHAR(3) COMMENT 'Customer reporting currency based on country',
     HAS_ANOMALY BOOLEAN COMMENT 'Flag indicating if customer has anomalous transaction patterns',
-    EMPLOYER VARCHAR(200) COMMENT 'Current employer name',
-    POSITION VARCHAR(100) COMMENT 'Current job position/title',
-    EMPLOYMENT_TYPE VARCHAR(30) COMMENT 'Current employment type',
     INCOME_RANGE VARCHAR(30) COMMENT 'Current income range bracket',
     ACCOUNT_TIER VARCHAR(30) COMMENT 'Current account tier',
-    EMAIL VARCHAR(255) COMMENT 'Customer email address',
-    PHONE VARCHAR(50) COMMENT 'Customer phone number',
-    PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Preferred contact method',
     RISK_CLASSIFICATION VARCHAR(20) COMMENT 'Risk classification',
     CREDIT_SCORE_BAND VARCHAR(20) COMMENT 'Credit score band',
-    STREET_ADDRESS VARCHAR(200) COMMENT 'Current street address for correspondence',
-    CITY VARCHAR(100) COMMENT 'Current city for location and regulatory purposes',
-    STATE VARCHAR(100) COMMENT 'Current state/region for jurisdiction and compliance',
-    ZIPCODE VARCHAR(20) COMMENT 'Current postal code for address validation',
     COUNTRY VARCHAR(50) COMMENT 'Current country for regulatory and tax purposes',
     ADDRESS_EFFECTIVE_DATE TIMESTAMP_NTZ COMMENT 'Date when current address became effective',
     CURRENT_STATUS VARCHAR(30) COMMENT 'Current customer status (ACTIVE/DORMANT/CLOSED/SUSPENDED/etc.)',
@@ -401,33 +388,18 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360(
 ) 
 TARGET_LAG = '{{ lag }}' 
 WAREHOUSE = {{ wh }}
-COMMENT = 'Comprehensive 360-degree customer view with master data, current address, current status, account summary with balances (Phase 1), transaction activity metrics via direct cross-schema join (Phase 2 - Option A), Exposed Person fuzzy matching, and Global Sanctions Data fuzzy matching with accuracy scoring from enhanced screening view (302_CRMA_sanctions_screening.sql). Phase 3 adds vulnerability attributes for UK Consumer Duty compliance. Phase 4 integrates key lifecycle metrics (LIFECYCLE_STAGE, ENGAGEMENT_SCORE, CHURN_PROBABILITY, TOTAL_LIFECYCLE_EVENTS) from {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE for unified customer analytics. Enables AUM tracking, advisor performance measurement, engagement scoring, churn prediction, comprehensive compliance screening, and vulnerable customer identification for holistic customer risk assessment and relationship management.'
+COMMENT = 'Comprehensive 360-degree customer view (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault. Join on CUSTOMER_ID for full profile via CRMA_AGG_VW_CUSTOMER_360_ENRICHED. Includes account summary, transaction activity, PEP/sanctions screening (uses PII vault for name matching), vulnerability flags, and lifecycle metrics.'
 AS
 SELECT 
     c.CUSTOMER_ID,
-    c.FIRST_NAME,
-    c.FAMILY_NAME,
-    c.FULL_NAME,
-    c.DATE_OF_BIRTH,
     c.ONBOARDING_DATE,
     c.REPORTING_CURRENCY,
     c.HAS_ANOMALY,
-
-    c.EMPLOYER,
-    c.POSITION,
-    c.EMPLOYMENT_TYPE,
     c.INCOME_RANGE,
     c.ACCOUNT_TIER,
-    c.EMAIL,
-    c.PHONE,
-    c.PREFERRED_CONTACT_METHOD,
     c.RISK_CLASSIFICATION,
     c.CREDIT_SCORE_BAND,
 
-    addr.STREET_ADDRESS,
-    addr.CITY,
-    addr.STATE,
-    addr.ZIPCODE,
     addr.COUNTRY,
     addr.CURRENT_FROM AS ADDRESS_EFFECTIVE_DATE,
 
@@ -504,17 +476,17 @@ SELECT
         WHEN pep_exact.EXPOSED_PERSON_ID IS NOT NULL THEN 100.0 
         WHEN pep_fuzzy.EXPOSED_PERSON_ID IS NOT NULL THEN
             CASE 
-                WHEN EDITDISTANCE(UPPER(c.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1
-                     AND EDITDISTANCE(UPPER(c.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1 
+                WHEN EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1
+                     AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1 
                 THEN 95.0
-                WHEN (UPPER(c.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME) AND EDITDISTANCE(UPPER(c.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1)
-                     OR (EDITDISTANCE(UPPER(c.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1 AND UPPER(c.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
+                WHEN (UPPER(pii.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME) AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1)
+                     OR (EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1 AND UPPER(pii.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
                 THEN 90.0
-                WHEN (UPPER(c.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME) AND EDITDISTANCE(UPPER(c.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 2)
-                     OR (EDITDISTANCE(UPPER(c.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 2 AND UPPER(c.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
+                WHEN (UPPER(pii.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME) AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 2)
+                     OR (EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 2 AND UPPER(pii.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
                 THEN 85.0
-                WHEN EDITDISTANCE(UPPER(CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) <= 3
-                THEN GREATEST(70.0, 100.0 - (EDITDISTANCE(UPPER(CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) * 10.0))
+                WHEN EDITDISTANCE(UPPER(CONCAT(pii.FIRST_NAME, ' ', pii.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) <= 3
+                THEN GREATEST(70.0, 100.0 - (EDITDISTANCE(UPPER(CONCAT(pii.FIRST_NAME, ' ', pii.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) * 10.0))
                 ELSE 75.0
             END
         ELSE NULL 
@@ -619,8 +591,8 @@ SELECT
 
     CASE 
         WHEN (c.INCOME_RANGE IN ('0-25K', '25K-50K') AND c.CREDIT_SCORE_BAND IN ('POOR', 'FAIR'))
-            OR DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) >= 75
-            OR (DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) BETWEEN 18 AND 25 
+            OR DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) >= 75
+            OR (DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) BETWEEN 18 AND 25 
                 AND DATEDIFF(month, c.ONBOARDING_DATE, CURRENT_DATE()) <= 6)
             OR (c.ACCOUNT_TIER IN ('BASIC', 'STANDARD') AND c.RISK_CLASSIFICATION IN ('HIGH', 'CRITICAL'))
         THEN TRUE
@@ -628,16 +600,16 @@ SELECT
     END AS VULNERABLE_CUSTOMER_FLAG,
 
     CASE 
-        WHEN DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) >= 75 THEN 'CAPABILITY'
-        WHEN DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) BETWEEN 18 AND 25 
+        WHEN DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) >= 75 THEN 'CAPABILITY'
+        WHEN DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) BETWEEN 18 AND 25 
              AND DATEDIFF(month, c.ONBOARDING_DATE, CURRENT_DATE()) <= 6 THEN 'CAPABILITY,FINANCIAL'
         WHEN c.INCOME_RANGE IN ('0-25K', '25K-50K') 
              AND c.CREDIT_SCORE_BAND IN ('POOR', 'FAIR') THEN 'FINANCIAL'
         WHEN c.ACCOUNT_TIER IN ('BASIC', 'STANDARD') 
              AND c.RISK_CLASSIFICATION IN ('HIGH', 'CRITICAL') THEN 'LIFE_EVENT,FINANCIAL'
         WHEN (c.INCOME_RANGE IN ('0-25K', '25K-50K') AND c.CREDIT_SCORE_BAND IN ('POOR', 'FAIR'))
-            OR DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) >= 75
-            OR (DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) BETWEEN 18 AND 25 
+            OR DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) >= 75
+            OR (DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) BETWEEN 18 AND 25 
                 AND DATEDIFF(month, c.ONBOARDING_DATE, CURRENT_DATE()) <= 6)
             OR (c.ACCOUNT_TIER IN ('BASIC', 'STANDARD') AND c.RISK_CLASSIFICATION IN ('HIGH', 'CRITICAL'))
         THEN 'FINANCIAL'
@@ -645,14 +617,14 @@ SELECT
     END AS VULNERABILITY_CATEGORIES,
 
     CASE 
-        WHEN DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) >= 80 
+        WHEN DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) >= 80 
              AND MOD(ABS(HASH(c.CUSTOMER_ID)), 100) < 30 
         THEN TRUE
         ELSE FALSE
     END AS HAS_POWER_OF_ATTORNEY,
 
     CASE 
-        WHEN DATEDIFF(year, c.DATE_OF_BIRTH, CURRENT_DATE()) >= 80 
+        WHEN DATEDIFF(year, pii.DATE_OF_BIRTH, CURRENT_DATE()) >= 80 
              AND MOD(ABS(HASH(c.CUSTOMER_ID)), 100) < 30
         THEN CONCAT(
             CASE MOD(ABS(HASH(c.CUSTOMER_ID)), 5)
@@ -663,7 +635,7 @@ SELECT
                 ELSE 'Jennifer'
             END,
             ' ',
-            c.FAMILY_NAME
+            pii.FAMILY_NAME
         )
         ELSE NULL
     END AS POA_HOLDER_NAME,
@@ -698,6 +670,9 @@ SELECT
 
 FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
 
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii
+    ON c.CUSTOMER_ID = pii.CUSTOMER_ID
+
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT addr
     ON c.CUSTOMER_ID = addr.CUSTOMER_ID
 
@@ -727,23 +702,23 @@ LEFT JOIN {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT adv_assign
     AND adv_assign.IS_CURRENT = TRUE
 
 LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_exact
-    ON UPPER(CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME)) = UPPER(pep_exact.FULL_NAME)
+    ON UPPER(CONCAT(pii.FIRST_NAME, ' ', pii.FAMILY_NAME)) = UPPER(pep_exact.FULL_NAME)
     AND pep_exact.STATUS = 'ACTIVE'
 
 LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_fuzzy
     ON pep_fuzzy.EXPOSED_PERSON_ID != COALESCE(pep_exact.EXPOSED_PERSON_ID, 'NO_EXACT_MATCH') 
     AND pep_fuzzy.STATUS = 'ACTIVE'
     AND (
-        (EDITDISTANCE(UPPER(c.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) <= 2 
-         AND UPPER(c.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
+        (EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) <= 2 
+         AND UPPER(pii.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
         OR
-        (UPPER(c.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME)
-         AND EDITDISTANCE(UPPER(c.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) <= 2)
+        (UPPER(pii.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME)
+         AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) <= 2)
         OR
-        (EDITDISTANCE(UPPER(c.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1
-         AND EDITDISTANCE(UPPER(c.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1)
+        (EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1
+         AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1)
         OR
-        EDITDISTANCE(UPPER(CONCAT(c.FIRST_NAME, ' ', c.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) <= 3
+        EDITDISTANCE(UPPER(CONCAT(pii.FIRST_NAME, ' ', pii.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) <= 3
     )
 
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_CUSTOMER_SCREENING sanctions
@@ -753,9 +728,10 @@ LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE lifecycle
     ON c.CUSTOMER_ID = lifecycle.CUSTOMER_ID
 
 GROUP BY 
-    c.CUSTOMER_ID, c.FIRST_NAME, c.FAMILY_NAME, c.FULL_NAME, c.DATE_OF_BIRTH, c.ONBOARDING_DATE, c.REPORTING_CURRENCY, c.HAS_ANOMALY,
-    c.EMPLOYER, c.POSITION, c.EMPLOYMENT_TYPE, c.INCOME_RANGE, c.ACCOUNT_TIER, c.EMAIL, c.PHONE, c.PREFERRED_CONTACT_METHOD, c.RISK_CLASSIFICATION, c.CREDIT_SCORE_BAND,
-    addr.STREET_ADDRESS, addr.CITY, addr.STATE, addr.ZIPCODE, addr.COUNTRY, addr.CURRENT_FROM,
+    c.CUSTOMER_ID, c.ONBOARDING_DATE, c.REPORTING_CURRENCY, c.HAS_ANOMALY,
+    c.INCOME_RANGE, c.ACCOUNT_TIER, c.RISK_CLASSIFICATION, c.CREDIT_SCORE_BAND,
+    pii.FIRST_NAME, pii.FAMILY_NAME, pii.DATE_OF_BIRTH,
+    addr.COUNTRY, addr.CURRENT_FROM,
     status.STATUS, status.STATUS_START_DATE,
     adv_assign.ADVISOR_EMPLOYEE_ID, adv_assign.ASSIGNMENT_START_DATE,
     pep_exact.EXPOSED_PERSON_ID, pep_exact.FULL_NAME, pep_exact.EXPOSED_PERSON_CATEGORY, pep_exact.RISK_LEVEL, pep_exact.STATUS,
@@ -893,10 +869,6 @@ COMMENT = 'Combined PEP and sanctions screening status for all customers. Provid
 AS
 SELECT 
     CUSTOMER_ID,
-    FIRST_NAME,
-    FAMILY_NAME,
-    FIRST_NAME || ' ' || FAMILY_NAME as FULL_NAME,
-    DATE_OF_BIRTH,
     COUNTRY,
     ONBOARDING_DATE,
     CURRENT_STATUS,
@@ -1046,3 +1018,43 @@ ORDER BY
     END,
     IS_SLA_BREACH DESC,
     DAYS_SINCE_SCREENING DESC;
+
+/*
+ * LATE ENRICHMENT SECURE VIEWS
+ * These views join PII-free DTs with PII vault tables at query time.
+ * Masking policies on the PII vault control what each role sees.
+ */
+DEFINE VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED
+COMMENT = 'Late enrichment: Customer 360 + PII vault + address PII. Masking policies control PII visibility per role.'
+AS
+SELECT
+    c.*,
+    pii.FIRST_NAME,
+    pii.FAMILY_NAME,
+    pii.FULL_NAME,
+    pii.DATE_OF_BIRTH,
+    pii.EMAIL,
+    pii.PHONE,
+    pii.EMPLOYER,
+    pii.POSITION,
+    pii.EMPLOYMENT_TYPE,
+    pii.PREFERRED_CONTACT_METHOD,
+    addr_pii.STREET_ADDRESS,
+    addr_pii.CITY,
+    addr_pii.STATE,
+    addr_pii.ZIPCODE
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii ON c.CUSTOMER_ID = pii.CUSTOMER_ID
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII addr_pii ON c.CUSTOMER_ID = addr_pii.CUSTOMER_ID;
+
+DEFINE VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS_ENRICHED
+COMMENT = 'Late enrichment: Screening status + PII for compliance name display.'
+AS
+SELECT
+    s.*,
+    pii.FIRST_NAME,
+    pii.FAMILY_NAME,
+    pii.FULL_NAME,
+    pii.DATE_OF_BIRTH
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS s
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii ON s.CUSTOMER_ID = pii.CUSTOMER_ID;

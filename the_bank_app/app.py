@@ -1157,7 +1157,7 @@ with tab8:
             session = get_snowflake_session()
             
             # Check if table exists by attempting to query it
-            test_query = "SELECT COUNT(*) as cnt FROM EMPA_AGG_DT_ADVISOR_PERFORMANCE LIMIT 1"
+            test_query = "SELECT COUNT(*) as cnt FROM EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED LIMIT 1"
             result = session.sql(test_query).collect()
             row_count = result[0]['CNT'] if result else 0
             
@@ -1167,7 +1167,7 @@ with tab8:
                 The advisor performance tables are deployed in `CRM_AGG_001` schema but are currently empty.
                 
                 ### Next Steps:
-                1. **Load advisor data** into `EMPA_AGG_DT_ADVISOR_PERFORMANCE`
+                1. **Load advisor data** into `EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED`
                 2. **Refresh the dashboard** to see wealth management analytics
                 
                 ### Expected Data:
@@ -1189,7 +1189,7 @@ with tab8:
                 
                 # Show actual columns in the table
                 try:
-                    cols_query = "SELECT * FROM EMPA_AGG_DT_ADVISOR_PERFORMANCE LIMIT 1"
+                    cols_query = "SELECT * FROM EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED LIMIT 1"
                     sample = session.sql(cols_query).to_pandas()
                     st.write(f"**Table columns:** {list(sample.columns)}")
                 except Exception as col_err:
@@ -1205,7 +1205,7 @@ with tab8:
                 The Employee/Advisor tables are not yet deployed in `CRM_AGG_001` schema.
                 
                 ### Required Tables:
-                - `EMPA_AGG_DT_ADVISOR_PERFORMANCE` - Advisor KPIs and performance metrics
+                - `EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED` - Advisor KPIs and performance metrics
                 - `EMPA_AGG_DT_PORTFOLIO_BY_ADVISOR` - Portfolio valuations by advisor
                 - `EMPA_AGG_DT_TEAM_LEADER_DASHBOARD` - Team-level aggregations
                 
@@ -1349,7 +1349,7 @@ with tab10:
         
         ### Next Steps:
         1. Check the **Wealth Management** tab for data status
-        2. Ensure `EMPA_AGG_DT_ADVISOR_PERFORMANCE` table has data
+        2. Ensure `EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED` table has data
         3. Refresh this page after loading advisor data
         
         **Schema:** `CRM_AGG_001`
