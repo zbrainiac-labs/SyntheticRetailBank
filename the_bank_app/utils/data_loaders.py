@@ -8,7 +8,7 @@ import pandas as pd
 from .snowflake_connection import get_snowflake_session
 
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=7200)  # Cache for 1 hour
 def load_customer_360():
     """
     Load complete customer 360° data
@@ -34,7 +34,7 @@ def load_customer_360():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_high_risk_customers():
     """
     Load high-risk customers requiring review
@@ -75,7 +75,7 @@ def load_high_risk_customers():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_risk_distribution():
     """
     Load risk distribution summary
@@ -104,7 +104,7 @@ def load_risk_distribution():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_pep_sanctions_summary():
     """
     Load PEP and sanctions screening summary
@@ -147,7 +147,7 @@ def load_pep_sanctions_summary():
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_account_tier_distribution():
     """
     Load account tier distribution
@@ -180,7 +180,7 @@ def load_account_tier_distribution():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_geographic_distribution():
     """
     Load geographic distribution of customers
@@ -214,7 +214,7 @@ def load_geographic_distribution():
 # AML & Transaction Monitoring Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_aml_alerts():
     """
     Load AML transaction monitoring alerts
@@ -225,9 +225,9 @@ def load_aml_alerts():
     try:
         session = get_snowflake_session()
         
-        # Try PAY_AGG_001 schema first, then fallback to default schema
+        # Try PAY_AGG_V001 schema first, then fallback to default schema
         queries = [
-            "SELECT * FROM PAY_AGG_001.PAYA_AGG_DT_TRANSACTION_ANOMALIES ORDER BY BOOKING_DATE DESC LIMIT 1000",
+            "SELECT * FROM PAY_AGG_V001.PAYA_AGG_DT_TRANSACTION_ANOMALIES ORDER BY BOOKING_DATE DESC LIMIT 1000",
             "SELECT * FROM PAYA_AGG_DT_TRANSACTION_ANOMALIES ORDER BY BOOKING_DATE DESC LIMIT 1000"
         ]
         
@@ -244,7 +244,7 @@ def load_aml_alerts():
                 continue  # Try next query
         
         # If all queries failed
-        st.warning("⚠️ PAYA_AGG_DT_TRANSACTION_ANOMALIES table not found or empty. PAY_AGG_001 schema may not be deployed yet.")
+        st.warning("⚠️ PAYA_AGG_DT_TRANSACTION_ANOMALIES table not found or empty. PAY_AGG_V001 schema may not be deployed yet.")
         return pd.DataFrame()
     
     except Exception as e:
@@ -252,7 +252,7 @@ def load_aml_alerts():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_aml_metrics():
     """
     Load AML key metrics summary
@@ -263,14 +263,14 @@ def load_aml_metrics():
     try:
         session = get_snowflake_session()
         
-        # Try PAY_AGG_001 schema first, then fallback to default schema
+        # Try PAY_AGG_V001 schema first, then fallback to default schema
         queries = [
             """
             SELECT 
                 COUNT(*) as TOTAL_ALERTS,
                 COUNT(DISTINCT CUSTOMER_ID) as UNIQUE_CUSTOMERS,
                 COUNT(*) as ANOMALOUS_TRANSACTIONS
-            FROM PAY_AGG_001.PAYA_AGG_DT_TRANSACTION_ANOMALIES
+            FROM PAY_AGG_V001.PAYA_AGG_DT_TRANSACTION_ANOMALIES
             WHERE BOOKING_DATE >= DATEADD(day, -90, CURRENT_DATE())
             """,
             """
@@ -301,7 +301,7 @@ def load_aml_metrics():
 # Lending Operations Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_lending_portfolio():
     """
     Load lending portfolio overview
@@ -337,7 +337,7 @@ def load_lending_portfolio():
 # Wealth Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_wealth_portfolios():
     """
     Load wealth management portfolios
@@ -368,7 +368,7 @@ def load_wealth_portfolios():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_advisor_performance():
     """
     Load advisor performance metrics
@@ -397,7 +397,7 @@ def load_advisor_performance():
 # Sanctions Control Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_sanctions_matches():
     """
     Load sanctions screening matches
@@ -434,7 +434,7 @@ def load_sanctions_matches():
 # Employee/Advisor Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_advisor_capacity():
     """
     Load advisor capacity and workload
@@ -473,7 +473,7 @@ def load_advisor_capacity():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_team_performance():
     """
     Load team leader dashboard data
@@ -501,7 +501,7 @@ def load_team_performance():
 # KYC & Screening Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_pep_matches():
     """
     Load PEP (Politically Exposed Persons) matches
@@ -534,7 +534,7 @@ def load_pep_matches():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_kyc_completeness():
     """
     Load KYC completeness metrics
@@ -571,7 +571,7 @@ def load_kyc_completeness():
 # Data Quality & Controls Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_data_quality_metrics():
     """
     Load data quality assessment metrics
@@ -609,7 +609,7 @@ def load_data_quality_metrics():
 # Compliance Risk Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_compliance_risk_summary():
     """
     Load overall compliance risk profile
@@ -645,7 +645,7 @@ def load_compliance_risk_summary():
 # Churn & Lifecycle Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_customer_lifecycle():
     """
     Load customer lifecycle data
@@ -657,8 +657,15 @@ def load_customer_lifecycle():
         session = get_snowflake_session()
         
         query = """
-            SELECT *
-            FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE
+            SELECT 
+                CUSTOMER_ID,
+                LIFECYCLE_STAGE,
+                CHURN_PROBABILITY,
+                DAYS_SINCE_LAST_TRANSACTION,
+                LAST_TRANSACTION_DATE,
+                ACCOUNT_TIER,
+                COUNTRY
+            FROM CRMA_AGG_DT_CUSTOMER_360
             ORDER BY CUSTOMER_ID
         """
         
@@ -670,7 +677,7 @@ def load_customer_lifecycle():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_lifecycle_summary():
     """
     Load lifecycle stage distribution summary
@@ -687,7 +694,7 @@ def load_lifecycle_summary():
                 COUNT(*) as CUSTOMER_COUNT,
                 AVG(CHURN_PROBABILITY) as AVG_CHURN_PROBABILITY,
                 AVG(DAYS_SINCE_LAST_TRANSACTION) as AVG_DAYS_INACTIVE
-            FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE
+            FROM CRMA_AGG_DT_CUSTOMER_360
             GROUP BY LIFECYCLE_STAGE
             ORDER BY 
                 CASE LIFECYCLE_STAGE
@@ -709,7 +716,7 @@ def load_lifecycle_summary():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_high_churn_risk_customers():
     """
     Load high churn risk customers (>70% probability)
@@ -722,21 +729,20 @@ def load_high_churn_risk_customers():
         
         query = """
             SELECT 
-                l.CUSTOMER_ID,
-                l.FIRST_NAME,
-                l.FAMILY_NAME,
-                l.LIFECYCLE_STAGE,
-                l.CHURN_PROBABILITY,
-                l.DAYS_SINCE_LAST_TRANSACTION,
-                l.LAST_TRANSACTION_DATE,
-                c.ACCOUNT_TIER,
-                c.COUNTRY,
-                c.EMAIL,
-                c.PHONE
-            FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE l
-            LEFT JOIN CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON l.CUSTOMER_ID = c.CUSTOMER_ID
-            WHERE l.CHURN_PROBABILITY > 70
-            ORDER BY l.CHURN_PROBABILITY DESC
+                CUSTOMER_ID,
+                FIRST_NAME,
+                FAMILY_NAME,
+                LIFECYCLE_STAGE,
+                CHURN_PROBABILITY,
+                DAYS_SINCE_LAST_TRANSACTION,
+                LAST_TRANSACTION_DATE,
+                ACCOUNT_TIER,
+                COUNTRY,
+                EMAIL,
+                PHONE
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
+            WHERE CHURN_PROBABILITY > 70
+            ORDER BY CHURN_PROBABILITY DESC
         """
         
         df = session.sql(query).to_pandas()
@@ -747,7 +753,7 @@ def load_high_churn_risk_customers():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_premium_at_risk():
     """
     Load GOLD/PLATINUM customers at risk of churning
@@ -760,23 +766,22 @@ def load_premium_at_risk():
         
         query = """
             SELECT 
-                l.CUSTOMER_ID,
-                l.FIRST_NAME,
-                l.FAMILY_NAME,
-                c.ACCOUNT_TIER,
-                c.COUNTRY,
-                l.LIFECYCLE_STAGE,
-                l.CHURN_PROBABILITY,
-                l.DAYS_SINCE_LAST_TRANSACTION,
-                l.LAST_TRANSACTION_DATE,
-                c.EMAIL,
-                c.PHONE,
-                c.PREFERRED_CONTACT_METHOD
-            FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE l
-            LEFT JOIN CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON l.CUSTOMER_ID = c.CUSTOMER_ID
-            WHERE c.ACCOUNT_TIER IN ('GOLD', 'PLATINUM')
-              AND l.CHURN_PROBABILITY > 70
-            ORDER BY l.CHURN_PROBABILITY DESC
+                CUSTOMER_ID,
+                FIRST_NAME,
+                FAMILY_NAME,
+                ACCOUNT_TIER,
+                COUNTRY,
+                LIFECYCLE_STAGE,
+                CHURN_PROBABILITY,
+                DAYS_SINCE_LAST_TRANSACTION,
+                LAST_TRANSACTION_DATE,
+                EMAIL,
+                PHONE,
+                PREFERRED_CONTACT_METHOD
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
+            WHERE ACCOUNT_TIER IN ('GOLD', 'PLATINUM')
+              AND CHURN_PROBABILITY > 70
+            ORDER BY CHURN_PROBABILITY DESC
         """
         
         df = session.sql(query).to_pandas()
@@ -787,7 +792,7 @@ def load_premium_at_risk():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_dormant_accounts():
     """
     Load dormant accounts (inactive >180 days)
@@ -800,23 +805,22 @@ def load_dormant_accounts():
         
         query = """
             SELECT 
-                l.CUSTOMER_ID,
-                l.FIRST_NAME,
-                l.FAMILY_NAME,
-                c.ACCOUNT_TIER,
-                c.COUNTRY,
-                l.LIFECYCLE_STAGE,
-                l.DAYS_SINCE_LAST_TRANSACTION,
-                l.LAST_TRANSACTION_DATE,
-                l.CHURN_PROBABILITY,
-                c.EMAIL,
-                c.PHONE,
-                c.TOTAL_ACCOUNTS
-            FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE l
-            LEFT JOIN CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON l.CUSTOMER_ID = c.CUSTOMER_ID
-            WHERE l.DAYS_SINCE_LAST_TRANSACTION > 180
-              AND l.LIFECYCLE_STAGE IN ('DORMANT', 'DECLINING')
-            ORDER BY l.DAYS_SINCE_LAST_TRANSACTION DESC
+                CUSTOMER_ID,
+                FIRST_NAME,
+                FAMILY_NAME,
+                ACCOUNT_TIER,
+                COUNTRY,
+                LIFECYCLE_STAGE,
+                DAYS_SINCE_LAST_TRANSACTION,
+                LAST_TRANSACTION_DATE,
+                CHURN_PROBABILITY,
+                EMAIL,
+                PHONE,
+                TOTAL_ACCOUNTS
+            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
+            WHERE DAYS_SINCE_LAST_TRANSACTION > 180
+              AND LIFECYCLE_STAGE IN ('DORMANT', 'DECLINING')
+            ORDER BY DAYS_SINCE_LAST_TRANSACTION DESC
         """
         
         df = session.sql(query).to_pandas()
@@ -827,7 +831,7 @@ def load_dormant_accounts():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def calculate_revenue_at_risk():
     """
     Calculate revenue at risk from potential churn
@@ -843,8 +847,9 @@ def calculate_revenue_at_risk():
                 COUNT(*) as AT_RISK_CUSTOMERS,
                 COUNT(CASE WHEN CHURN_PROBABILITY > 90 THEN 1 END) as CRITICAL_CUSTOMERS,
                 COUNT(CASE WHEN CHURN_PROBABILITY BETWEEN 70 AND 90 THEN 1 END) as HIGH_CUSTOMERS,
-                AVG(CHURN_PROBABILITY) as AVG_CHURN_PROBABILITY
-            FROM CRMA_AGG_DT_CUSTOMER_LIFECYCLE
+                AVG(CHURN_PROBABILITY) as AVG_CHURN_PROBABILITY,
+                COALESCE(SUM(TOTAL_BALANCE), 0) / 1000 as TOTAL_REVENUE_AT_RISK
+            FROM CRMA_AGG_DT_CUSTOMER_360
             WHERE CHURN_PROBABILITY > 70
         """
         
@@ -860,7 +865,7 @@ def calculate_revenue_at_risk():
 # LCR (Liquidity Coverage Ratio) Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_lcr_current_status():
     """
     Load current LCR status
@@ -891,8 +896,8 @@ def load_lcr_current_status():
                 OUTFLOW_CORP,
                 OUTFLOW_FI,
                 CALCULATION_TIMESTAMP
-            FROM REP_AGG_001.REPP_AGG_DT_LCR_DAILY
-            WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM REP_AGG_001.REPP_AGG_DT_LCR_DAILY)
+            FROM REP_AGG_V001.REPP_AGG_DT_LCR_DAILY
+            WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM REP_AGG_V001.REPP_AGG_DT_LCR_DAILY)
             LIMIT 1
         """
         
@@ -904,7 +909,7 @@ def load_lcr_current_status():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_lcr_trend(days=90):
     """
     Load LCR trend data
@@ -931,8 +936,7 @@ def load_lcr_trend(days=90):
                 LCR_DOD_CHANGE,
                 LCR_STATUS,
                 SEVERITY
-            FROM REP_AGG_001.REPP_AGG_DT_LCR_TREND
-            WHERE AS_OF_DATE >= DATEADD(day, -{days}, CURRENT_DATE())
+            FROM REP_AGG_V001.REPP_AGG_DT_LCR_TREND
             ORDER BY AS_OF_DATE
         """
         
@@ -944,7 +948,7 @@ def load_lcr_trend(days=90):
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_hqla_holdings_detail():
     """
     Load HQLA holdings detail aggregated by asset type
@@ -964,10 +968,10 @@ def load_hqla_holdings_detail():
                 ROUND(SUM(MARKET_VALUE_CHF), 2) AS MARKET_VALUE_CHF,
                 ROUND(SUM(WEIGHTED_VALUE_CHF), 2) AS WEIGHTED_VALUE_CHF,
                 ROUND(AVG(MARKET_VALUE_CHF), 2) AS AVG_HOLDING_SIZE_CHF
-            FROM REP_AGG_001.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL
-            WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM REP_AGG_001.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL)
+            FROM REP_AGG_V001.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL
+            WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM REP_AGG_V001.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL)
             GROUP BY ASSET_TYPE, REGULATORY_LEVEL
-            ORDER BY SUM(MARKET_VALUE_CHF) DESC
+            ORDER BY MARKET_VALUE_CHF DESC
         """
         
         df = session.sql(query).to_pandas()
@@ -978,7 +982,7 @@ def load_hqla_holdings_detail():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_deposit_outflows_detail():
     """
     Load deposit outflows detail aggregated by deposit type
@@ -1000,8 +1004,8 @@ def load_deposit_outflows_detail():
                 ROUND(SUM(OUTFLOW_AMOUNT_CHF), 2) AS TOTAL_OUTFLOW_CHF,
                 ROUND(AVG(BALANCE_CHF), 2) AS AVG_BALANCE_CHF,
                 ROUND(AVG(FINAL_RUN_OFF_RATE) * 100, 2) AS AVG_ADJUSTED_RUN_OFF_RATE
-            FROM REP_AGG_001.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL
-            WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM REP_AGG_001.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL)
+            FROM REP_AGG_V001.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL
+            WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM REP_AGG_V001.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL)
             GROUP BY DEPOSIT_TYPE, COUNTERPARTY_TYPE
             ORDER BY SUM(OUTFLOW_AMOUNT_CHF) DESC
         """
@@ -1014,7 +1018,7 @@ def load_deposit_outflows_detail():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_lcr_alerts():
     """
     Load active LCR alerts
@@ -1036,7 +1040,7 @@ def load_lcr_alerts():
                 alert_item.value:message::STRING AS ALERT_MESSAGE,
                 alert_item.value:action::STRING AS RECOMMENDED_ACTION,
                 ALERT_TIMESTAMP
-            FROM REP_AGG_001.REPP_AGG_VW_LCR_ALERTS,
+            FROM REP_AGG_V001.REPP_AGG_VW_LCR_ALERTS,
             LATERAL FLATTEN(input => ALL_ALERTS) alert_item
             WHERE TOTAL_ALERT_COUNT > 0
             ORDER BY 
@@ -1058,7 +1062,7 @@ def load_lcr_alerts():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_lcr_monthly_summary():
     """
     Load monthly LCR summary for SNB reporting
@@ -1088,7 +1092,7 @@ def load_lcr_monthly_summary():
                     WHEN BREACH_DAYS <= 3 THEN 'WARNING'
                     ELSE 'FAIL'
                 END AS COMPLIANCE_STATUS
-            FROM REP_AGG_001.REPP_AGG_VW_LCR_MONTHLY_SUMMARY
+            FROM REP_AGG_V001.REPP_AGG_VW_LCR_MONTHLY_SUMMARY
             ORDER BY REPORTING_MONTH DESC
             LIMIT 12
         """
@@ -1105,7 +1109,7 @@ def load_lcr_monthly_summary():
 # LOAN PORTFOLIO DATA LOADERS
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_loan_portfolio_summary():
     """
     Load loan portfolio summary metrics
@@ -1127,7 +1131,7 @@ def load_loan_portfolio_summary():
                 MIN_REQUESTED_AMOUNT,
                 MAX_REQUESTED_AMOUNT,
                 AVG_TERM_MONTHS
-            FROM REP_AGG_001.LOAR_AGG_DT_PORTFOLIO_SUMMARY
+            FROM REP_AGG_V001.LOAR_AGG_DT_PORTFOLIO_SUMMARY
             WHERE AS_OF_DATE = CURRENT_DATE()
             ORDER BY TOTAL_REQUESTED_AMOUNT DESC
         """
@@ -1140,7 +1144,7 @@ def load_loan_portfolio_summary():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_loan_ltv_distribution():
     """
     Load LTV distribution for loan portfolio
@@ -1160,7 +1164,7 @@ def load_loan_ltv_distribution():
                 AVG_LTV_PCT,
                 TOTAL_COLLATERAL_VALUE,
                 PCT_OF_TOTAL_LOANS
-            FROM REP_AGG_001.LOAR_AGG_DT_LTV_DISTRIBUTION
+            FROM REP_AGG_V001.LOAR_AGG_DT_LTV_DISTRIBUTION
             WHERE AS_OF_DATE = CURRENT_DATE()
             ORDER BY LTV_BUCKET_SORT_ORDER
         """
@@ -1173,7 +1177,7 @@ def load_loan_ltv_distribution():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_loan_application_funnel():
     """
     Load loan application funnel by status
@@ -1196,7 +1200,7 @@ def load_loan_application_funnel():
                 APPROVAL_RATE_PCT,
                 DECLINE_RATE_PCT,
                 AVG_REQUESTED_AMOUNT
-            FROM REP_AGG_001.LOAR_AGG_DT_APPLICATION_FUNNEL
+            FROM REP_AGG_V001.LOAR_AGG_DT_APPLICATION_FUNNEL
             WHERE AS_OF_DATE = CURRENT_DATE()
             ORDER BY TOTAL_APPLICATIONS DESC
         """
@@ -1209,7 +1213,7 @@ def load_loan_application_funnel():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_loan_affordability_analysis():
     """
     Load affordability analysis for loan applications
@@ -1230,7 +1234,7 @@ def load_loan_affordability_analysis():
                 AVG_GROSS_INCOME,
                 AVG_DEBT_OBLIGATIONS,
                 PASS_RATE_PCT
-            FROM REP_AGG_001.LOAR_AGG_DT_AFFORDABILITY_SUMMARY
+            FROM REP_AGG_V001.LOAR_AGG_DT_AFFORDABILITY_SUMMARY
             WHERE AS_OF_DATE = CURRENT_DATE()
             ORDER BY COUNTRY, AFFORDABILITY_RESULT
         """
@@ -1243,7 +1247,7 @@ def load_loan_affordability_analysis():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_loan_compliance_screening():
     """
     Load compliance screening results for loan applications
@@ -1258,7 +1262,6 @@ def load_loan_compliance_screening():
             SELECT 
                 APPLICATION_ID,
                 CUSTOMER_ID,
-                FULL_NAME,
                 COUNTRY,
                 REQUESTED_AMOUNT,
                 APPLICATION_STATUS,
@@ -1269,7 +1272,7 @@ def load_loan_compliance_screening():
                 COMPLIANCE_HOLD_FLAG,
                 COMPLIANCE_STATUS,
                 APPLICATION_DATE_TIME
-            FROM REP_AGG_001.LOAR_AGG_VW_COMPLIANCE_SCREENING
+            FROM REP_AGG_V001.LOAR_AGG_VW_COMPLIANCE_SCREENING
             WHERE COMPLIANCE_HOLD_FLAG = TRUE
                 OR VULNERABLE_CUSTOMER_FLAG = TRUE
                 OR OVERALL_RISK_RATING IN ('CRITICAL', 'HIGH')
@@ -1292,7 +1295,7 @@ def load_loan_compliance_screening():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=7200)
 def load_loan_customer_summary():
     """
     Load customer-level loan summary
@@ -1320,7 +1323,7 @@ def load_loan_customer_summary():
                 c.VULNERABLE_CUSTOMER_FLAG,
                 c.REQUIRES_SANCTIONS_REVIEW,
                 c.REQUIRES_EXPOSED_PERSON_REVIEW
-            FROM REP_AGG_001.LOAR_AGG_DT_CUSTOMER_LOAN_SUMMARY cls
+            FROM REP_AGG_V001.LOAR_AGG_DT_CUSTOMER_LOAN_SUMMARY cls
             LEFT JOIN CRM_AGG_V001.CRMA_AGG_VW_CUSTOMER_360_ENRICHED c ON cls.CUSTOMER_ID = c.CUSTOMER_ID
             WHERE cls.TOTAL_APPLICATIONS > 0
             ORDER BY cls.TOTAL_APPROVED_AMOUNT DESC

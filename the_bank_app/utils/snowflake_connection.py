@@ -1,6 +1,9 @@
 """
 Snowflake Connection Management
-Handles Snowflake session creation and connection management
+Handles Snowflake session creation and connection management.
+
+Uses the Snowflake connection defined in ~/.snowflake/connections.toml
+(connection name configured in .streamlit/secrets.toml or defaults to DEMO_MDAEPPEN).
 """
 
 import streamlit as st
@@ -11,28 +14,30 @@ from snowflake.snowpark.exceptions import SnowparkSQLException
 @st.cache_resource
 def get_snowflake_session():
     """
-    Create and cache Snowflake session
-    
+    Create and cache Snowflake session using ~/.snowflake/connections.toml.
+
+    Reads connection_name, warehouse, database, schema, and role from
+    .streamlit/secrets.toml [snowflake] section. Falls back to sensible defaults.
+
     Returns:
         Session: Snowflake Snowpark session
     """
     try:
-        # Get credentials from Streamlit secrets
+        # Read app-level overrides from secrets.toml (optional keys)
+        sf_cfg = st.secrets.get("snowflake", {})
+        connection_name = sf_cfg.get("connection_name", "DEMO_MDAEPPEN")
+
         connection_parameters = {
-            "account": st.secrets["snowflake"]["account"],
-            "user": st.secrets["snowflake"]["user"],
-            "password": st.secrets["snowflake"]["password"],
-            "warehouse": st.secrets["snowflake"]["warehouse"],
-            "database": st.secrets["snowflake"]["database"],
-            "schema": st.secrets["snowflake"]["schema"],
-            "role": st.secrets["snowflake"]["role"]
+            "connection_name": connection_name,
+            "warehouse": sf_cfg.get("warehouse", "MD_TEST_WH"),
+            "database": sf_cfg.get("database", "AAA_DEV_SYNTHETIC_BANK"),
+            "schema": sf_cfg.get("schema", "CRM_AGG_V001"),
+            "role": sf_cfg.get("role", "ACCOUNTADMIN"),
         }
-        
+
         session = Session.builder.configs(connection_parameters).create()
         return session
-    
-    except KeyError as e:
-        raise Exception(f"Missing Snowflake credential: {e}. Please configure .streamlit/secrets.toml")
+
     except Exception as e:
         raise Exception(f"Failed to connect to Snowflake: {e}")
 

@@ -29,7 +29,9 @@
 SyntheticRetailBank/
 ├── manifest.yml                        DCM v2 (DEV + PROD targets, 19 Jinja vars)
 ├── pre_deploy.sql                      DB + schema + project (Jinja parameterized)
-├── post_deploy.sql                     Streams, file formats, procedures, agents, semantic views
+├── post_deploy.sql                     Streams, file formats, procedures, sub-agents, semantic views
+├── post_deploy_master-agent.sql         Master agent: hybrid router, caching, observability, regression
+├── deploy.sh                            Deployment script (DCM + post-deploy hooks)
 ├── github-workflow-verification_v1.sh  SHA256 integrity check
 ├── open_points.md                      This file
 ├── .github/workflows/
@@ -46,6 +48,7 @@ SyntheticRetailBank/
 ├── business_requirements/              Business requirement documents
 ├── operation/                          Manual SQL operations (Jinja parameterized)
 ├── the_bank_app/                       16-tab Streamlit banking dashboard
+├── master-agent/                       Master agent docs + customer reference code
 ├── data_generator.sh                   Data generation wrapper (default: 5000 customers)
 └── upload-data.sh                      Parallel stage upload (10 threads, batched)
 ```
@@ -70,8 +73,9 @@ SyntheticRetailBank/
 | File Formats | 14 | `post_deploy.sql` |
 | Stored Procedures | 7 | `post_deploy.sql` |
 | Semantic Views | 15 | `post_deploy.sql` |
-| Cortex Agents | 6 | `post_deploy.sql` |
-| **Total post-deploy** | **59** | |
+| Cortex Agents (sub-agents) | 7 | `post_deploy.sql` |
+| Master Agent infrastructure | 10 UDFs, 4 tables, 4 procedures, 5 views, 1 agent | `post_deploy_master-agent.sql` |
+| **Total post-deploy** | **73** | |
 
 ## Naming Convention (DataOpsBackbone aligned)
 

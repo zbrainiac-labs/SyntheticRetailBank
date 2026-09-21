@@ -1567,8 +1567,8 @@ facts (
   customers.INVESTMENT_ACCOUNTS as INVESTMENT_ACCOUNTS comment='Investment accounts | brokerage accounts | trading accounts | securities accounts | investment products',
   
   customers.TOTAL_BALANCE as TOTAL_BALANCE 
-    WITH SYNONYMS = ('AUM', 'assets under management', 'total assets', 'managed assets', 'portfolio value', 'balance', 'wealth')
-    comment='Total Assets Under Management. Primary metric for advisor performance and client portfolio size ranking',
+    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value', 'balance', 'wealth', 'client balance')
+    comment='Per-customer total balance. Use for individual client AUM or portfolio value lookups',
   customers.CHECKING_BALANCE as CHECKING_BALANCE comment='Checking balance | current account balance | transaction account balance | liquid funds',
   customers.SAVINGS_BALANCE as SAVINGS_BALANCE comment='Savings balance | deposit balance | savings account balance | deposit funds',
   customers.BUSINESS_BALANCE as BUSINESS_BALANCE comment='Business balance | commercial balance | corporate balance | SME balance',
@@ -1618,22 +1618,36 @@ facts (
 dimensions (
   customers.COUNTRY AS COUNTRY 
     WITH SYNONYMS = ('country', 'nation', 'geography', 'location', 'region')
-    COMMENT = 'Country code or name. Primary dimension for geographic grouping. Use with "by country" or "per country" queries',
+    COMMENT = 'Country code or name. Primary dimension for geographic grouping. Use with "by country" or "per country" queries'
+    SAMPLE_VALUES ('CHE', 'GBR', 'DEU')
+    IS_ENUM,
   customers.ACCOUNT_TIER AS ACCOUNT_TIER 
     WITH SYNONYMS = ('tier', 'service level', 'customer segment', 'membership level')
-    COMMENT = 'Account tier (PLATINUM, GOLD, SILVER, BRONZE). Primary dimension for customer segmentation',
+    COMMENT = 'Account tier (PLATINUM, GOLD, SILVER, BRONZE). Primary dimension for customer segmentation'
+    SAMPLE_VALUES ('STANDARD', 'SILVER', 'GOLD', 'PLATINUM', 'PREMIUM')
+    IS_ENUM,
   customers.CURRENT_STATUS AS CURRENT_STATUS 
     WITH SYNONYMS = ('status', 'active', 'inactive', 'customer status')
-    COMMENT = 'Customer status (ACTIVE, INACTIVE, CLOSED). Use for filtering active customers',
+    COMMENT = 'Customer status (ACTIVE, INACTIVE, CLOSED). Use for filtering active customers'
+    SAMPLE_VALUES ('ACTIVE', 'INACTIVE', 'CLOSED')
+    IS_ENUM,
   customers.RISK_CLASSIFICATION AS RISK_CLASSIFICATION 
     WITH SYNONYMS = ('risk level', 'risk category', 'risk rating')
-    COMMENT = 'Risk classification (LOW_RISK, MEDIUM_RISK, HIGH_RISK). Use for risk-based grouping',
+    COMMENT = 'Risk classification (LOW_RISK, MEDIUM_RISK, HIGH_RISK). Use for risk-based grouping'
+    SAMPLE_VALUES ('LOW_RISK', 'MEDIUM_RISK', 'HIGH_RISK')
+    IS_ENUM,
   
   customers.CITY AS CITY COMMENT = 'City for geographic analysis',
   customers.STATE AS STATE COMMENT = 'State/province for regional grouping',
   customers.EMPLOYMENT_TYPE AS EMPLOYMENT_TYPE COMMENT = 'Employment type for demographic analysis',
   customers.INCOME_RANGE AS INCOME_RANGE COMMENT = 'Income range for customer segmentation',
-  customers.CREDIT_SCORE_BAND AS CREDIT_SCORE_BAND COMMENT = 'Credit score band for risk grouping'
+  customers.CREDIT_SCORE_BAND AS CREDIT_SCORE_BAND COMMENT = 'Credit score band for risk grouping',
+  customers.ACTIVE_CUSTOMERS LABELS = (FILTER) AS customers.CURRENT_STATUS = 'ACTIVE'
+    COMMENT = 'Filter to active customers only',
+  customers.HIGH_RISK_ONLY LABELS = (FILTER) AS customers.OVERALL_RISK_RATING IN ('HIGH', 'CRITICAL')
+    COMMENT = 'Filter to HIGH and CRITICAL risk customers',
+  customers.REQUIRES_REVIEW LABELS = (FILTER) AS (customers.REQUIRES_SANCTIONS_REVIEW = TRUE OR customers.REQUIRES_EXPOSED_PERSON_REVIEW = TRUE)
+    COMMENT = 'Filter to customers requiring compliance review'
 )
 
 metrics (
@@ -1644,7 +1658,7 @@ metrics (
                         "Top 10 countries by customer count" → COUNT(CUSTOMER_ID) GROUP BY COUNTRY LIMIT 10
                         "How many PLATINUM customers?" → COUNT WHERE ACCOUNT_TIER = PLATINUM',
   customers.TOTAL_BALANCE_SUM AS SUM(customers.TOTAL_BALANCE)
-    WITH SYNONYMS = ('total AUM', 'total assets', 'total balance', 'sum of balances')
+    WITH SYNONYMS = ('total AUM', 'total assets', 'total wealth', 'aggregate balance', 'sum of balances')
     COMMENT = 'Sum of all customer balances. Use for wealth/AUM aggregation.
                EXAMPLES: "Top 10 clients by total AUM" → ORDER BY TOTAL_BALANCE DESC LIMIT 10
                         "Total AUM by country" → SUM(TOTAL_BALANCE) GROUP BY COUNTRY
@@ -1654,6 +1668,66 @@ metrics (
     COMMENT = 'Average customer balance. Use for typical customer value.
                EXAMPLES: "Average balance by country" → AVG(TOTAL_BALANCE) GROUP BY COUNTRY
                         "Which country has highest average wealth?" → AVG(TOTAL_BALANCE) GROUP BY COUNTRY'
+)
+
+COMMENT = 'Customer 360 intelligence - profiles, risk, compliance (PEP/sanctions), accounts, lifecycle, and advisor assignments.'
+
+AI_SQL_GENERATION 'When ranking customers (top clients, highest value), use TOTAL_BALANCE unless the user explicitly asks about transactions. Always include CUSTOMER_ID in SELECT. For dormancy queries, use IS_DORMANT_TRANSACTIONALLY = TRUE. For high-risk queries, use OVERALL_RISK_RATING IN (''HIGH'', ''CRITICAL'') unless a specific field is named.'
+
+AI_QUESTION_CATEGORIZATION 'Reject questions about individual transaction details (amounts, dates, counterparties) -- those belong to the Compliance Monitoring semantic view. If the user asks about a specific customer by name and the result is masked, explain that PII is protected by masking policies.'
+
+AI_VERIFIED_QUERIES (
+  top_customers_by_aum AS (
+    QUESTION 'Show me top 10 customers by AUM'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.TOTAL_BALANCE, customers.COUNTRY, customers.ACCOUNT_TIER FROM __customers AS customers ORDER BY customers.TOTAL_BALANCE DESC NULLS LAST LIMIT 10'
+  ),
+  customer_count_by_country AS (
+    QUESTION 'How many customers per country?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.COUNTRY, COUNT(customers.CUSTOMER_ID) AS CUSTOMER_COUNT FROM __customers AS customers GROUP BY customers.COUNTRY ORDER BY CUSTOMER_COUNT DESC'
+  ),
+  platinum_customers_switzerland AS (
+    QUESTION 'Show me all PLATINUM customers in Switzerland'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.TOTAL_BALANCE, customers.OVERALL_RISK_RATING FROM __customers AS customers WHERE customers.ACCOUNT_TIER = ''PLATINUM'' AND customers.COUNTRY = ''CHE'' ORDER BY customers.TOTAL_BALANCE DESC NULLS LAST'
+  ),
+  high_risk_customers AS (
+    QUESTION 'Which customers have CRITICAL or HIGH risk rating?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.OVERALL_RISK_RATING, customers.OVERALL_RISK_SCORE, customers.REQUIRES_SANCTIONS_REVIEW, customers.REQUIRES_EXPOSED_PERSON_REVIEW FROM __customers AS customers WHERE customers.OVERALL_RISK_RATING IN (''CRITICAL'', ''HIGH'') ORDER BY customers.OVERALL_RISK_SCORE DESC NULLS LAST'
+  ),
+  pep_review_required AS (
+    QUESTION 'Which customers require PEP review?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.EXPOSED_PERSON_MATCH_TYPE, customers.EXPOSED_PERSON_EXACT_CATEGORY, customers.EXPOSED_PERSON_EXACT_RISK_LEVEL FROM __customers AS customers WHERE customers.REQUIRES_EXPOSED_PERSON_REVIEW = TRUE ORDER BY customers.EXPOSED_PERSON_EXACT_RISK_LEVEL DESC NULLS LAST'
+  ),
+  dormant_customers AS (
+    QUESTION 'Show me dormant customers with no recent transactions'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.DAYS_SINCE_LAST_TRANSACTION, customers.LAST_TRANSACTION_DATE, customers.ACCOUNT_TIER, customers.TOTAL_BALANCE FROM __customers AS customers WHERE customers.IS_DORMANT_TRANSACTIONALLY = TRUE ORDER BY customers.DAYS_SINCE_LAST_TRANSACTION DESC NULLS LAST'
+  ),
+  customer_count_by_tier AS (
+    QUESTION 'How many customers per account tier?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.ACCOUNT_TIER, COUNT(customers.CUSTOMER_ID) AS CUSTOMER_COUNT, SUM(customers.TOTAL_BALANCE) AS TOTAL_AUM FROM __customers AS customers GROUP BY customers.ACCOUNT_TIER ORDER BY TOTAL_AUM DESC NULLS LAST'
+  ),
+  sanctions_review_required AS (
+    QUESTION 'Which customers require sanctions review?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.SANCTIONS_MATCH_TYPE, customers.SANCTIONS_EXACT_MATCH_NAME, customers.SANCTIONS_EXACT_MATCH_COUNTRY, customers.OVERALL_SANCTIONS_RISK FROM __customers AS customers WHERE customers.REQUIRES_SANCTIONS_REVIEW = TRUE ORDER BY customers.OVERALL_SANCTIONS_RISK DESC NULLS LAST'
+  )
 );
 
 GRANT SELECT ON TABLE CRMA_AGG_DT_CUSTOMER_360 TO ROLE ACCOUNTADMIN;
@@ -1729,7 +1803,7 @@ metrics (
     COMMENT = 'Count of advisors.
                EXAMPLES: "How many advisors by region?" → COUNT(EMPLOYEE_ID) GROUP BY REGION',
   advisors.TOTAL_PORTFOLIO_SUM AS SUM(advisors.TOTAL_PORTFOLIO_VALUE)
-    WITH SYNONYMS = ('total AUM', 'total assets', 'total managed assets', 'sum of AUM')
+    WITH SYNONYMS = ('total advisor AUM', 'total managed assets', 'sum of advisor AUM', 'aggregate advisor portfolio')
     COMMENT = 'Sum of all portfolio value managed by advisors. DEFAULT for advisor rankings.
                EXAMPLES: "Show me top 10 advisors by AUM" → ORDER BY TOTAL_PORTFOLIO_VALUE DESC LIMIT 10',
   advisors.AVG_PORTFOLIO AS AVG(advisors.TOTAL_PORTFOLIO_VALUE)
@@ -1744,6 +1818,137 @@ metrics (
 );
 
 SELECT 'EMPA_SV_EMPLOYEE_ADVISOR created successfully! Advisor relationship management view ready.' AS STATUS;
+
+-- ============================================================
+-- HR EMPLOYEE SEMANTIC VIEW (raw-table based, always has data)
+-- ============================================================
+
+CREATE OR REPLACE SEMANTIC VIEW EMPA_SV_HR_EMPLOYEE
+
+TABLES (
+  EMPLOYEES AS (
+    SELECT
+      e.EMPLOYEE_ID,
+      pii.FULL_NAME,
+      pii.FIRST_NAME,
+      pii.FAMILY_NAME,
+      pii.EMAIL,
+      pii.PHONE,
+      pii.DATE_OF_BIRTH,
+      e.HIRE_DATE,
+      DATEDIFF(DAY, e.HIRE_DATE, CURRENT_DATE()) AS TENURE_DAYS,
+      ROUND(DATEDIFF(DAY, e.HIRE_DATE, CURRENT_DATE()) / 365.25, 1) AS TENURE_YEARS,
+      e.EMPLOYMENT_STATUS,
+      e.COUNTRY,
+      e.OFFICE_LOCATION,
+      e.REGION,
+      e.POSITION_LEVEL,
+      e.MANAGER_EMPLOYEE_ID,
+      e.PERFORMANCE_RATING,
+      e.LANGUAGES_SPOKEN,
+      e.CERTIFICATIONS
+    FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE e
+    LEFT JOIN {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII pii
+      ON e.EMPLOYEE_ID = pii.EMPLOYEE_ID
+  )
+  PRIMARY KEY (EMPLOYEE_ID)
+  COMMENT = 'HR Employee master data with PII from vault. Covers all staff: advisors, team leaders, super team leaders.'
+)
+
+FACTS (
+  EMPLOYEES.EMPLOYEE_ID AS EMPLOYEE_ID
+    COMMENT = 'Employee identifier | staff ID | employee number | advisor ID | personnel number',
+  EMPLOYEES.FULL_NAME AS FULL_NAME
+    COMMENT = 'Full name | employee name | staff name | complete name',
+  EMPLOYEES.FIRST_NAME AS FIRST_NAME
+    COMMENT = 'First name | given name | forename',
+  EMPLOYEES.FAMILY_NAME AS FAMILY_NAME
+    COMMENT = 'Family name | last name | surname',
+  EMPLOYEES.EMAIL AS EMAIL
+    COMMENT = 'Email address | work email | contact email',
+  EMPLOYEES.PHONE AS PHONE
+    COMMENT = 'Phone number | telephone | mobile | contact number',
+  EMPLOYEES.DATE_OF_BIRTH AS DATE_OF_BIRTH
+    COMMENT = 'Date of birth | DOB | birthday',
+  EMPLOYEES.HIRE_DATE AS HIRE_DATE
+    COMMENT = 'Hire date | start date | employment start | join date | onboarding date',
+  EMPLOYEES.TENURE_DAYS AS TENURE_DAYS
+    COMMENT = 'Tenure in days | days employed | service length | employment duration',
+  EMPLOYEES.TENURE_YEARS AS TENURE_YEARS
+    COMMENT = 'Tenure in years | years employed | years of service',
+  EMPLOYEES.MANAGER_EMPLOYEE_ID AS MANAGER_EMPLOYEE_ID
+    COMMENT = 'Manager ID | reports to | supervisor ID | team leader ID | boss',
+  EMPLOYEES.LANGUAGES_SPOKEN AS LANGUAGES_SPOKEN
+    COMMENT = 'Languages spoken | language skills | multilingual | language proficiency',
+  EMPLOYEES.CERTIFICATIONS AS CERTIFICATIONS
+    COMMENT = 'Certifications | qualifications | credentials | professional certifications',
+  EMPLOYEES.PERFORMANCE_RATING AS PERFORMANCE_RATING
+    COMMENT = 'Performance rating value | rating score | performance score | appraisal score'
+)
+
+DIMENSIONS (
+  EMPLOYEES.POSITION_LEVEL AS POSITION_LEVEL
+    WITH SYNONYMS = ('role', 'job title', 'position', 'level', 'job level', 'rank')
+    COMMENT = 'Position level: SUPER_TEAM_LEADER, TEAM_LEADER, CLIENT_ADVISOR. Primary hierarchy dimension'
+    SAMPLE_VALUES ('SUPER_TEAM_LEADER', 'TEAM_LEADER', 'CLIENT_ADVISOR')
+    IS_ENUM,
+  EMPLOYEES.COUNTRY AS COUNTRY
+    WITH SYNONYMS = ('country', 'nation', 'location', 'geography')
+    COMMENT = 'Country where employee is based. Use for geographic headcount analysis',
+  EMPLOYEES.OFFICE_LOCATION AS OFFICE_LOCATION
+    WITH SYNONYMS = ('office', 'branch', 'site', 'workplace', 'location')
+    COMMENT = 'Office location or branch. Use for office-level headcount and capacity planning',
+  EMPLOYEES.REGION AS REGION
+    WITH SYNONYMS = ('region', 'territory', 'area', 'geographic region')
+    COMMENT = 'Geographic region for regional grouping',
+  EMPLOYEES.EMPLOYMENT_STATUS AS EMPLOYMENT_STATUS
+    WITH SYNONYMS = ('status', 'active', 'inactive', 'employment status', 'work status')
+    COMMENT = 'Employment status (ACTIVE, INACTIVE). Use for filtering active staff'
+    SAMPLE_VALUES ('ACTIVE', 'INACTIVE')
+    IS_ENUM,
+  EMPLOYEES.ACTIVE_STAFF LABELS = (FILTER) AS EMPLOYEES.EMPLOYMENT_STATUS = 'ACTIVE'
+    COMMENT = 'Filter to active employees only'
+)
+
+METRICS (
+  EMPLOYEES.EMPLOYEE_COUNT AS COUNT(EMPLOYEES.EMPLOYEE_ID)
+    WITH SYNONYMS = ('headcount', 'staff count', 'how many employees', 'workforce size', 'number of employees', 'total employees', 'team size', 'number of staff')
+    COMMENT = 'Count of employees. DEFAULT metric for headcount questions.',
+  EMPLOYEES.AVG_TENURE AS AVG(EMPLOYEES.TENURE_YEARS)
+    WITH SYNONYMS = ('average tenure', 'mean tenure', 'avg years of service', 'average experience')
+    COMMENT = 'Average tenure in years across employees'
+)
+
+COMMENT = 'HR Employee Intelligence - workforce headcount, org structure, tenure, offices, regions, performance, and certifications.'
+
+AI_SQL_GENERATION 'For headcount queries, use EMPLOYEE_COUNT metric. Filter EMPLOYMENT_STATUS = ''ACTIVE'' by default unless the user asks about all staff or inactive employees. For \"team leaders\", filter POSITION_LEVEL = ''TEAM_LEADER''. For managers, use POSITION_LEVEL IN (''TEAM_LEADER'', ''SUPER_TEAM_LEADER'').'
+
+AI_QUESTION_CATEGORIZATION 'Reject questions about client portfolios, AUM, or transactions -- those belong to other semantic views. If asked about advisor-client relationships or advisor AUM, redirect to the Employee Advisor semantic view.'
+
+AI_VERIFIED_QUERIES (
+  headcount_total AS (
+    QUESTION 'How many employees do we have?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT COUNT(EMPLOYEES.EMPLOYEE_ID) AS EMPLOYEE_COUNT FROM __EMPLOYEES AS EMPLOYEES WHERE EMPLOYEES.EMPLOYMENT_STATUS = ''ACTIVE'''
+  ),
+  headcount_by_region AS (
+    QUESTION 'Show me headcount by region'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT EMPLOYEES.REGION, COUNT(EMPLOYEES.EMPLOYEE_ID) AS EMPLOYEE_COUNT FROM __EMPLOYEES AS EMPLOYEES WHERE EMPLOYEES.EMPLOYMENT_STATUS = ''ACTIVE'' GROUP BY EMPLOYEES.REGION ORDER BY EMPLOYEE_COUNT DESC'
+  ),
+  avg_tenure_by_position AS (
+    QUESTION 'Average tenure by position level'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT EMPLOYEES.POSITION_LEVEL, COUNT(EMPLOYEES.EMPLOYEE_ID) AS EMPLOYEE_COUNT, AVG(EMPLOYEES.TENURE_YEARS) AS AVG_TENURE_YEARS FROM __EMPLOYEES AS EMPLOYEES WHERE EMPLOYEES.EMPLOYMENT_STATUS = ''ACTIVE'' GROUP BY EMPLOYEES.POSITION_LEVEL ORDER BY AVG_TENURE_YEARS DESC NULLS LAST'
+  )
+);
+
+SELECT 'EMPA_SV_HR_EMPLOYEE created successfully! HR Employee Intelligence view ready.' AS STATUS;
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ pay_agg }};
@@ -1807,22 +2012,32 @@ facts (
 dimensions (
   transactions.OVERALL_ANOMALY_CLASSIFICATION AS OVERALL_ANOMALY_CLASSIFICATION 
     WITH SYNONYMS = ('risk level', 'anomaly level', 'classification', 'severity', 'risk category')
-    COMMENT = 'Overall anomaly classification (CRITICAL, HIGH, MODERATE, LOW). Primary dimension for risk-based filtering and grouping',
+    COMMENT = 'Overall anomaly classification (CRITICAL, HIGH, MODERATE, LOW). Primary dimension for risk-based filtering and grouping'
+    SAMPLE_VALUES ('CRITICAL', 'HIGH', 'MODERATE', 'LOW')
+    IS_ENUM,
   transactions.CURRENCY AS CURRENCY 
     WITH SYNONYMS = ('currency', 'currency code', 'payment currency', 'transaction currency')
     COMMENT = 'Transaction currency. Use for currency-based analysis and reporting',
   
   transactions.AMOUNT_ANOMALY_LEVEL AS AMOUNT_ANOMALY_LEVEL 
     WITH SYNONYMS = ('amount risk', 'amount anomaly', 'unusual amount')
-    COMMENT = 'Amount anomaly level. Use for filtering transactions with unusual amounts',
+    COMMENT = 'Amount anomaly level. Use for filtering transactions with unusual amounts'
+    SAMPLE_VALUES ('CRITICAL', 'HIGH', 'MODERATE', 'LOW')
+    IS_ENUM,
   transactions.TIMING_ANOMALY_LEVEL AS TIMING_ANOMALY_LEVEL 
     WITH SYNONYMS = ('timing risk', 'timing anomaly', 'unusual timing')
-    COMMENT = 'Timing anomaly level. Use for filtering transactions with unusual timing patterns',
+    COMMENT = 'Timing anomaly level. Use for filtering transactions with unusual timing patterns'
+    SAMPLE_VALUES ('CRITICAL', 'HIGH', 'MODERATE', 'LOW')
+    IS_ENUM,
   transactions.VELOCITY_ANOMALY_LEVEL AS VELOCITY_ANOMALY_LEVEL 
     WITH SYNONYMS = ('velocity risk', 'frequency anomaly', 'velocity anomaly')
     COMMENT = 'Velocity anomaly level. Use for filtering transactions with unusual frequency patterns',
   transactions.TRANSACTION_DAYOFWEEK AS TRANSACTION_DAYOFWEEK 
-    COMMENT = 'Day of week for temporal analysis'
+    COMMENT = 'Day of week for temporal analysis',
+  transactions.CRITICAL_AND_HIGH LABELS = (FILTER) AS transactions.OVERALL_ANOMALY_CLASSIFICATION IN ('CRITICAL', 'HIGH')
+    COMMENT = 'Filter to CRITICAL and HIGH anomaly transactions',
+  transactions.REQUIRES_IMMEDIATE LABELS = (FILTER) AS transactions.REQUIRES_IMMEDIATE_REVIEW = TRUE
+    COMMENT = 'Filter to transactions requiring immediate compliance review'
 )
 
 metrics (
@@ -1838,6 +2053,47 @@ metrics (
   transactions.HIGH_RISK_COUNT AS COUNT(CASE WHEN transactions.OVERALL_ANOMALY_CLASSIFICATION IN ('HIGH', 'CRITICAL') THEN 1 END)
     WITH SYNONYMS = ('high risk transactions', 'critical transactions', 'number of high risk', 'high risk count')
     COMMENT = 'Count of HIGH and CRITICAL anomaly transactions. Use for risk concentration analysis'
+)
+
+COMMENT = 'AML transaction monitoring - anomaly detection (amount, timing, velocity), compliance flags, and investigation prioritization.'
+
+AI_SQL_GENERATION 'For date-based queries, filter on BOOKING_DATE. For "recent" or "last N days" queries, use BOOKING_DATE >= DATEADD(DAY, -N, CURRENT_DATE()). When counting anomalies, use OVERALL_ANOMALY_CLASSIFICATION as the grouping dimension. For "high risk" transactions, filter OVERALL_ANOMALY_CLASSIFICATION IN (''CRITICAL'', ''HIGH'').'
+
+AI_QUESTION_CATEGORIZATION 'Reject questions about customer demographics, addresses, or account tier -- those belong to the Customer 360 semantic view. If asked about sanctions list matches or PEP status, explain that customer-level screening is in Customer 360; this view covers transaction-level anomalies.'
+
+AI_VERIFIED_QUERIES (
+  critical_anomalies_30d AS (
+    QUESTION 'Show me CRITICAL and HIGH anomaly transactions in the last 30 days'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT transactions.TRANSACTION_ID, transactions.CUSTOMER_ID, transactions.BOOKING_DATE, transactions.AMOUNT, transactions.CURRENCY, transactions.OVERALL_ANOMALY_CLASSIFICATION, transactions.COMPOSITE_ANOMALY_SCORE FROM __transactions AS transactions WHERE transactions.OVERALL_ANOMALY_CLASSIFICATION IN (''CRITICAL'', ''HIGH'') AND transactions.BOOKING_DATE >= DATEADD(DAY, -30, CURRENT_DATE()) ORDER BY transactions.COMPOSITE_ANOMALY_SCORE DESC NULLS LAST'
+  ),
+  customers_multiple_anomalies AS (
+    QUESTION 'Which customers have multiple HIGH or CRITICAL anomaly transactions?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT transactions.CUSTOMER_ID, COUNT(transactions.TRANSACTION_ID) AS ANOMALY_COUNT, SUM(transactions.AMOUNT) AS TOTAL_ANOMALOUS_AMOUNT FROM __transactions AS transactions WHERE transactions.OVERALL_ANOMALY_CLASSIFICATION IN (''CRITICAL'', ''HIGH'') GROUP BY transactions.CUSTOMER_ID HAVING COUNT(transactions.TRANSACTION_ID) > 1 ORDER BY ANOMALY_COUNT DESC'
+  ),
+  large_offhours AS (
+    QUESTION 'Show me large transactions with off-hours timing'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT transactions.TRANSACTION_ID, transactions.CUSTOMER_ID, transactions.BOOKING_DATE, transactions.AMOUNT, transactions.CURRENCY, transactions.TRANSACTION_HOUR, transactions.COMPOSITE_ANOMALY_SCORE FROM __transactions AS transactions WHERE transactions.IS_LARGE_TRANSACTION = TRUE AND transactions.IS_OFF_HOURS_TRANSACTION = TRUE ORDER BY transactions.AMOUNT DESC NULLS LAST'
+  ),
+  anomaly_count_by_classification AS (
+    QUESTION 'How many transactions per anomaly classification?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT transactions.OVERALL_ANOMALY_CLASSIFICATION, COUNT(transactions.TRANSACTION_ID) AS TRANSACTION_COUNT, SUM(transactions.AMOUNT) AS TOTAL_AMOUNT FROM __transactions AS transactions GROUP BY transactions.OVERALL_ANOMALY_CLASSIFICATION ORDER BY TRANSACTION_COUNT DESC'
+  ),
+  top_anomaly_customers AS (
+    QUESTION 'Top 10 customers by composite anomaly score'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT transactions.CUSTOMER_ID, MAX(transactions.COMPOSITE_ANOMALY_SCORE) AS MAX_ANOMALY_SCORE, COUNT(transactions.TRANSACTION_ID) AS TRANSACTION_COUNT FROM __transactions AS transactions GROUP BY transactions.CUSTOMER_ID ORDER BY MAX_ANOMALY_SCORE DESC NULLS LAST LIMIT 10'
+  )
 );
 
 GRANT SELECT ON TABLE PAYA_AGG_DT_TRANSACTION_ANOMALIES TO ROLE ACCOUNTADMIN;
@@ -1911,8 +2167,8 @@ facts (
   portfolio.CURRENT_CMD_VALUE_CHF as CURRENT_CMD_VALUE_CHF comment='Current commodity value | commodity market value',
   
   portfolio.TOTAL_PORTFOLIO_VALUE_CHF as TOTAL_PORTFOLIO_VALUE_CHF 
-    WITH SYNONYMS = ('AUM', 'assets under management', 'total assets', 'managed assets', 'portfolio value', 'total value')
-    comment='Total Assets Under Management. Primary metric for portfolio performance and client wealth ranking',
+    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value', 'portfolio worth', 'client portfolio')
+    comment='Per-portfolio total value in CHF. Use for individual portfolio lookups and rankings',
   portfolio.TOTAL_RETURN_CHF as TOTAL_RETURN_CHF comment='Total return | absolute return | portfolio gain | profit',
   portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE as TOTAL_PORTFOLIO_TWR_PERCENTAGE comment='Total TWR | time weighted return | portfolio TWR | portfolio return',
   portfolio.ANNUALIZED_PORTFOLIO_TWR as ANNUALIZED_PORTFOLIO_TWR comment='Annualized return | annual return | CAGR | compound growth',
@@ -1937,19 +2193,29 @@ facts (
 dimensions (
   portfolio.ACCOUNT_TYPE AS ACCOUNT_TYPE 
     WITH SYNONYMS = ('account type', 'portfolio type', 'investment type', 'account category')
-    COMMENT = 'Account type (CHECKING, SAVINGS, INVESTMENT, BUSINESS). Primary dimension for account segmentation',
+    COMMENT = 'Account type (CHECKING, SAVINGS, INVESTMENT, BUSINESS). Primary dimension for account segmentation'
+    SAMPLE_VALUES ('CHECKING', 'SAVINGS', 'INVESTMENT', 'BUSINESS')
+    IS_ENUM,
   portfolio.PERFORMANCE_CATEGORY AS PERFORMANCE_CATEGORY 
     WITH SYNONYMS = ('performance', 'performance rating', 'return category', 'performance level', 'excellent', 'good', 'neutral', 'poor', 'negative')
-    COMMENT = 'Performance category (EXCELLENT_PERFORMANCE, GOOD_PERFORMANCE, NEUTRAL_PERFORMANCE, POOR_PERFORMANCE, NEGATIVE_PERFORMANCE). Use for filtering high/low performers',
+    COMMENT = 'Performance category. Use for filtering high/low performers'
+    SAMPLE_VALUES ('EXCELLENT_PERFORMANCE', 'GOOD_PERFORMANCE', 'NEUTRAL_PERFORMANCE', 'POOR_PERFORMANCE', 'NEGATIVE_PERFORMANCE')
+    IS_ENUM,
   portfolio.RISK_CATEGORY AS RISK_CATEGORY 
     WITH SYNONYMS = ('risk level', 'risk rating', 'risk classification', 'high risk', 'moderate risk', 'low risk')
-    COMMENT = 'Risk category (HIGH, MODERATE, LOW). Use for risk-based grouping and analysis',
+    COMMENT = 'Risk category (HIGH, MODERATE, LOW). Use for risk-based grouping and analysis'
+    SAMPLE_VALUES ('HIGH', 'MODERATE', 'LOW')
+    IS_ENUM,
   
   portfolio.BASE_CURRENCY AS BASE_CURRENCY 
     WITH SYNONYMS = ('currency', 'reporting currency', 'portfolio currency')
     COMMENT = 'Base currency (CHF, USD, EUR, GBP). Use for currency-based analysis',
   portfolio.PORTFOLIO_TYPE AS PORTFOLIO_TYPE 
-    COMMENT = 'Portfolio type or investment style classification'
+    COMMENT = 'Portfolio type or investment style classification',
+  portfolio.IS_HIGH_PERFORMER LABELS = (FILTER) AS portfolio.PERFORMANCE_CATEGORY IN ('EXCELLENT_PERFORMANCE', 'GOOD_PERFORMANCE')
+    COMMENT = 'Filter to EXCELLENT and GOOD performance portfolios',
+  portfolio.IS_HIGH_RISK_PORTFOLIO LABELS = (FILTER) AS portfolio.RISK_CATEGORY = 'HIGH'
+    COMMENT = 'Filter to HIGH risk portfolios'
 )
 
 metrics (
@@ -1957,7 +2223,7 @@ metrics (
     WITH SYNONYMS = ('number of portfolios', 'portfolio count', 'how many portfolios', 'total portfolios', 'account count')
     COMMENT = 'Count of portfolios. Use for "how many portfolios" queries',
   portfolio.TOTAL_AUM AS SUM(portfolio.TOTAL_PORTFOLIO_VALUE_CHF)
-    WITH SYNONYMS = ('total AUM', 'total assets', 'sum of portfolio values', 'aggregate wealth')
+    WITH SYNONYMS = ('total AUM', 'total assets', 'sum of portfolio values', 'aggregate wealth', 'combined AUM')
     COMMENT = 'Sum of all portfolio values. Use for total AUM calculations and wealth aggregation',
   portfolio.AVG_PORTFOLIO_VALUE AS AVG(portfolio.TOTAL_PORTFOLIO_VALUE_CHF)
     WITH SYNONYMS = ('average AUM', 'mean portfolio value', 'typical portfolio size', 'avg wealth')
@@ -1971,6 +2237,48 @@ metrics (
   portfolio.HIGH_PERFORMERS AS COUNT(CASE WHEN portfolio.PERFORMANCE_CATEGORY IN ('EXCELLENT_PERFORMANCE', 'GOOD_PERFORMANCE') THEN 1 END)
     WITH SYNONYMS = ('excellent performers', 'good performers', 'top performers', 'high performance count')
     COMMENT = 'Count of portfolios with EXCELLENT or GOOD performance. Use for success rate analysis'
+)
+
+COMMENT = 'Wealth management - multi-asset portfolio performance (TWR, Sharpe, drawdown), asset allocation, and risk classification.'
+
+AI_SQL_GENERATION 'For AUM queries, use TOTAL_PORTFOLIO_VALUE_CHF. All monetary values are in CHF. For return calculations, use TOTAL_PORTFOLIO_TWR_PERCENTAGE (not ANNUALIZED unless the user asks for annualized). When asked about "top clients", join to customer context via CUSTOMER_ID and order by TOTAL_PORTFOLIO_VALUE_CHF DESC.'
+
+AI_QUESTION_CATEGORIZATION 'Reject questions about individual trade executions or order book details. If asked about customer names or contact info, explain that PII is in the Customer 360 view accessed via the customer context tool.'
+
+AI_VERIFIED_QUERIES (
+  top_portfolios_by_value AS (
+    QUESTION 'Show me top 10 portfolios by total value'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT portfolio.ACCOUNT_ID, portfolio.CUSTOMER_ID, portfolio.TOTAL_PORTFOLIO_VALUE_CHF, portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE, portfolio.SHARPE_RATIO, portfolio.PERFORMANCE_CATEGORY, portfolio.RISK_CATEGORY FROM __portfolio AS portfolio ORDER BY portfolio.TOTAL_PORTFOLIO_VALUE_CHF DESC NULLS LAST LIMIT 10'
+  ),
+  portfolios_by_performance AS (
+    QUESTION 'How many portfolios per performance category?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT portfolio.PERFORMANCE_CATEGORY, COUNT(portfolio.ACCOUNT_ID) AS PORTFOLIO_COUNT, AVG(portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE) AS AVG_RETURN FROM __portfolio AS portfolio GROUP BY portfolio.PERFORMANCE_CATEGORY ORDER BY PORTFOLIO_COUNT DESC'
+  ),
+  high_risk_poor_performance AS (
+    QUESTION 'Find portfolios with HIGH risk and POOR or NEGATIVE performance'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT portfolio.ACCOUNT_ID, portfolio.CUSTOMER_ID, portfolio.TOTAL_PORTFOLIO_VALUE_CHF, portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE, portfolio.MAX_DRAWDOWN_PERCENTAGE, portfolio.RISK_CATEGORY, portfolio.PERFORMANCE_CATEGORY FROM __portfolio AS portfolio WHERE portfolio.RISK_CATEGORY = ''HIGH'' AND portfolio.PERFORMANCE_CATEGORY IN (''POOR_PERFORMANCE'', ''NEGATIVE_PERFORMANCE'') ORDER BY portfolio.TOTAL_PORTFOLIO_VALUE_CHF DESC NULLS LAST'
+  ),
+  avg_return_by_account_type AS (
+    QUESTION 'Average return by account type'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT portfolio.ACCOUNT_TYPE, COUNT(portfolio.ACCOUNT_ID) AS PORTFOLIO_COUNT, AVG(portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE) AS AVG_RETURN, AVG(portfolio.SHARPE_RATIO) AS AVG_SHARPE FROM __portfolio AS portfolio GROUP BY portfolio.ACCOUNT_TYPE ORDER BY AVG_RETURN DESC NULLS LAST'
+  ),
+  total_aum AS (
+    QUESTION 'What is our total AUM across all portfolios?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT SUM(portfolio.TOTAL_PORTFOLIO_VALUE_CHF) AS TOTAL_AUM, COUNT(portfolio.ACCOUNT_ID) AS PORTFOLIO_COUNT, AVG(portfolio.TOTAL_PORTFOLIO_VALUE_CHF) AS AVG_PORTFOLIO_VALUE FROM __portfolio AS portfolio'
+  )
 );
 
 CREATE OR REPLACE VIEW REPA_SV_WEALTH_MANAGEMENT_DETAILED
@@ -2125,14 +2433,6 @@ facts (
     WITH SYNONYMS = ('LCR', 'liquidity ratio', 'coverage ratio', 'LCR percentage', 'liquidity coverage ratio')
     comment='Liquidity Coverage Ratio percentage. Primary liquidity metric. Must be >= 100% for FINMA compliance',
   
-  lcr_data.LCR_STATUS as LCR_STATUS
-    WITH SYNONYMS = ('compliance status', 'regulatory status', 'FINMA status', 'status')
-    comment='LCR compliance status | pass/fail status | compliance level',
-  
-  lcr_data.SEVERITY as SEVERITY
-    WITH SYNONYMS = ('status color', 'alert level', 'traffic light')
-    comment='Alert severity | RED/YELLOW/GREEN status indicator',
-  
   lcr_data.HQLA_TOTAL as HQLA_TOTAL
     WITH SYNONYMS = ('HQLA', 'liquid assets', 'high quality assets', 'total HQLA', 'numerator', 'total liquid assets')
     comment='Total High-Quality Liquid Assets in CHF. LCR numerator. Assets available for 30-day stress scenario',
@@ -2200,6 +2500,64 @@ facts (
   lcr_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
     WITH SYNONYMS = ('calculation time', 'data timestamp', 'calculated at')
     comment='When LCR was last calculated'
+)
+
+dimensions (
+  lcr_data.LCR_STATUS AS LCR_STATUS
+    WITH SYNONYMS = ('compliance status', 'regulatory status', 'FINMA status', 'status')
+    COMMENT = 'LCR compliance status: PASS (>=100%), WARNING (95-100%), FAIL (<95%), N/A'
+    SAMPLE_VALUES ('PASS', 'WARNING', 'FAIL', 'N/A')
+    IS_ENUM,
+  lcr_data.SEVERITY AS SEVERITY
+    WITH SYNONYMS = ('alert level', 'traffic light', 'status color')
+    COMMENT = 'Alert severity: GREEN (>=100%), YELLOW (95-100%), RED (<95%), GRAY (N/A)'
+    SAMPLE_VALUES ('GREEN', 'YELLOW', 'RED', 'GRAY')
+    IS_ENUM
+)
+
+metrics (
+  lcr_data.LATEST_LCR_RATIO AS MAX(lcr_data.LCR_RATIO)
+    WITH SYNONYMS = ('current LCR', 'LCR ratio', 'liquidity ratio')
+    COMMENT = 'Most recent LCR ratio percentage',
+  lcr_data.LATEST_HQLA AS MAX(lcr_data.HQLA_TOTAL)
+    WITH SYNONYMS = ('current HQLA', 'total liquid assets')
+    COMMENT = 'Most recent total HQLA in CHF',
+  lcr_data.LATEST_OUTFLOW AS MAX(lcr_data.OUTFLOW_TOTAL)
+    WITH SYNONYMS = ('current outflows', 'stressed outflows')
+    COMMENT = 'Most recent total stressed outflows in CHF'
+)
+
+COMMENT = 'Liquidity Coverage Ratio (LCR) per FINMA Circular 2015/2 - HQLA stock, stressed outflows, compliance status, and 40% cap monitoring.'
+
+AI_SQL_GENERATION 'This table typically has one row per date. For "current" or "today" queries, filter to the most recent AS_OF_DATE using: WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM __lcr_data). For trend queries over multiple dates, do not apply the MAX filter. The LCR must be >= 100% for FINMA compliance. Internal target is 110%.'
+
+AI_VERIFIED_QUERIES (
+  current_lcr_ratio AS (
+    QUESTION 'What is our current LCR ratio?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.LCR_RATIO, lcr_data.LCR_STATUS, lcr_data.HQLA_TOTAL, lcr_data.OUTFLOW_TOTAL, lcr_data.LCR_BUFFER_CHF FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
+  ),
+  hqla_by_level AS (
+    QUESTION 'Show me HQLA breakdown by L1, L2A, L2B'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.L1_TOTAL, lcr_data.L2A_TOTAL, lcr_data.L2B_TOTAL, lcr_data.L2_CAPPED, lcr_data.HQLA_TOTAL, lcr_data.CAP_APPLIED FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
+  ),
+  liquidity_buffer AS (
+    QUESTION 'What is our liquidity buffer in CHF?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.LCR_BUFFER_CHF, lcr_data.LCR_BUFFER_PCT, lcr_data.HQLA_TOTAL, lcr_data.OUTFLOW_TOTAL FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
+  ),
+  is_cap_applied AS (
+    QUESTION 'Is the 40% cap on Level 2 assets applied today?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.CAP_APPLIED, lcr_data.L2_UNCAPPED, lcr_data.L2_CAPPED, lcr_data.DISCARDED_L2, lcr_data.L1_TOTAL FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
+  )
 );
 
 SELECT 'Created LCRS_SV_LCR_CURRENT semantic view' AS status;
@@ -2382,18 +2740,6 @@ facts (
     WITH SYNONYMS = ('reporting date', 'calculation date', 'snapshot date', 'data date', 'as of date')
     comment='Date of portfolio snapshot | reporting date',
   
-  portfolio_data.PRODUCT_TYPE as PRODUCT_TYPE
-    WITH SYNONYMS = ('product', 'loan type', 'loan product', 'product category')
-    comment='Product type: MORTGAGE, PERSONAL_LOAN, HOME_EQUITY',
-  
-  portfolio_data.COUNTRY as COUNTRY
-    WITH SYNONYMS = ('country code', 'jurisdiction', 'regime', 'market')
-    comment='Country code: CHE (Switzerland), GBR (UK), DEU (Germany), PRT (Portugal)',
-  
-  portfolio_data.APPLICATION_STATUS as APPLICATION_STATUS
-    WITH SYNONYMS = ('status', 'loan status', 'application state', 'approval status')
-    comment='Application status: APPROVED, DECLINED, UNDER_REVIEW, DISBURSED',
-  
   portfolio_data.LOAN_COUNT as LOAN_COUNT
     WITH SYNONYMS = ('count', 'number of loans', 'loan volume', 'applications count', 'total loans')
     comment='Number of loan applications in this category',
@@ -2421,6 +2767,63 @@ facts (
   portfolio_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
     WITH SYNONYMS = ('calculation time', 'data timestamp', 'calculated at', 'last updated')
     comment='When this portfolio aggregation was last calculated'
+)
+
+dimensions (
+  portfolio_data.PRODUCT_TYPE AS PRODUCT_TYPE
+    WITH SYNONYMS = ('product', 'loan type', 'loan product', 'product category')
+    COMMENT = 'Loan product type'
+    SAMPLE_VALUES ('MORTGAGE')
+    IS_ENUM,
+  portfolio_data.COUNTRY AS COUNTRY
+    WITH SYNONYMS = ('country code', 'jurisdiction', 'regime', 'market')
+    COMMENT = 'Country: CHE (Switzerland), GBR (UK), DEU (Germany), PRT (Portugal)'
+    SAMPLE_VALUES ('CHE', 'GBR', 'DEU', 'PRT')
+    IS_ENUM,
+  portfolio_data.APPLICATION_STATUS AS APPLICATION_STATUS
+    WITH SYNONYMS = ('status', 'loan status', 'application state', 'approval status')
+    COMMENT = 'Application status'
+    SAMPLE_VALUES ('APPROVED', 'DECLINED', 'UNDER_REVIEW', 'DISBURSED', 'SUBMITTED', 'DRAFT')
+    IS_ENUM
+)
+
+metrics (
+  portfolio_data.TOTAL_LOANS AS SUM(portfolio_data.LOAN_COUNT)
+    WITH SYNONYMS = ('total applications', 'total loan count', 'application volume')
+    COMMENT = 'Total number of loan applications',
+  portfolio_data.TOTAL_EXPOSURE AS SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT)
+    WITH SYNONYMS = ('total loan exposure', 'aggregate exposure', 'total lending')
+    COMMENT = 'Total requested loan amount in CHF',
+  portfolio_data.AVG_LOAN AS AVG(portfolio_data.AVG_REQUESTED_AMOUNT)
+    WITH SYNONYMS = ('average loan amount', 'mean loan size')
+    COMMENT = 'Average requested loan amount in CHF'
+)
+
+COMMENT = 'Loan portfolio summary - application volumes, exposure by product and country, approval status tracking.'
+
+AI_SQL_GENERATION 'For \"total exposure\" or \"total loan amount\", use SUM(TOTAL_REQUESTED_AMOUNT). For approval rates, calculate counts where APPLICATION_STATUS = ''APPROVED'' divided by total count. For \"current\" portfolio, use MAX(AS_OF_DATE). Country codes: CHE=Switzerland, GBR=United Kingdom, DEU=Germany, PRT=Portugal.'
+
+AI_VERIFIED_QUERIES (
+  total_loan_exposure AS (
+    QUESTION 'What is our total loan exposure?'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT) AS TOTAL_EXPOSURE, SUM(portfolio_data.LOAN_COUNT) AS TOTAL_LOANS, AVG(portfolio_data.AVG_REQUESTED_AMOUNT) AS AVG_LOAN_AMOUNT FROM __portfolio_data AS portfolio_data WHERE portfolio_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __portfolio_data AS sub)'
+  ),
+  portfolio_by_country AS (
+    QUESTION 'Show me loan portfolio breakdown by country'
+    VERIFIED_AT 1726185600
+    ONBOARDING_QUESTION TRUE
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT portfolio_data.COUNTRY, SUM(portfolio_data.LOAN_COUNT) AS TOTAL_LOANS, SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT) AS TOTAL_EXPOSURE, AVG(portfolio_data.AVG_REQUESTED_AMOUNT) AS AVG_LOAN FROM __portfolio_data AS portfolio_data WHERE portfolio_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __portfolio_data AS sub) GROUP BY portfolio_data.COUNTRY ORDER BY TOTAL_EXPOSURE DESC NULLS LAST'
+  ),
+  approved_vs_declined AS (
+    QUESTION 'How many approved vs declined applications?'
+    VERIFIED_AT 1726185600
+    VERIFIED_BY '(STEWARD = mdaeppen)'
+    SQL 'SELECT portfolio_data.APPLICATION_STATUS, SUM(portfolio_data.LOAN_COUNT) AS LOAN_COUNT, SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT) AS TOTAL_AMOUNT FROM __portfolio_data AS portfolio_data WHERE portfolio_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __portfolio_data AS sub) AND portfolio_data.APPLICATION_STATUS IN (''APPROVED'', ''DECLINED'') GROUP BY portfolio_data.APPLICATION_STATUS ORDER BY LOAN_COUNT DESC'
+  )
 );
 
 SELECT 'Created LOAS_SV_PORTFOLIO_CURRENT semantic view' AS status;
@@ -4381,3 +4784,384 @@ SHOW AGENTS IN SCHEMA {{ db }}.{{ rep_agg }};
 SHOW SNOWFLAKE INTELLIGENCES;
 
 SELECT 'LOAN_PORTFOLIO_AGENT created successfully! Retail Loans  and  Mortgages monitoring agent ready.' AS STATUS;
+
+-- ============================================================
+-- HR EMPLOYEE AGENT
+-- ============================================================
+
+USE DATABASE {{ db }};
+USE SCHEMA {{ crm_agg }};
+
+CREATE OR REPLACE AGENT HR_EMPLOYEE_AGENT
+  COMMENT = 'HR Employee Intelligence Agent - workforce headcount, org structure, hierarchy, tenure, offices, regions, performance ratings, languages, certifications'
+  PROFILE = '{"display_name": "HR Employee", "avatar": "SparklesAgentIcon", "color": "#7B1FA2"}'
+  FROM SPECIFICATION
+  $$
+  models:
+    orchestration: auto
+
+  orchestration: {}
+
+  instructions:
+    sample_questions:
+      - question: "How many employees do we have?"
+      - question: "Show me headcount by region"
+      - question: "What is our org chart structure?"
+      - question: "Which offices have the most staff?"
+      - question: "What languages do our employees speak?"
+      - question: "Average tenure of our team leaders?"
+      - question: "List all employees in Germany"
+
+    system: |
+      You are the HR Employee Intelligence Agent for Synthetic Bank. You answer questions about the workforce: headcount, organizational structure, hierarchy, tenure, office locations, regions, performance ratings, languages spoken, and professional certifications.
+
+      DATA SCOPE:
+      - You have data on ALL bank employees: Client Advisors, Team Leaders, and Super Team Leaders
+      - Employees span 12 countries across multiple European regions
+      - The data includes names, hire dates, offices, performance ratings, languages, and certifications
+      - Manager relationships enable org chart and hierarchy queries
+
+      RESPONSE GUIDELINES:
+      - Always provide specific numbers and breakdowns
+      - When asked about "employees" or "staff", include ALL position levels unless a specific level is requested
+      - For org chart questions, show the hierarchy: Super Team Leader -> Team Leaders -> Client Advisors
+      - Include country and region context for geographic questions
+      - Format headcount data in clear tables when multiple groupings are involved
+
+  tools:
+    - tool_spec:
+        type: cortex_analyst_text_to_sql
+        name: HR_Employee_Data
+        description: |
+          HR Employee Intelligence - workforce data covering all bank employees across 3 hierarchy levels.
+          Answers: headcount (total, by country, region, office, position level), org chart and reporting structure,
+          tenure analysis (hire dates, years of service), performance ratings, languages spoken, certifications,
+          office and geographic distribution.
+          Position Levels: SUPER_TEAM_LEADER, TEAM_LEADER, CLIENT_ADVISOR.
+
+  tool_resources:
+    HR_Employee_Data:
+      semantic_view: {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE
+      execution_environment:
+        type: warehouse
+        warehouse: MD_TEST_WH
+        query_timeout: 30
+  $$;
+
+GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO ROLE ACCOUNTADMIN;
+GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO ROLE PUBLIC;
+
+ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT 
+  ADD AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT;
+
+SELECT 'HR_EMPLOYEE_AGENT created successfully! HR workforce intelligence agent ready.' AS STATUS;
+
+-- ============================================================
+-- UBER AGENT (Orchestrator across all sub-agents)
+-- ============================================================
+
+USE DATABASE {{ db }};
+USE SCHEMA {{ rep_agg }};
+
+CREATE OR REPLACE AGENT UBER_AGENT
+  COMMENT = 'Synthetic Bank Uber Agent - routes requests across Loan Portfolio, Liquidity Risk, Wealth Advisor, CRM Customer 360, and HR Employee sub-agents with smart domain-based routing.'
+  PROFILE = '{"display_name": "Uber Agent", "avatar": "SparklesAgentIcon", "color": "#6A1B9A"}'
+  FROM SPECIFICATION
+  $$
+  models:
+    orchestration: auto
+
+  orchestration:
+    budget:
+      seconds: 60
+      tokens: 32000
+    tool_not_accessible: accept
+
+  instructions:
+    sample_questions:
+      - question: "What is our total loan exposure across all products?"
+      - question: "What is the current LCR ratio and are we FINMA compliant?"
+      - question: "Show me my top 10 wealth clients by AUM"
+      - question: "Which customers are at high churn risk?"
+      - question: "How many employees do we have?"
+      - question: "Show me headcount by region or office"
+      - question: "How many mortgage applications are under review?"
+      - question: "Show me HQLA breakdown by level"
+      - question: "Which advisors have the highest client retention?"
+      - question: "Are there any loans with sanctions or PEP hits?"
+
+    response: |
+      Respond in the same language the user writes in. Structure responses clearly:
+      1. Direct answer with key metrics
+      2. Analysis and context (trends, comparisons, concentrations)
+      3. Cross-domain insights when relevant (e.g., flag if a high-LTV borrower also has compliance issues)
+
+      Use appropriate currency formatting. When presenting risk metrics, include the regulatory context (FINMA, FCA, BaFin, Basel III). If data suggests potential compliance concerns, note them proactively.
+
+    orchestration: |
+      Route every request to exactly one specialist agent first. Use this decision tree:
+
+      1. **loan_portfolio** - Retail lending and mortgage origination
+         Keywords: loan, mortgage, LTV, loan-to-value, application funnel, approval rate, decline rate, affordability, DTI, DSTI, sanctions screening, PEP screening (in loan context), compliance hold, collateral, origination, personal loan, loan exposure, application status
+
+      2. **liquidity_risk** - Treasury, liquidity, and LCR
+         Keywords: LCR, liquidity coverage ratio, HQLA, high-quality liquid assets, deposit outflows, run-off rate, FINMA liquidity, Basel III liquidity, 40% cap, Level 1/2A/2B assets, SNB reporting, liquidity buffer, treasury, funding stability, canton bonds, government bonds (in HQLA context), liquidity alerts
+
+      3. **wealth_advisor** - Wealth management, portfolio performance, credit risk IRB, equity trading
+         Keywords: portfolio performance, AUM, returns, Sharpe ratio, Sortino, drawdown, alpha, beta, asset allocation, IRB, probability of default, PD, LGD, EAD, risk-weighted assets, RWA, equity positions, P&L, trading, ISIN, investment account, wealth, private banking, rebalancing, client tier (PLATINUM/GOLD/PREMIUM in wealth context)
+
+      4. **crm_customer_360** - Customer profiles, demographics, lifecycle, advisor-client relationships
+         Keywords: customer 360, customer profile, demographics, contact details, address, onboarding, lifecycle stage, churn probability, engagement score, dormant customers, at-risk customers, customer segmentation, advisor performance, advisor capacity, advisor AUM, client retention, PEP/sanctions (in customer screening context), fraud flags, anomaly detection, KYC
+
+      5. **hr_employee** - HR, workforce, org structure, employee master data
+         Keywords: employee, employees, staff, headcount, HR, workforce, team size, hire date, tenure, team leader, manager, employment status, office, office location, region (in staff context), org chart, hierarchy, certifications, languages, position level, super team leader, how many people, workforce size, team structure, reporting structure
+
+      **Overlap rules:**
+      - "Customer risk + loan" -> loan_portfolio first, then crm_customer_360 if needed
+      - "Customer risk + portfolio" -> wealth_advisor first, then crm_customer_360 if needed
+      - "Advisor + portfolio" -> wealth_advisor (has advisor relationships built in)
+      - "Advisor performance + client counts" -> crm_customer_360 (has detailed advisor metrics)
+      - "Employee + advisor capacity" -> hr_employee first, then crm_customer_360 if needed
+      - "Employee + client portfolio" -> crm_customer_360 (has advisor-client relationships)
+      - "Regulatory compliance + loans" -> loan_portfolio
+      - "Regulatory compliance + liquidity" -> liquidity_risk
+
+      If the question is ambiguous or spans 3+ domains, ask the user to clarify which area they are most interested in.
+
+    system: |
+      You are the Synthetic Bank Uber Agent - a senior banking intelligence coordinator. You route each user request to the most appropriate specialist agent based on the domain. When a question spans multiple domains, call the primary domain first, then supplement with others. Always provide context-rich answers with regulatory awareness.
+
+      CRITICAL RULE: Never refuse a question by saying you lack data without first trying the most relevant sub-agent. If the closest available data is a partial match, query it and explain what data scope is covered. For example, if asked about "employees", route to hr_employee which has complete workforce data. If asked about "advisors and their clients", route to crm_customer_360 which has advisor-client relationships.
+
+  tools:
+    - tool_spec:
+        type: web_search
+        name: Web Search
+    - tool_spec:
+        type: code_execution
+        name: code_execution
+    - tool_spec:
+        type: agent_toolset
+        name: loan_portfolio
+    - tool_spec:
+        type: agent_toolset
+        name: liquidity_risk
+    - tool_spec:
+        type: agent_toolset
+        name: wealth_advisor
+    - tool_spec:
+        type: agent_toolset
+        name: crm_customer_360
+    - tool_spec:
+        type: agent_toolset
+        name: hr_employee
+
+  tool_resources:
+    loan_portfolio:
+      agent_name: {{ db }}.{{ rep_agg }}.LOAN_PORTFOLIO_AGENT
+    liquidity_risk:
+      agent_name: {{ db }}.{{ rep_agg }}.LIQUIDITY_RISK_AGENT
+    wealth_advisor:
+      agent_name: {{ db }}.{{ rep_agg }}.WEALTH_ADVISOR_AGENT
+    crm_customer_360:
+      agent_name: {{ db }}.{{ crm_agg }}.CRM_CUSTOMER_360
+    hr_employee:
+      agent_name: {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT
+  $$;
+
+GRANT USAGE ON AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT TO ROLE ACCOUNTADMIN;
+GRANT USAGE ON AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT TO ROLE PUBLIC;
+
+ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT 
+  ADD AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT;
+
+SELECT 'UBER_AGENT created successfully! Orchestrator agent with 7 sub-agents ready.' AS STATUS;
+
+-- MASTER_AGENT: managed separately in post_deploy_master-agent.sql
+-- Deploy via: ./deploy.sh DEV (or PROD)
+
+USE DATABASE {{ db }};
+USE SCHEMA AAA_DCM;
+
+-- ============================================================
+-- DATA QUALITY GATES (built-in Data Metric Functions)
+-- Using SNOWFLAKE.CORE DMFs: ROW_COUNT, NULL_PERCENT, FRESHNESS
+-- ============================================================
+
+-- Product 1: Customer PII Vault
+ALTER TABLE {{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
+
+ALTER TABLE {{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.NULL_PERCENT ON (FULL_NAME);
+
+ALTER TABLE {{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
+
+-- Product 2: Employee PII Vault
+ALTER TABLE {{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
+
+ALTER TABLE {{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.NULL_PERCENT ON (FULL_NAME);
+
+-- Product 3: Customer 360 & KYC
+ALTER TABLE {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
+
+ALTER TABLE {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.FRESHNESS ON ();
+
+ALTER TABLE {{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS
+    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
+
+SELECT 'Data quality gates attached to Products 1-3.' AS STATUS;
+
+-- ============================================================
+-- DATA PRODUCT SHARES
+-- ============================================================
+
+-- Product 1: Customer PII Vault (RESTRICTED)
+CREATE SHARE IF NOT EXISTS SH_CUSTOMER_PII_VAULT
+    COMMENT = 'Restricted: Customer PII vault with column-level masking policies. Only ACCOUNTADMIN/COMPLIANCE see unmasked values.';
+
+GRANT USAGE ON DATABASE {{ db }} TO SHARE SH_CUSTOMER_PII_VAULT;
+GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE SH_CUSTOMER_PII_VAULT;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII TO SHARE SH_CUSTOMER_PII_VAULT;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII TO SHARE SH_CUSTOMER_PII_VAULT;
+
+SELECT 'Share SH_CUSTOMER_PII_VAULT created.' AS STATUS;
+
+-- Product 2: Employee PII Vault (RESTRICTED)
+CREATE SHARE IF NOT EXISTS SH_EMPLOYEE_PII_VAULT
+    COMMENT = 'Restricted: Employee PII vault with column-level masking policies. Only ACCOUNTADMIN/COMPLIANCE see unmasked values.';
+
+GRANT USAGE ON DATABASE {{ db }} TO SHARE SH_EMPLOYEE_PII_VAULT;
+GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE SH_EMPLOYEE_PII_VAULT;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII TO SHARE SH_EMPLOYEE_PII_VAULT;
+
+SELECT 'Share SH_EMPLOYEE_PII_VAULT created.' AS STATUS;
+
+-- Product 3: Customer 360 & KYC (AI-READY)
+CREATE SHARE IF NOT EXISTS SH_CUSTOMER_360_KYC
+    COMMENT = 'Customer 360 & KYC data product - AI-ready with semantic views and Cortex Agents. Comprehensive customer profiles, AML/KYC screening, advisor performance.';
+
+ALTER SHARE SH_CUSTOMER_360_KYC SET SECURE_OBJECTS_ONLY = FALSE;
+
+GRANT USAGE ON DATABASE {{ db }} TO SHARE SH_CUSTOMER_360_KYC;
+GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Customer 360 core
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_HISTORY TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Address metadata (no PII)
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_HISTORY TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Accounts
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Risk & compliance views (excluding cross-database sanctions views)
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_RISK_PROFILE TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Employee / advisor analytics
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_PORTFOLIO_BY_ADVISOR TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_TEAM_LEADER_DASHBOARD TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISORS TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_TEAM_DASHBOARD_ENRICHED TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_EMPLOYEE_HIERARCHY TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ORGANIZATIONAL_CHART TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_CURRENT_ASSIGNMENTS TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ASSIGNMENT_HISTORY TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_WORKLOAD_DISTRIBUTION TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Semantic views (AI-ready)
+GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.CRMA_SV_CUSTOMER_360 TO SHARE SH_CUSTOMER_360_KYC;
+GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.CRMA_SV_CUSTOMER_360 TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_EMPLOYEE_ADVISOR TO SHARE SH_CUSTOMER_360_KYC;
+GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_EMPLOYEE_ADVISOR TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE TO SHARE SH_CUSTOMER_360_KYC;
+GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE TO SHARE SH_CUSTOMER_360_KYC;
+
+-- Cortex Agents (AI-ready)
+GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.CRM_Customer_360 TO SHARE SH_CUSTOMER_360_KYC;
+GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO SHARE SH_CUSTOMER_360_KYC;
+
+SELECT 'Share SH_CUSTOMER_360_KYC created with AI objects.' AS STATUS;
+
+-- ============================================================
+-- ORGANIZATION LISTINGS
+-- ============================================================
+
+-- Product 1: Customer PII Vault
+CREATE ORGANIZATION LISTING IF NOT EXISTS LS_CUSTOMER_PII_VAULT
+SHARE SH_CUSTOMER_PII_VAULT AS
+$$
+title: "Customer PII Vault"
+subtitle: "Restricted personal data with column-level masking and GDPR support"
+description: "Restricted PII vault containing customer personal data protected by column-level masking policies. Only ACCOUNTADMIN and COMPLIANCE roles see unmasked values; all other roles receive masked output. Implements the Late Enrichment pattern: downstream analytics carry only CUSTOMER_ID, with PII joined back at display time. Includes customer addresses in a separate address PII table. All columns tagged with SENSITIVITY_LEVEL = restricted. Supports GDPR right-to-erasure. Quality gates: ROW_COUNT and NULL_PERCENT monitored via Snowflake Data Metric Functions."
+organization_profile: "INTERNAL"
+organization_targets:
+  discovery:
+    - all_internal_accounts: true
+  access:
+    - all_internal_accounts: true
+support_contact: "marcel.daeppen@snowflake.com"
+approver_contact: "marcel.daeppen@snowflake.com"
+locations:
+  access_regions:
+    - name: "PUBLIC.AWS_EU_CENTRAL_1"
+$$;
+
+SELECT 'Listing LS_CUSTOMER_PII_VAULT published.' AS STATUS;
+
+-- Product 2: Employee PII Vault
+CREATE ORGANIZATION LISTING IF NOT EXISTS LS_EMPLOYEE_PII_VAULT
+SHARE SH_EMPLOYEE_PII_VAULT AS
+$$
+title: "Employee PII Vault"
+subtitle: "Restricted employee personal data with column-level masking"
+description: "Restricted employee PII vault containing personal data for all bank staff including client advisors, team leaders, and super team leaders. Protected by column-level masking policies (only ACCOUNTADMIN and COMPLIANCE roles see unmasked values). All columns tagged with SENSITIVITY_LEVEL = restricted. Implements the Late Enrichment pattern for HR analytics and advisor performance reporting. Downstream tables carry only EMPLOYEE_ID; this vault is joined at display time for name resolution. Quality gates: ROW_COUNT and NULL_PERCENT monitored via Snowflake Data Metric Functions."
+organization_profile: "INTERNAL"
+organization_targets:
+  discovery:
+    - all_internal_accounts: true
+  access:
+    - all_internal_accounts: true
+support_contact: "marcel.daeppen@snowflake.com"
+approver_contact: "marcel.daeppen@snowflake.com"
+locations:
+  access_regions:
+    - name: "PUBLIC.AWS_EU_CENTRAL_1"
+$$;
+
+SELECT 'Listing LS_EMPLOYEE_PII_VAULT published.' AS STATUS;
+
+-- Product 3: Customer 360 & KYC (AI-Ready)
+CREATE ORGANIZATION LISTING IF NOT EXISTS LS_CUSTOMER_360_KYC
+SHARE SH_CUSTOMER_360_KYC AS
+$$
+title: "Customer 360 & KYC"
+subtitle: "AI-ready customer profiles with AML/KYC screening and advisor analytics"
+description: "Centralized customer master data product with comprehensive 360-degree profiles, SCD Type 2 history tracking, and Late Enrichment PII pattern. Core capabilities: Customer 360 profiles with 70+ attributes (identity, accounts, risk, compliance); PEP (Politically Exposed Persons) checks with confidence scoring; lifecycle engagement scoring, churn prediction, and vulnerability flags; consolidated risk profiles (NO_RISK through CRITICAL); account master data with multi-currency support; SCD Type 2 history for customer attributes and addresses. Advisor analytics: client advisor performance metrics (AUM, client counts, retention), team leader dashboards, organizational hierarchy, and workload distribution. AI-ready: 3 Semantic Views (CRMA_SV_CUSTOMER_360, EMPA_SV_EMPLOYEE_ADVISOR, EMPA_SV_HR_EMPLOYEE) for natural language querying via Cortex Analyst; 2 Cortex Agents (CRM_Customer_360, HR_EMPLOYEE_AGENT) for conversational data exploration; 200+ synonym mappings for business-friendly queries. Quality gates: ROW_COUNT, FRESHNESS, and NULL_PERCENT monitored via Snowflake Data Metric Functions. Data freshness: hourly refresh via dynamic tables (60-minute target lag). 25+ objects included across customer profiles, risk views, advisor performance, and organizational structure."
+organization_profile: "INTERNAL"
+organization_targets:
+  discovery:
+    - all_internal_accounts: true
+  access:
+    - all_internal_accounts: true
+support_contact: "marcel.daeppen@snowflake.com"
+approver_contact: "marcel.daeppen@snowflake.com"
+locations:
+  access_regions:
+    - name: "PUBLIC.AWS_EU_CENTRAL_1"
+$$;
+
+SELECT 'Listing LS_CUSTOMER_360_KYC published with AI-ready tag.' AS STATUS;

@@ -21,6 +21,9 @@ snow sql -c <my-sf-connection> -f operation/setup_listings.sql
 
 ./data_generator.sh 5000 --clean
 ./upload-data.sh --CONNECTION_NAME=<my-sf-connection>
+
+# Deploy (DCM + post-deploy hooks):
+./deploy.sh DEV   # or PROD
 ```
 
 ---
@@ -31,7 +34,9 @@ snow sql -c <my-sf-connection> -f operation/setup_listings.sql
 SyntheticRetailBank/
 ├── manifest.yml                    DCM manifest (v2, targets: DEV + PROD)
 ├── pre_deploy.sql                  DB/schema/project creation
-├── post_deploy.sql                 Streams, file formats, procedures, agents, semantic views
+├── post_deploy.sql                 Streams, file formats, procedures, sub-agents, semantic views
+├── post_deploy_master-agent.sql    Master agent: hybrid router, caching, observability, regression
+├── deploy.sh                       Deployment script (DCM + post-deploy hooks)
 ├── github-workflow-verification_v1.sh  Workflow SHA256 integrity check
 ├── .github/workflows/
 │   └── update-local-repo.yml       CI/CD: DCM deploy, SonarQube, clone/test/drop, release
@@ -53,6 +58,7 @@ SyntheticRetailBank/
 │   └── tests.sqltest               59 SQL validation tests
 ├── notebooks/                      9 interactive Snowflake notebooks
 ├── the_bank_app/                   16-tab Streamlit banking dashboard
+├── master-agent/                   Master agent docs + customer reference code
 ├── business_requirements/          Business requirement documents
 ├── generators/                     21 Python data generator modules
 ├── generated_data/                 Output CSV/XML files
@@ -79,7 +85,8 @@ SyntheticRetailBank/
 | Analytics | 71 dynamic tables | DEFINE DYNAMIC TABLE |
 | Reporting | 28 views | DEFINE VIEW |
 | Access | 9 grants | GRANT statements |
-| Post-deploy | 17 streams, 14 file formats, 7 procedures, 15 semantic views, 6 agents | CREATE (unsupported by DCM) |
+| Post-deploy | 17 streams, 14 file formats, 7 procedures, 15 semantic views, 7 sub-agents | CREATE (unsupported by DCM) |
+| Master Agent | 10 UDFs, 4 tables, 4 procedures, 5 views, 1 agent | `post_deploy_master-agent.sql` |
 
 ---
 
@@ -165,6 +172,9 @@ Triggered on push to `main` or manual dispatch:
 | Wealth Advisor | Reporting | REPA_SV_WEALTH_MANAGEMENT |
 | Liquidity Risk | Reporting | LCRS_SV_LCR_CURRENT, LCRS_SV_HQLA_BREAKDOWN, LCRS_SV_OUTFLOW_BREAKDOWN, LCRS_SV_TREND_90DAY, LCRS_SV_ALERTS_ACTIVE |
 | Loan Portfolio | Reporting | LOAS_SV_PORTFOLIO_CURRENT, LOAS_SV_LTV_DISTRIBUTION, LOAS_SV_APPLICATION_FUNNEL, LOAS_SV_AFFORDABILITY_ANALYSIS, LOAS_SV_COMPLIANCE_SCREENING |
+| HR Employee | CRM | EMPA_SV_HR_EMPLOYEE |
+| **Uber Agent** (orchestrator) | Cross-domain | Routes to all 7 specialist sub-agents |
+| **Master Agent** (enhanced orchestrator) | Cross-domain | Hybrid router (regex + AI_CLASSIFY), response caching, golden regression. See [master-agent/README.md](master-agent/README.md) |
 
 ---
 
@@ -202,3 +212,4 @@ Triggered on push to `main` or manual dispatch:
 | `Connection not found` | `snow connection add <connection>` |
 | `Stream has no data` | `./upload-data.sh --CONNECTION_NAME=<connection>` |
 | AGG/REP tables empty after upload | Run `operation/execute_all_tasks_and_refresh_dts.sql` |
+| Deploy master agent only | `snow sql -f post_deploy_master-agent.sql --variable "db='AAA_DEV_SYNTHETIC_BANK'" --variable "rep_agg='REP_AGG_V001'" --variable "crm_agg='CRM_AGG_V001'" --variable "wh='MD_TEST_WH'" --enable-templating JINJA` |

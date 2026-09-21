@@ -6,3 +6,17 @@ __pycache__/
 out/
 output/
 .scannerwork/
+master-agent/Snowflake_codes/analyst_routing_manifest.yaml
+master-agent/Snowflake_codes/sql/01_helpers.sql
+master-agent/Snowflake_codes/sql/02_schema.sql
+master-agent/Snowflake_codes/sql/03_wrappers.sql
+master-agent/Snowflake_codes/sql/04_master_agent.sql
+master-agent/Snowflake_codes/sql/05_observability.sql
+master-agent/Snowflake_codes/sql/06_golden_regression.sql
+master-agent/Snowflake_codes/sql/07_seed_golden_smoke.sql
+master-agent/Snowflake_codes/sql/08_cross_domain_bridges.sql
+master-agent/Snowflake_codes/sql/09_router.sql
+master-agent/Snowflake_codes/sql/10_query_performance.sql
+master-agent/Snowflake_codes/sql/README.md
+master-agent/Snowflake_codes.zip
+.snowflake/

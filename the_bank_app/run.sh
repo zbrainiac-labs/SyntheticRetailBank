@@ -32,20 +32,21 @@ fi
 if [ ! -f ".streamlit/secrets.toml" ]; then
     echo "⚠️  WARNING: .streamlit/secrets.toml not found!"
     echo ""
-    echo "Please create .streamlit/secrets.toml with your Snowflake credentials:"
+    echo "Creating default secrets.toml (uses ~/.snowflake/connections.toml for auth)..."
     echo ""
-    echo "[snowflake]"
-    echo "account = \"your-account\""
-    echo "user = \"your-username\""
-    echo "password = \"your-password\""
-    echo "warehouse = \"your-warehouse\""
-    echo "database = \"AAA_DEV_SYNTHETIC_BANK\""
-    echo "schema = \"CRM_AGG_001\""
-    echo "role = \"ACCOUNTADMIN\""
+    cat > .streamlit/secrets.toml << 'EOF'
+# Snowflake connection configuration
+# Authentication is handled via ~/.snowflake/connections.toml (OAuth browser flow)
+
+[snowflake]
+connection_name = "DEMO_MDAEPPEN"
+warehouse = "MD_TEST_WH"
+database = "AAA_DEV_SYNTHETIC_BANK"
+schema = "CRM_AGG_V001"
+role = "ACCOUNTADMIN"
+EOF
+    echo "✅ Created .streamlit/secrets.toml"
     echo ""
-    echo "See .streamlit/secrets.toml.example for reference"
-    echo ""
-    exit 1
 fi
 
 # Run Streamlit app
