@@ -91,6 +91,8 @@ WITH customer_base AS (
                ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) as rn
         FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES
     ) a ON c.CUSTOMER_ID = a.CUSTOMER_ID AND a.rn = 1
+    -- Screen the current customer version only (raw table keeps every SCD version)
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY c.CUSTOMER_ID ORDER BY c.INSERT_TIMESTAMP_UTC DESC) = 1
 ),
 exact_matches AS (
     SELECT 
@@ -145,21 +147,18 @@ fuzzy_matches AS (
         s.EXPIRY_DATE,
         s.CITATION_LINK,
         'FUZZY_MATCH' AS MATCH_TYPE,
-        CASE 
-            WHEN EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) <= 1 THEN 95.0 
-            WHEN EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) <= 2 THEN 90.0 
-            WHEN EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) <= 3 THEN 85.0 
-            WHEN EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) <= 4 THEN 80.0 
-            WHEN EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) <= 5 THEN 75.0 
-            ELSE 70.0
-        END AS MATCH_SCORE,
+        -- Score = Jaro-Winkler similarity (90-99); exact matches score 100
+        JAROWINKLER_SIMILARITY(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME))::NUMBER(3,0) AS MATCH_SCORE,
         EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) AS EDIT_DISTANCE
     FROM customer_base c
     INNER JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_ENRICHED s
         ON s.ENTITY_ID NOT IN (
             SELECT ENTITY_ID FROM exact_matches WHERE CUSTOMER_ID = c.CUSTOMER_ID
         )
-        AND EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) <= 5
+        -- Length-relative rule: a fixed distance (<= 5) matched almost any short name
+        AND JAROWINKLER_SIMILARITY(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME)) >= 90
+        AND EDITDISTANCE(UPPER(c.FULL_NAME), UPPER(s.ENTITY_NAME))
+            <= GREATEST(1, FLOOR(0.2 * GREATEST(LENGTH(c.FULL_NAME), LENGTH(s.ENTITY_NAME))))
     WHERE s.IS_ACTIVE = TRUE 
 ),
 alias_matches AS (

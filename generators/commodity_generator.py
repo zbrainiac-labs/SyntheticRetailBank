@@ -260,6 +260,11 @@ class CommodityTradeGenerator(BaseGenerator):
             end_date: End date for trade generation
         """
         super().__init__(config)
+        self.rng = random.Random(config.random_seed)
+        # Held contracts per account: {account_id: {(commodity_type, commodity_name): contracts}}
+        self.holdings: Dict[str, Dict[tuple, int]] = {}
+        self.sell_ratio = 0.35  # share of trades that sell an existing holding
+        self.side_counts = {'1': 0, '2': 0}
         self.customers = customers
         self.accounts = accounts
         self.fx_rates = fx_rates
@@ -288,7 +293,7 @@ class CommodityTradeGenerator(BaseGenerator):
     
     def _generate_delivery_month(self, trade_date: date) -> str:
         """Generate a delivery month for futures (1-12 months forward)"""
-        months_forward = random.randint(1, 12)
+        months_forward = self.rng.randint(1, 12)
         delivery_date = trade_date + timedelta(days=30 * months_forward)
         return delivery_date.strftime('%Y-%m')
     
@@ -303,24 +308,30 @@ class CommodityTradeGenerator(BaseGenerator):
                       trade_date: date) -> CommodityTrade:
         """Generate a single commodity trade"""
         
-        # Select commodity type and commodity
-        commodity_type = random.choice(list(self.COMMODITIES.keys()))
-        commodity_name = random.choice(list(self.COMMODITIES[commodity_type].keys()))
+        # Sell only from holdings: pick a held commodity, never sell more contracts than held
+        holdings = self.holdings.setdefault(account['account_id'], {})
+        held = [k for k, n in holdings.items() if n > 0]
+        is_sell = bool(held) and self.rng.random() < self.sell_ratio
+        if is_sell:
+            commodity_type, commodity_name = self.rng.choice(held)
+        else:
+            commodity_type = self.rng.choice(list(self.COMMODITIES.keys()))
+            commodity_name = self.rng.choice(list(self.COMMODITIES[commodity_type].keys()))
         commodity_spec = self.COMMODITIES[commodity_type][commodity_name]
         
         # Contract type
-        contract_type = random.choices(
+        contract_type = self.rng.choices(
             ['SPOT', 'FUTURE', 'FORWARD', 'SWAP'],
             weights=[0.2, 0.5, 0.2, 0.1]
         )[0]
         
         # Price (with some random variation)
         price_range = commodity_spec['price_range']
-        spot_price = round(random.uniform(*price_range), 2)
+        spot_price = round(self.rng.uniform(*price_range), 2)
         
         # Forward price (slightly higher for futures/forwards)
         if contract_type in ['FUTURE', 'FORWARD']:
-            forward_price = spot_price * random.uniform(1.0, 1.05)
+            forward_price = spot_price * self.rng.uniform(1.0, 1.05)
             price = round(forward_price, 2)
         else:
             forward_price = None
@@ -328,15 +339,21 @@ class CommodityTradeGenerator(BaseGenerator):
         
         # Volatility
         vol_range = commodity_spec['volatility_range']
-        volatility = round(random.uniform(*vol_range), 1)
+        volatility = round(self.rng.uniform(*vol_range), 1)
         
         # Quantity (number of contracts)
-        num_contracts = random.choice([1, 2, 5, 10, 25, 50, 100])
+        num_contracts = self.rng.choice([1, 2, 5, 10, 25, 50, 100])
+        if is_sell:
+            held_contracts = holdings[(commodity_type, commodity_name)]
+            num_contracts = held_contracts if self.rng.random() < 0.3 else self.rng.randint(1, held_contracts)
         contract_size = commodity_spec['contract_size']
         quantity = num_contracts * contract_size
         
-        # Side (Buy or Sell)
-        side = random.choice(['1', '2'])  # 1=Buy, 2=Sell
+        # Side (1=Buy, 2=Sell) and holdings update
+        side = '2' if is_sell else '1'
+        self.side_counts[side] += 1
+        key = (commodity_type, commodity_name)
+        holdings[key] = holdings.get(key, 0) + (-num_contracts if is_sell else num_contracts)
         
         # Currency and FX rate
         currency = commodity_spec['currency']
@@ -348,7 +365,7 @@ class CommodityTradeGenerator(BaseGenerator):
             gross_amount = -gross_amount
         
         # Commission (5-20 bps of notional)
-        commission = abs(gross_amount) * random.uniform(0.0005, 0.0020)
+        commission = abs(gross_amount) * self.rng.uniform(0.0005, 0.0020)
         
         # Net amount
         if side == '1':  # Buy
@@ -383,15 +400,15 @@ class CommodityTradeGenerator(BaseGenerator):
             'BASE_METAL': ['London', 'Rotterdam', 'Singapore'],
             'AGRICULTURAL': ['Chicago', 'Kansas City', 'Minneapolis'],
         }
-        delivery_location = random.choice(delivery_locations.get(commodity_type, ['N/A']))
+        delivery_location = self.rng.choice(delivery_locations.get(commodity_type, ['N/A']))
         
         # Liquidity score (energy and precious metals more liquid)
         if commodity_type in ['ENERGY', 'PRECIOUS_METAL']:
-            liquidity_score = random.uniform(7, 10)
+            liquidity_score = self.rng.uniform(7, 10)
         elif commodity_type == 'BASE_METAL':
-            liquidity_score = random.uniform(6, 9)
+            liquidity_score = self.rng.uniform(6, 9)
         else:  # AGRICULTURAL
-            liquidity_score = random.uniform(4, 8)
+            liquidity_score = self.rng.uniform(4, 8)
         
         return CommodityTrade(
             trade_date=trade_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
@@ -426,7 +443,7 @@ class CommodityTradeGenerator(BaseGenerator):
             forward_price=forward_price,
             volatility=volatility,
             exchange=commodity_spec['exchange'],
-            broker_id=f"BRK_{random.randint(100, 999)}",
+            broker_id=f"BRK_{self.rng.randint(100, 999)}",
             venue=commodity_spec['exchange'],
             liquidity_score=round(liquidity_score, 2),
             created_at=self.get_utc_timestamp()
@@ -446,35 +463,39 @@ class CommodityTradeGenerator(BaseGenerator):
         
         print(f"Generating {num_trades} commodity trades...")
         
+        # Draw all trade slots first and generate them in date order, so a sell
+        # always comes after the buy that created the holding
+        days_range = (self.end_date - self.start_date).days
+        slots = []
         for i in range(num_trades):
-            # Random customer and account
-            customer_id = random.choice(self.customers)
+            customer_id = self.rng.choice(self.customers)
             if customer_id not in self.customer_accounts:
                 continue
-            
-            account = random.choice(self.customer_accounts[customer_id])
-            
-            # Random trade date
-            days_range = (self.end_date - self.start_date).days
-            trade_date = self.start_date + timedelta(days=random.randint(0, days_range))
-            
-            # Ensure business day
+            account = self.rng.choice(self.customer_accounts[customer_id])
+            trade_date = self.start_date + timedelta(days=self.rng.randint(0, days_range))
             while not self._is_business_day(trade_date):
                 trade_date += timedelta(days=1)
-            
-            # Add random time
             trade_date = datetime.combine(trade_date, 
                                          datetime.min.time().replace(
-                                             hour=random.randint(9, 16),
-                                             minute=random.randint(0, 59),
-                                             second=random.randint(0, 59)))
-            
+                                             hour=self.rng.randint(9, 16),
+                                             minute=self.rng.randint(0, 59),
+                                             second=self.rng.randint(0, 59)))
+            slots.append((trade_date, customer_id, account))
+        slots.sort(key=lambda x: (x[0], x[1]))
+        
+        for n, (trade_date, customer_id, account) in enumerate(slots, 1):
             trade = self.generate_trade(customer_id, account, trade_date)
             trades.append(trade)
             
-            if (i + 1) % 100 == 0:
-                print(f"  Generated {i + 1}/{num_trades} trades...")
+            if n % 100 == 0:
+                print(f"  Generated {n}/{num_trades} trades...")
         
+        short = [(a, k) for a, h in self.holdings.items() for k, c in h.items() if c < 0]
+        if short:
+            raise AssertionError(f"Commodity generator produced {len(short)} short positions, e.g. {short[:3]}")
+        sells = self.side_counts['2']
+        print(f"  Commodities: {self.side_counts['1']} buys, {sells} sells "
+              f"({100.0 * sells / max(1, sum(self.side_counts.values())):.1f}% sells), no short positions")
         print(f"✓ Generated {len(trades)} commodity trades")
         return trades
     

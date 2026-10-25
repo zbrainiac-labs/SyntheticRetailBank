@@ -10,6 +10,7 @@ This module generates synthetic equity trade data with:
 """
 
 import csv
+import hashlib
 import random
 import uuid
 from dataclasses import dataclass, asdict, fields
@@ -57,6 +58,11 @@ class EquityTradeGenerator:
     def __init__(self, trading_customers: List, investment_accounts: List, fx_rates: Dict[str, float], seed: int = 42):
         # Initialize random state with seed for reproducibility
         self.fake = init_random_seed(seed)
+        self.rng = random.Random(seed)
+        # Open holdings per account: {account_id: {isin: quantity}}; sells only come out of these
+        self.holdings: Dict[str, Dict[str, float]] = {}
+        self.sell_ratio = 0.35  # target share of sells when the account holds something
+        self.side_counts = {"1": 0, "2": 0}
         self.trading_customers = trading_customers
         self.investment_accounts = investment_accounts
         self.fx_rates = fx_rates
@@ -70,7 +76,7 @@ class EquityTradeGenerator:
             self.customer_investments[account.customer_id].append(account)
         
         # Classify trading customers: 10% are high-volume traders (10-30 trades/month)
-        self.high_volume_traders = random.sample(
+        self.high_volume_traders = self.rng.sample(
             self.trading_customers,
             max(1, int(len(self.trading_customers) * 0.1))  # At least 1 if we have trading customers
         )
@@ -111,11 +117,22 @@ class EquityTradeGenerator:
             "TSE": 0.006
         }
         
+        self.isin_to_security: Dict[str, tuple] = {}
+
         # Brokers
         self.brokers = ["UBS", "CS", "JPM", "GS", "MS", "DB", "BAML", "CITI", "WF", "TD"]
         
         # Venues
         self.venues = ["BATS", "CHI-X", "DARK", "BLOCK", "SIP", "CROSS"]
+
+    def _isin(self, market: str, symbol: str) -> str:
+        """Stable ISIN per security (same symbol on the same market always gets the same ISIN),
+        so repeated trades build up one position instead of one position per trade."""
+        country = self.isin_patterns[market][:2]
+        digits = int(hashlib.sha256(f"{country}:{symbol}".encode()).hexdigest(), 16)
+        isin = f"{country}{digits % 90 + 10}{digits % 10**8:08d}"
+        self.isin_to_security[isin] = (market, symbol)
+        return isin
 
     def _is_business_day(self, check_date: date) -> bool:
         """Check if a date is a business day (Mon-Fri)"""
@@ -147,37 +164,44 @@ class EquityTradeGenerator:
         if not customer_investments:
             raise ValueError(f"No investment accounts found for customer {customer.customer_id}")
         
-        investment_account = random.choice(customer_investments)
+        investment_account = self.rng.choice(customer_investments)
         
-        # Select market and symbol
-        market = random.choice(list(self.markets.keys()))
+        account_id = investment_account.account_id
+        account_holdings = self.holdings.setdefault(account_id, {})
+        held = [i for i, q in account_holdings.items() if q > 0]
+
+        # Sell only from holdings: pick a held security, never sell more than held
+        is_buy = not held or self.rng.random() >= self.sell_ratio
+        if is_buy:
+            market = self.rng.choice(list(self.markets.keys()))
+            symbol = self.rng.choice(self.markets[market]["symbols"])
+        else:
+            isin_held = self.rng.choice(held)
+            market, symbol = self.isin_to_security[isin_held]
         market_info = self.markets[market]
-        symbol = random.choice(market_info["symbols"])
         currency = market_info["currency"]
-        
-        # Generate ISIN
-        pattern = self.isin_patterns[market]
-        check_digits = random.randint(10, 99)
-        security_number = random.randint(10000000, 99999999)
-        isin = pattern.format(check_digits, security_number)
-        
-        # Trade details
-        side = random.choice(self.fix_sides)
-        is_buy = side == "1"
-        
-        quantity = round(random.uniform(10, 1000), 4)
+        isin = self._isin(market, symbol)
+        side = "1" if is_buy else "2"
+        self.side_counts[side] += 1
+
+        quantity = round(self.rng.uniform(10, 1000), 4)
+        if not is_buy:
+            # Sell part or all of the position (whole position in ~30% of sells)
+            held_qty = account_holdings[isin]
+            quantity = held_qty if self.rng.random() < 0.3 else round(held_qty * self.rng.uniform(0.1, 0.9), 4)
+        account_holdings[isin] = round(account_holdings.get(isin, 0.0) + (quantity if is_buy else -quantity), 4)
         
         # Price generation based on market
         if market in ["NYSE", "NASDAQ"]:
-            price = round(random.uniform(50, 300), 2)
+            price = round(self.rng.uniform(50, 300), 2)
         elif market == "LSE":
-            price = round(random.uniform(100, 2000), 2)  # Pence
+            price = round(self.rng.uniform(100, 2000), 2)  # Pence
         elif market == "XETRA":
-            price = round(random.uniform(20, 150), 2)
+            price = round(self.rng.uniform(20, 150), 2)
         elif market == "SIX":
-            price = round(random.uniform(50, 1000), 2)
+            price = round(self.rng.uniform(50, 1000), 2)
         else:  # TSE
-            price = round(random.uniform(1000, 5000), 0)
+            price = round(self.rng.uniform(1000, 5000), 0)
         
         # Calculate amounts
         gross_amount = quantity * price
@@ -197,8 +221,6 @@ class EquityTradeGenerator:
         base_gross_amount = gross_amount * fx_rate
         base_net_amount = net_amount * fx_rate
         
-        # Use investment account for settlements
-        account_id = investment_account.account_id
         
         # Generate IDs
         trade_id = f"TRD_{uuid.uuid4().hex[:12].upper()}"
@@ -230,11 +252,11 @@ class EquityTradeGenerator:
             base_net_amount=round(base_net_amount, 2),
             fx_rate=round(fx_rate, 6),
             market=market,
-            order_type=random.choice(self.order_types),
-            exec_type=random.choice(self.exec_types),
-            time_in_force=random.choice(self.time_in_force),
-            broker_id=random.choice(self.brokers),
-            venue=random.choice(self.venues)
+            order_type=self.rng.choice(self.order_types),
+            exec_type=self.rng.choice(self.exec_types),
+            time_in_force=self.rng.choice(self.time_in_force),
+            broker_id=self.rng.choice(self.brokers),
+            venue=self.rng.choice(self.venues)
         )
 
     def generate_daily_trades(self, target_date: datetime) -> List[EquityTrade]:
@@ -252,20 +274,23 @@ class EquityTradeGenerator:
             if customer in self.high_volume_traders:
                 # High-volume traders: aim for 10-30 trades/month = 0.5-1.5 trades/day on average
                 # But with bursts of activity (some days 0, some days 3-8 trades)
-                num_trades = random.choices([0, 1, 2, 3, 4, 5, 6, 7, 8], weights=[20, 15, 15, 15, 12, 10, 8, 3, 2])[0]
+                num_trades = self.rng.choices([0, 1, 2, 3, 4, 5, 6, 7, 8], weights=[20, 15, 15, 15, 12, 10, 8, 3, 2])[0]
             else:
                 # Regular traders: 0-5 trades per day (original distribution)
-                num_trades = random.choices([0, 1, 2, 3, 4, 5], weights=[15, 25, 30, 20, 8, 2])[0]
+                num_trades = self.rng.choices([0, 1, 2, 3, 4, 5], weights=[15, 25, 30, 20, 8, 2])[0]
             
-            for _ in range(num_trades):
-                # Random trade time during trading hours (09:00 - 17:00)
-                trade_time = target_date.replace(
-                    hour=random.randint(9, 16),
-                    minute=random.randint(0, 59),
-                    second=random.randint(0, 59),
-                    microsecond=random.randint(0, 999999)
+            # Random trade times during trading hours (09:00 - 17:00), in time order so that
+            # a sell is never timestamped before the buy that created the holding
+            trade_times = sorted(
+                target_date.replace(
+                    hour=self.rng.randint(9, 16),
+                    minute=self.rng.randint(0, 59),
+                    second=self.rng.randint(0, 59),
+                    microsecond=self.rng.randint(0, 999999)
                 )
-                
+                for _ in range(num_trades)
+            )
+            for trade_time in trade_times:
                 trade = self._generate_single_trade(customer, trade_time)
                 trades.append(trade)
         
@@ -319,7 +344,12 @@ class EquityTradeGenerator:
             
             current_date += timedelta(days=1)
         
+        negative = [(a, i) for a, h in self.holdings.items() for i, q in h.items() if q < -1e-6]
+        if negative:
+            raise AssertionError(f"Equity generator produced {len(negative)} short positions, e.g. {negative[:3]}")
         summary["total_trades"] = total_trades
+        summary["sell_share_pct"] = round(100.0 * self.side_counts["2"] / max(1, sum(self.side_counts.values())), 1)
+        print(f"Equity trades: {self.side_counts['1']} buys, {self.side_counts['2']} sells ({summary['sell_share_pct']}% sells), no short positions")
         summary["trading_days"] = trading_days
         
         return summary

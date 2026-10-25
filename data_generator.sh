@@ -40,7 +40,7 @@ echo "  ✓ Customer updates (employment, account tier)"
 echo "  ✓ Customer lifecycle events & status history"
 echo "  ✓ Fixed income trades (bonds & swaps)"
 echo "  ✓ Commodity trades (energy, metals, agricultural)"
-echo "  ✓ FINMA LCR data (HQLA holdings & deposit balances)"
+echo "  ✓ FINMA LCR book (HQLA, deposits, contracts, cashflows, events)"
 echo ""
 
 ./venv/bin/python generators/main.py \
@@ -80,8 +80,10 @@ echo "=================================================="
 echo "Generating FINMA LCR Data (Liquidity Coverage Ratio)"
 echo "=================================================="
 echo "Configuration:"
-echo "  - Days: 90 (3 months)"
+echo "  - Days: 90 (3 months, ending today)"
 echo "  - Customers: Linked to actual customer base"
+echo "  - Target BASE LCR: 135% (calibrated) with deterministic showcase events"
+echo "  - FX: CHF crosses from $OUTPUT_DIR/fx_rates/"
 echo "  - Output: $OUTPUT_DIR/lcr/"
 echo ""
 
@@ -89,6 +91,8 @@ echo ""
 ./venv/bin/python generators/lcr_data_generator.py \
     --days 90 \
     --customer-file "$OUTPUT_DIR/master_data/customers.csv" \
+    --fx-dir "$OUTPUT_DIR/fx_rates" \
+    --target-lcr 135 \
     --output-dir "$OUTPUT_DIR/lcr"
 
 if [ $? -ne 0 ]; then
@@ -171,6 +175,8 @@ FI_FILES=$(find "${OUTPUT_DIR}/fixed_income_trades" -name "*.csv" 2>/dev/null | 
 COMMODITY_FILES=$(find "${OUTPUT_DIR}/commodity_trades" -name "*.csv" 2>/dev/null | wc -l | tr -d ' ')
 LCR_HQLA_FILES=$(find "${OUTPUT_DIR}/lcr" -name "hqla_holdings_*.csv" 2>/dev/null | wc -l | tr -d ' ')
 LCR_DEPOSIT_FILES=$(find "${OUTPUT_DIR}/lcr" -name "deposit_balances_*.csv" 2>/dev/null | wc -l | tr -d ' ')
+LCR_CONTRACT_FILES=$(find "${OUTPUT_DIR}/lcr" -name "contracts_*.csv" 2>/dev/null | wc -l | tr -d ' ')
+LCR_CASHFLOW_FILES=$(find "${OUTPUT_DIR}/lcr" -name "cashflows_*.csv" 2>/dev/null | wc -l | tr -d ' ')
 
 echo ""
 echo "📊 File Counts:"
@@ -186,6 +192,8 @@ echo "   Fixed income files: $FI_FILES"
 echo "   Commodity files: $COMMODITY_FILES"
 echo "   LCR HQLA holdings: $LCR_HQLA_FILES"
 echo "   LCR deposit balances: $LCR_DEPOSIT_FILES"
+echo "   LCR contracts: $LCR_CONTRACT_FILES"
+echo "   LCR cashflows: $LCR_CASHFLOW_FILES"
 
 # Count records
 CUSTOMER_COUNT=$(tail -n +2 "${OUTPUT_DIR}/master_data/customers.csv" 2>/dev/null | wc -l | tr -d ' ')
@@ -237,8 +245,11 @@ echo "   ├── fx_rates/ ($FX_FILES files)"
 echo "   ├── swift_messages/ ($SWIFT_FILES XML files)"
 echo "   ├── emails/ ($EMAIL_FILES email files)"
 echo "   └── lcr/"
+echo "       ├── counterparties.csv, lcr_events.csv, README.md"
 echo "       ├── hqla_holdings_*.csv ($LCR_HQLA_FILES files)"
-echo "       └── deposit_balances_*.csv ($LCR_DEPOSIT_FILES files)"
+echo "       ├── deposit_balances_*.csv ($LCR_DEPOSIT_FILES files)"
+echo "       ├── contracts_*.csv ($LCR_CONTRACT_FILES files)"
+echo "       └── cashflows_*.csv ($LCR_CASHFLOW_FILES files)"
 echo ""
 echo "🎉 Synthetic Bank Data Generation COMPLETE!"
 echo ""

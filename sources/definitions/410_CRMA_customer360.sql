@@ -22,6 +22,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII(
     PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Preferred contact method'
 )
 TARGET_LAG = '{{ lag }}'
+DATA_METRIC_SCHEDULE = '60 MINUTE'
 WAREHOUSE = {{ wh }}
 COMMENT = 'PII vault: centralized customer personal data for late enrichment pattern. Protected by masking and row access policies. All downstream DTs carry only CUSTOMER_ID.'
 AS
@@ -56,6 +57,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII(
     ADDRESS_EFFECTIVE_DATE TIMESTAMP_NTZ COMMENT 'Date when current address became effective'
 )
 TARGET_LAG = '{{ lag }}'
+DATA_METRIC_SCHEDULE = '60 MINUTE'
 WAREHOUSE = {{ wh }}
 COMMENT = 'PII vault: centralized customer address data for late enrichment pattern. One row per customer (latest address).'
 AS
@@ -384,12 +386,20 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360(
     CHURN_PROBABILITY NUMBER(5,2) COMMENT 'ML-derived churn probability percentage (0-100). Currently rule-based proxy using dormancy and event patterns. Future: replace with Snowflake ML model output.',
     TOTAL_LIFECYCLE_EVENTS NUMBER(10,0) COMMENT 'Total count of lifecycle events (ONBOARDING, ADDRESS_CHANGE, ACCOUNT_UPGRADE, etc.) for customer journey depth analysis.',
 
-    LAST_UPDATED TIMESTAMP_NTZ COMMENT 'Timestamp when customer record was last updated'
+    LAST_UPDATED TIMESTAMP_NTZ COMMENT 'Timestamp when customer record was last updated',
+    SANCTIONS_HIT_COUNT NUMBER(10,0) COMMENT 'Number of sanctions list hits for the customer (all hits are listed in CRMA_AGG_VW_SANCTIONS_CUSTOMER_SCREENING; the SANCTIONS_* columns show the best one)'
 ) 
 TARGET_LAG = '{{ lag }}' 
+DATA_METRIC_SCHEDULE = '60 MINUTE'
 WAREHOUSE = {{ wh }}
-COMMENT = 'Comprehensive 360-degree customer view (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault. Join on CUSTOMER_ID for full profile via CRMA_AGG_VW_CUSTOMER_360_ENRICHED. Includes account summary, transaction activity, PEP/sanctions screening (uses PII vault for name matching), vulnerability flags, and lifecycle metrics.'
+COMMENT = 'Comprehensive 360-degree customer view (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault. Join on CUSTOMER_ID for full profile via CRMA_AGG_VW_CUSTOMER_360_ENRICHED. Includes account summary, transaction activity, PEP/sanctions screening (on unmasked raw names; one best match per customer), vulnerability flags, and lifecycle metrics.'
 AS
+-- Latest unmasked name and date of birth per customer (see comment at the pii join)
+WITH screening_names AS (
+    SELECT CUSTOMER_ID, FIRST_NAME, FAMILY_NAME, DATE_OF_BIRTH
+    FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) = 1
+)
 SELECT 
     c.CUSTOMER_ID,
     c.ONBOARDING_DATE,
@@ -666,11 +676,17 @@ SELECT
 
     COALESCE(lifecycle.TOTAL_LIFECYCLE_EVENTS, 0) AS TOTAL_LIFECYCLE_EVENTS,
 
-    CURRENT_TIMESTAMP() AS LAST_UPDATED
+    CURRENT_TIMESTAMP() AS LAST_UPDATED,
+
+    COALESCE(sanctions.SANCTIONS_HIT_COUNT, 0) AS SANCTIONS_HIT_COUNT
 
 FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
 
-LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii
+-- Unmasked screening attributes (alias pii kept for readability). The PII vault
+-- CRMI_AGG_DT_CUSTOMER_PII is masked for the DT owner (CICD): names read as 'D***' and
+-- DATE_OF_BIRTH as 1900-01-01, which broke PEP matching and the age-based vulnerability flags.
+-- The raw schema has no consumer grants, and no name or DOB column is exposed by this DT.
+LEFT JOIN screening_names pii
     ON c.CUSTOMER_ID = pii.CUSTOMER_ID
 
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT addr
@@ -701,27 +717,56 @@ LEFT JOIN {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT adv_assign
     ON c.CUSTOMER_ID = adv_assign.CUSTOMER_ID
     AND adv_assign.IS_CURRENT = TRUE
 
-LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_exact
-    ON UPPER(CONCAT(pii.FIRST_NAME, ' ', pii.FAMILY_NAME)) = UPPER(pep_exact.FULL_NAME)
-    AND pep_exact.STATUS = 'ACTIVE'
+-- At most one PEP / sanctions row per customer: the best match wins, so the DT stays one row per customer
+LEFT JOIN (
+    SELECT n.CUSTOMER_ID, p.*
+    FROM screening_names n
+    JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON p
+        ON UPPER(CONCAT(n.FIRST_NAME, ' ', n.FAMILY_NAME)) = UPPER(p.FULL_NAME)
+        AND p.STATUS = 'ACTIVE'
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY n.CUSTOMER_ID
+        ORDER BY CASE p.RISK_LEVEL WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, p.EXPOSED_PERSON_ID
+    ) = 1
+) pep_exact
+    ON c.CUSTOMER_ID = pep_exact.CUSTOMER_ID
 
-LEFT JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON pep_fuzzy
-    ON pep_fuzzy.EXPOSED_PERSON_ID != COALESCE(pep_exact.EXPOSED_PERSON_ID, 'NO_EXACT_MATCH') 
-    AND pep_fuzzy.STATUS = 'ACTIVE'
-    AND (
-        (EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) <= 2 
-         AND UPPER(pii.FAMILY_NAME) = UPPER(pep_fuzzy.LAST_NAME))
-        OR
-        (UPPER(pii.FIRST_NAME) = UPPER(pep_fuzzy.FIRST_NAME)
-         AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) <= 2)
-        OR
-        (EDITDISTANCE(UPPER(pii.FIRST_NAME), UPPER(pep_fuzzy.FIRST_NAME)) = 1
-         AND EDITDISTANCE(UPPER(pii.FAMILY_NAME), UPPER(pep_fuzzy.LAST_NAME)) = 1)
-        OR
-        EDITDISTANCE(UPPER(CONCAT(pii.FIRST_NAME, ' ', pii.FAMILY_NAME)), UPPER(pep_fuzzy.FULL_NAME)) <= 3
-    )
+LEFT JOIN (
+    SELECT n.CUSTOMER_ID, p.*
+    FROM screening_names n
+    JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON p
+        ON p.STATUS = 'ACTIVE'
+        AND UPPER(CONCAT(n.FIRST_NAME, ' ', n.FAMILY_NAME)) != UPPER(p.FULL_NAME)
+        AND (
+            (EDITDISTANCE(UPPER(n.FIRST_NAME), UPPER(p.FIRST_NAME)) <= 2 
+             AND UPPER(n.FAMILY_NAME) = UPPER(p.LAST_NAME))
+            OR
+            (UPPER(n.FIRST_NAME) = UPPER(p.FIRST_NAME)
+             AND EDITDISTANCE(UPPER(n.FAMILY_NAME), UPPER(p.LAST_NAME)) <= 2)
+            OR
+            (EDITDISTANCE(UPPER(n.FIRST_NAME), UPPER(p.FIRST_NAME)) = 1
+             AND EDITDISTANCE(UPPER(n.FAMILY_NAME), UPPER(p.LAST_NAME)) = 1)
+            OR
+            EDITDISTANCE(UPPER(CONCAT(n.FIRST_NAME, ' ', n.FAMILY_NAME)), UPPER(p.FULL_NAME)) <= 3
+        )
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY n.CUSTOMER_ID
+        ORDER BY EDITDISTANCE(UPPER(CONCAT(n.FIRST_NAME, ' ', n.FAMILY_NAME)), UPPER(p.FULL_NAME)),
+                 CASE p.RISK_LEVEL WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,
+                 p.EXPOSED_PERSON_ID
+    ) = 1
+) pep_fuzzy
+    ON c.CUSTOMER_ID = pep_fuzzy.CUSTOMER_ID
+    AND pep_exact.EXPOSED_PERSON_ID IS NULL
 
-LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_CUSTOMER_SCREENING sanctions
+LEFT JOIN (
+    SELECT s.*, COUNT(*) OVER (PARTITION BY s.CUSTOMER_ID) AS SANCTIONS_HIT_COUNT
+    FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SANCTIONS_CUSTOMER_SCREENING s
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY s.CUSTOMER_ID
+        ORDER BY s.MATCH_SCORE DESC, s.SANCTIONS_RISK_SCORE DESC, s.ENTITY_ID
+    ) = 1
+) sanctions
     ON c.CUSTOMER_ID = sanctions.CUSTOMER_ID
 
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE lifecycle
@@ -739,6 +784,7 @@ GROUP BY
     sanctions.ENTITY_ID, sanctions.ENTITY_NAME, sanctions.AUTHORITY, sanctions.LIST_NAME, sanctions.SANCTIONS_PROGRAM,
     sanctions.SANCTIONS_RISK_SCORE, sanctions.MATCH_TYPE, sanctions.MATCH_SCORE, sanctions.MATCH_CONFIDENCE,
     sanctions.DISPOSITION_RECOMMENDATION, sanctions.ALERT_PRIORITY, sanctions.DOB_MATCH, sanctions.NATIONALITY_MATCH,
+    sanctions.SANCTIONS_HIT_COUNT,
     lifecycle.CHURN_COUNT, lifecycle.ACCOUNT_CLOSE_COUNT, lifecycle.IS_DORMANT_LIFECYCLE, lifecycle.ENGAGEMENT_SCORE,
     lifecycle.DAYS_SINCE_LAST_EVENT, lifecycle.HAS_RECENT_ACTIVITY, lifecycle.TOTAL_LIFECYCLE_EVENTS
 
@@ -1058,3 +1104,28 @@ SELECT
     pii.DATE_OF_BIRTH
 FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS s
 LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii ON s.CUSTOMER_ID = pii.CUSTOMER_ID;
+
+-- ============================================================
+-- PROCEDURES (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE PROCEDURE {{ db }}.{{ crm_agg }}.CRMI_AGG_SP_ERASE_CUSTOMER_PII(P_CUSTOMER_ID VARCHAR)
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    UPDATE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII
+    SET FIRST_NAME = NULL, FAMILY_NAME = NULL, FULL_NAME = NULL,
+        DATE_OF_BIRTH = NULL, EMAIL = NULL, PHONE = NULL,
+        EMPLOYER = NULL, POSITION = NULL, EMPLOYMENT_TYPE = NULL,
+        PREFERRED_CONTACT_METHOD = NULL
+    WHERE CUSTOMER_ID = :P_CUSTOMER_ID;
+
+    UPDATE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII
+    SET STREET_ADDRESS = NULL, CITY = NULL, STATE = NULL, ZIPCODE = NULL
+    WHERE CUSTOMER_ID = :P_CUSTOMER_ID;
+
+    RETURN 'PII erased for customer ' || :P_CUSTOMER_ID;
+END;
+$$;

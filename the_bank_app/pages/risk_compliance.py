@@ -11,8 +11,9 @@ from utils.visualizations import (
     plot_pep_screening_results
 )
 from utils.ui_helpers import show_profile_picker
+from utils.ui_helpers import page_header
 
-st.header("Risk & Compliance")
+page_header('Risk & Compliance', 'Credit risk, regulatory capital and compliance monitoring')
 
 tab_overview, tab_sanctions, tab_kyc = st.tabs(["Overview", "Sanctions Control", "KYC Screening"])
 

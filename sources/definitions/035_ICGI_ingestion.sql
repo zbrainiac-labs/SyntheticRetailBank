@@ -21,6 +21,7 @@ DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_LOAD_SWIFT_MESSAGES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ pay_raw }}.ICGI_RAW_SM_SWIFT_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES (FILE_NAME, RAW_XML)
     FROM (
@@ -37,5 +38,23 @@ DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_CLEANUP_AFTER_LOAD_SWIFT_MESSAGES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER SWIFT message data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_LOAD_SWIFT_MESSAGES
+    STARTED
 AS
     CALL PAYI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND', 5);
+
+-- ============================================================
+-- FILE FORMATS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE FILE FORMAT {{ db }}.{{ pay_raw }}.ICGI_RAW_FF_XML
+    TYPE = XML
+    STRIP_OUTER_ELEMENT = TRUE
+    COMMENT = 'Optimized XML file format for SWIFT ISO20022 message processing. Strips outer XML envelope for efficient VARIANT parsing of PACS.008 credit transfers and PACS.002 status reports. Supports multi-message files and preserves all ISO20022 schema elements for compliance and downstream analytics.';
+
+-- ============================================================
+-- STREAMS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE STREAM {{ db }}.{{ pay_raw }}.ICGI_RAW_SM_SWIFT_FILES
+    ON STAGE {{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
+    COMMENT = 'Monitors ICGI_RAW_ST_SWIFT_INBOUND stage for new SWIFT ISO20022 XML files. Triggers ICGI_RAW_TK_LOAD_SWIFT_MESSAGES when files matching *.xml pattern are detected';

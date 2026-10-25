@@ -17,61 +17,35 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_DAILY(
     OUTFLOW_RETAIL NUMBER(18,2) COMMENT 'Total expected 30-day retail deposit outflows in CHF (3-10% base rates with discounts). Most stable funding source due to deposit insurance and relationship banking. Critical for retail funding strategy.',
     OUTFLOW_CORP NUMBER(18,2) COMMENT 'Total expected 30-day corporate deposit outflows in CHF (25-40% rates). Operational vs non-operational designation drives run-off assumptions. Used for commercial banking funding strategy.',
     OUTFLOW_FI NUMBER(18,2) COMMENT 'Total expected 30-day financial institution deposit outflows in CHF (100% assumption). Most volatile wholesale funding requiring immediate liquidity coverage. Monitored for counterparty concentration limits.',
-    OUTFLOW_TOTAL NUMBER(18,2) COMMENT 'Total expected 30-day stressed net cash outflows in CHF (denominator in LCR formula). Must maintain sufficient HQLA to cover this amount for 100% LCR. Critical metric for daily liquidity planning and SNB reporting.',
+    OUTFLOW_TOTAL NUMBER(18,2) COMMENT 'Total gross stressed 30-day outflows in CHF incl. facility drawdowns. The LCR denominator is NET_OUTFLOW (outflows minus capped inflows).',
     TOTAL_DEPOSIT_ACCOUNTS NUMBER(10,0) COMMENT 'Total number of active deposit accounts across all counterparty types. Deposit base breadth metric for diversification assessment and operational complexity monitoring.',
-    LCR_RATIO NUMBER(8,2) COMMENT 'Liquidity Coverage Ratio: (HQLA_Total / Outflow_Total) × 100. Primary Basel III liquidity metric. Regulatory minimum 100% per FINMA Circular 2015/2. Values over 9000% indicate no stressed outflows (exceptional case).',
-    LCR_STATUS VARCHAR(10) COMMENT 'Regulatory compliance status: PASS (≥100%), WARNING (95-100%), FAIL (<95%), N/A (no outflows). Used for automated alert generation, management escalation, and FINMA breach reporting.',
-    SEVERITY VARCHAR(10) COMMENT 'Color-coded severity level for dashboards: GREEN (≥100%), YELLOW (95-100%), RED (<95%), GRAY (N/A). Visual indicator for Treasury operations and executive dashboards.',
-    LCR_BUFFER_CHF NUMBER(18,2) COMMENT 'Absolute liquidity buffer in CHF (HQLA_Total - Outflow_Total). Excess HQLA beyond minimum regulatory requirement. Positive buffer provides cushion for market stress; negative indicates breach requiring immediate action.',
-    LCR_BUFFER_PCT NUMBER(8,2) COMMENT 'Liquidity buffer as percentage of required outflows ((HQLA - Outflows) / Outflows × 100). Indicates buffer size relative to stressed outflows. Target typically 20-50% buffer for operational flexibility and stress resilience.',
-    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp when LCR calculation was executed. Used for data lineage, audit trail, and SLA monitoring. Critical for validating calculation freshness (must be within 60 minutes for intraday reporting).'
-) COMMENT = 'Daily Liquidity Coverage Ratio (LCR) calculation per FINMA Circular 2015/2. Combines HQLA stock and 30-day net cash outflows to calculate the primary Basel III liquidity metric. Determines regulatory compliance status (PASS/WARNING/FAIL) and calculates liquidity buffer. Critical metric monitored daily by Treasury, reported monthly to Swiss National Bank (SNB), and used for strategic liquidity planning. Regulatory minimum 100% must be maintained at all times. Updated hourly for real-time compliance monitoring and management escalation.'
+    LCR_RATIO NUMBER(8,2) COMMENT 'Liquidity Coverage Ratio: (HQLA_Total / Net_Outflow) × 100. Primary Basel III liquidity metric. Regulatory minimum 100% per FINMA Circular 2015/2. Values over 9000% indicate no stressed outflows (exceptional case).',
+    LCR_STATUS VARCHAR(10) COMMENT 'Regulatory compliance status: FAIL (<100%), WARNING (100% to <110% internal buffer), PASS (≥110%). Used for automated alert generation, management escalation, and FINMA breach reporting.',
+    SEVERITY VARCHAR(10) COMMENT 'Color-coded severity level for dashboards: RED (<100%), YELLOW (100-110%), GREEN (≥110%). Visual indicator for Treasury operations and executive dashboards.',
+    LCR_BUFFER_CHF NUMBER(18,2) COMMENT 'Absolute liquidity buffer in CHF (HQLA_Total - Net_Outflow). Excess HQLA beyond minimum regulatory requirement. Positive buffer provides cushion for market stress; negative indicates breach requiring immediate action.',
+    LCR_BUFFER_PCT NUMBER(8,2) COMMENT 'Liquidity buffer as percentage of net outflows ((HQLA - Net_Outflow) / Net_Outflow × 100). Indicates buffer size relative to stressed outflows. Target typically 20-50% buffer for operational flexibility and stress resilience.',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp when LCR calculation was executed. Used for data lineage, audit trail, and SLA monitoring. Critical for validating calculation freshness (must be within 60 minutes for intraday reporting).',
+    OUTFLOW_FACILITIES NUMBER(18,2) COMMENT 'Drawdown outflows on undrawn committed credit and liquidity facilities (5% retail, 10% corporate credit, 30% corporate liquidity, 40% banks).',
+    INFLOW_TOTAL NUMBER(18,2) COMMENT 'Weighted 30-day contractual inflows before the cap (50% non-financial, 100% financial, 0% non-performing).',
+    INFLOW_CAPPED NUMBER(18,2) COMMENT 'Inflows after the 75% cap: min(INFLOW_TOTAL, 0.75 x OUTFLOW_TOTAL).',
+    NET_OUTFLOW NUMBER(18,2) COMMENT 'Net cash outflows = OUTFLOW_TOTAL - INFLOW_CAPPED. LCR denominator.',
+    L2B_CAP_APPLIED BOOLEAN COMMENT 'TRUE when the 15% Level 2B cap (15/85 of L1 + L2A) reduced the HQLA stock.',
+    INFLOW_CAP_APPLIED BOOLEAN COMMENT 'TRUE when the 75% inflow cap was binding.'
+) COMMENT = 'Daily Liquidity Coverage Ratio (LCR) calculation per FINMA Circular 2015/2. Combines HQLA stock and 30-day net cash outflows to calculate the primary Basel III liquidity metric. Built from the BASE rows of REPP_AGG_DT_LCR_SCENARIO_DAILY (shared formula REPP_AGG_FN_LCR_CALC incl. L2B 15% cap, L2 40% cap and 75% inflow cap). Determines status FAIL (<100%), WARNING (100-110%), PASS (>=110%) and the liquidity buffer. Critical metric monitored daily by Treasury, reported monthly to Swiss National Bank (SNB), and used for strategic liquidity planning. Regulatory minimum 100% must be maintained at all times. Updated hourly for real-time compliance monitoring and management escalation.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-WITH lcr_calc AS (
-    SELECT
-        COALESCE(h.AS_OF_DATE, o.AS_OF_DATE) AS AS_OF_DATE,
-        'SYNTH-CH-999' AS BANK_ID,
-        COALESCE(h.L1_TOTAL, 0) AS L1_TOTAL,
-        COALESCE(h.L2A_TOTAL, 0) AS L2A_TOTAL,
-        COALESCE(h.L2B_TOTAL, 0) AS L2B_TOTAL,
-        COALESCE(h.L2_UNCAPPED, 0) AS L2_UNCAPPED,
-        COALESCE(h.L2_CAPPED, 0) AS L2_CAPPED,
-        COALESCE(h.HQLA_TOTAL, 0) AS HQLA_TOTAL,
-        COALESCE(h.CAP_APPLIED, FALSE) AS CAP_APPLIED,
-        COALESCE(h.DISCARDED_L2, 0) AS DISCARDED_L2,
-        COALESCE(h.TOTAL_HOLDINGS, 0) AS TOTAL_HOLDINGS,
-        COALESCE(o.OUTFLOW_RETAIL, 0) AS OUTFLOW_RETAIL,
-        COALESCE(o.OUTFLOW_CORP, 0) AS OUTFLOW_CORP,
-        COALESCE(o.OUTFLOW_FI, 0) AS OUTFLOW_FI,
-        COALESCE(o.OUTFLOW_TOTAL, 0) AS OUTFLOW_TOTAL,
-        COALESCE(o.TOTAL_ACCOUNTS, 0) AS TOTAL_DEPOSIT_ACCOUNTS,
-        CASE
-            WHEN COALESCE(o.OUTFLOW_TOTAL, 0) > 0
-            THEN ROUND((COALESCE(h.HQLA_TOTAL, 0) / o.OUTFLOW_TOTAL) * 100, 2)
-            ELSE 9999.99  -- Infinite LCR (no outflows)
-        END AS LCR_RATIO,
-        CASE
-            WHEN COALESCE(o.OUTFLOW_TOTAL, 0) = 0 THEN 'N/A'
-            WHEN (COALESCE(h.HQLA_TOTAL, 0) / NULLIF(o.OUTFLOW_TOTAL, 0)) * 100 >= 100 THEN 'PASS'
-            WHEN (COALESCE(h.HQLA_TOTAL, 0) / NULLIF(o.OUTFLOW_TOTAL, 0)) * 100 >= 95 THEN 'WARNING'
-            ELSE 'FAIL'
-        END AS LCR_STATUS,
-        CASE
-            WHEN COALESCE(o.OUTFLOW_TOTAL, 0) = 0 THEN 'GRAY'
-            WHEN (COALESCE(h.HQLA_TOTAL, 0) / NULLIF(o.OUTFLOW_TOTAL, 0)) * 100 >= 100 THEN 'GREEN'
-            WHEN (COALESCE(h.HQLA_TOTAL, 0) / NULLIF(o.OUTFLOW_TOTAL, 0)) * 100 >= 95 THEN 'YELLOW'
-            ELSE 'RED'
-        END AS SEVERITY,
-        COALESCE(h.HQLA_TOTAL, 0) - COALESCE(o.OUTFLOW_TOTAL, 0) AS LCR_BUFFER_CHF,
-        ROUND((COALESCE(h.HQLA_TOTAL, 0) - COALESCE(o.OUTFLOW_TOTAL, 0)) / NULLIF(o.OUTFLOW_TOTAL, 0) * 100, 2) AS LCR_BUFFER_PCT,
-        CURRENT_TIMESTAMP() AS CALCULATION_TIMESTAMP
-    FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_HQLA_CALCULATION h
-    FULL OUTER JOIN {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_OUTFLOW_CALCULATION o
-        ON h.AS_OF_DATE = o.AS_OF_DATE
-)
-SELECT * FROM lcr_calc
-ORDER BY AS_OF_DATE DESC;
+SELECT
+    AS_OF_DATE, 'SYNTH-CH-999', L1_TOTAL, L2A_TOTAL, L2B_TOTAL, L2_UNCAPPED, L2_CAPPED, HQLA_TOTAL,
+    (L2B_CAP_APPLIED OR L2_CAP_APPLIED), (L2_UNCAPPED - L2_CAPPED)::NUMBER(18,2),
+    L1_COUNT + L2A_COUNT + L2B_COUNT,
+    OUTFLOW_RETAIL, OUTFLOW_CORP, OUTFLOW_FI, OUTFLOW_TOTAL,
+    RETAIL_ACCOUNTS + CORP_ACCOUNTS + FI_ACCOUNTS,
+    LCR_RATIO, LCR_STATUS, SEVERITY, LCR_BUFFER_CHF,
+    ROUND(LCR_BUFFER_CHF / NULLIF(NET_OUTFLOW, 0) * 100, 2),
+    CURRENT_TIMESTAMP(),
+    OUTFLOW_FACILITIES, INFLOW_TOTAL, INFLOW_CAPPED, NET_OUTFLOW, L2B_CAP_APPLIED, INFLOW_CAP_APPLIED
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_DAILY
+WHERE STRESS_SCENARIO = 'BASE';
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_TREND(
     AS_OF_DATE DATE COMMENT 'Reporting date for trend analysis (daily COB snapshot). Time dimension for historical trend visualization, volatility monitoring, and predictive analytics. Used for identifying adverse liquidity patterns before breaches occur.',
@@ -163,7 +137,20 @@ SELECT
 FROM rolling_stats
 ORDER BY AS_OF_DATE DESC;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_MONTHLY_SUMMARY
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_MONTHLY_SUMMARY (
+    REPORTING_MONTH COMMENT 'First day of the reporting month (monthly SNB / FINMA reporting period).',
+    TRADING_DAYS COMMENT 'Number of reporting days in the month.',
+    LCR_AVG COMMENT 'Average LCR of the month in percent.',
+    LCR_MIN COMMENT 'Minimum LCR of the month in percent.',
+    LCR_MAX COMMENT 'Maximum LCR of the month in percent.',
+    LCR_VOLATILITY COMMENT 'Standard deviation of the daily LCR within the month.',
+    AVG_HQLA_TOTAL COMMENT 'Average HQLA stock of the month in CHF.',
+    AVG_OUTFLOW_TOTAL COMMENT 'Average gross stressed outflows of the month in CHF.',
+    BREACH_DAYS COMMENT 'Number of FAIL days (LCR < 100%) in the month.',
+    WARNING_DAYS COMMENT 'Number of WARNING days (100% to <110%) in the month.',
+    COMPLIANT_DAYS COMMENT 'Number of PASS days (>= 110%) in the month.',
+    BREACH_RATE_PCT COMMENT 'Share of FAIL days in the month in percent.'
+)
     COMMENT = 'Monthly summary of LCR metrics for Swiss National Bank (SNB) regulatory reporting per FINMA Circular 2015/2. Aggregates daily LCR ratios by month with summary statistics (average, min, max, volatility), breach day counts (FAIL/WARNING/PASS), and compliance rates. Used by Compliance team for monthly regulatory submissions, by Treasury for performance reporting, and by Executive Management for Board reporting. Critical for demonstrating sustained compliance with Basel III liquidity requirements and trend analysis over time.'
     AS
 SELECT
@@ -183,7 +170,54 @@ FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
 GROUP BY DATE_TRUNC('MONTH', AS_OF_DATE)
 ORDER BY REPORTING_MONTH DESC;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_MONITORING
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_MONITORING (
+    REPORTING_DATE COMMENT 'Reporting (cut-off) date of the LCR figures (daily COB snapshot).',
+    BANK_ID COMMENT 'Regulatory bank identifier used in SNB submissions (SYNTH-CH-999).',
+    LCR_RATIO COMMENT 'Liquidity Coverage Ratio in percent (HQLA / net cash outflows x 100).',
+    LCR_STATUS COMMENT 'Status band: FAIL (<100%), WARNING (100% to <110%), PASS (>=110%).',
+    SEVERITY COMMENT 'Severity / colour of the status (RED, YELLOW, GREEN) or alert severity (CRITICAL, HIGH, MEDIUM, INFO).',
+    HQLA_TOTAL COMMENT 'Stock of HQLA in CHF after the L2B and L2 caps (LCR numerator).',
+    L1_TOTAL COMMENT 'Level 1 HQLA in CHF (0% haircut).',
+    L2A_TOTAL COMMENT 'Level 2A HQLA in CHF after 15% haircut.',
+    L2B_TOTAL COMMENT 'Level 2B HQLA in CHF after 50% haircut, before the 15% cap.',
+    L2_CAPPED COMMENT 'Level 2 HQLA in CHF after the L2B 15% and L2 40% caps.',
+    CAP_APPLIED COMMENT 'TRUE when the L2B 15% or L2 40% cap reduced the HQLA stock.',
+    DISCARDED_L2 COMMENT 'Level 2 assets in CHF excluded by the caps.',
+    OUTFLOW_TOTAL COMMENT 'Total gross stressed 30-day outflows in CHF incl. facility drawdowns.',
+    OUTFLOW_RETAIL COMMENT 'Stressed 30-day retail deposit outflows in CHF.',
+    OUTFLOW_CORP COMMENT 'Stressed 30-day corporate / SME deposit outflows in CHF.',
+    OUTFLOW_FI COMMENT 'Stressed 30-day financial-institution deposit and interbank borrowing outflows in CHF.',
+    LCR_BUFFER_CHF COMMENT 'Liquidity buffer in CHF = HQLA - net cash outflows.',
+    LCR_BUFFER_PCT COMMENT 'Liquidity buffer in percent of net cash outflows.',
+    LCR_7D_AVG COMMENT '7-day rolling average LCR in percent.',
+    LCR_30D_AVG COMMENT '30-day rolling average LCR in percent.',
+    LCR_90D_AVG COMMENT '90-day rolling average LCR in percent.',
+    LCR_30D_VOLATILITY COMMENT '30-day rolling standard deviation of the LCR.',
+    LCR_30D_MIN COMMENT 'Minimum LCR of the last 30 days in percent.',
+    LCR_30D_MAX COMMENT 'Maximum LCR of the last 30 days in percent.',
+    LCR_DOD_CHANGE COMMENT 'Day-over-day LCR change in percentage points.',
+    CONSECUTIVE_BREACHES_3D COMMENT 'Number of days below 100% within the last 3 days.',
+    HIGH_VOLATILITY_ALERT COMMENT 'TRUE when the absolute day-over-day change exceeds 10pp.',
+    SUSTAINED_BREACH_ALERT COMMENT 'TRUE when the LCR was below 100% on 3 consecutive days.',
+    CRITICAL_BREACH_ALERT COMMENT 'TRUE when the LCR is below 95%.',
+    L1_HOLDING_COUNT COMMENT 'Number of eligible Level 1 positions on the latest date.',
+    L1_GROSS_VALUE COMMENT 'Gross market value of eligible Level 1 positions in CHF.',
+    L1_CURRENCIES COMMENT 'Currencies of the eligible Level 1 positions.',
+    L2A_HOLDING_COUNT COMMENT 'Number of eligible Level 2A positions on the latest date.',
+    L2A_GROSS_VALUE COMMENT 'Gross market value of eligible Level 2A positions in CHF.',
+    L2B_HOLDING_COUNT COMMENT 'Number of eligible Level 2B positions on the latest date.',
+    L2B_GROSS_VALUE COMMENT 'Gross market value of eligible Level 2B positions in CHF.',
+    RETAIL_ACCOUNT_COUNT COMMENT 'Number of active retail deposit accounts on the latest date.',
+    RETAIL_CUSTOMER_COUNT COMMENT 'Number of distinct retail depositors on the latest date.',
+    RETAIL_BALANCE_CHF COMMENT 'Total active retail deposit balance in CHF.',
+    RETAIL_AVG_RUN_OFF_PCT COMMENT 'Average final run-off rate of retail accounts in percent.',
+    CORP_ACCOUNT_COUNT COMMENT 'Number of active corporate deposit accounts on the latest date.',
+    CORP_CUSTOMER_COUNT COMMENT 'Number of distinct corporate depositors on the latest date.',
+    CORP_BALANCE_CHF COMMENT 'Total active corporate deposit balance in CHF.',
+    CORP_AVG_RUN_OFF_PCT COMMENT 'Average final run-off rate of corporate accounts in percent.',
+    LCR_CALCULATION_TIMESTAMP COMMENT 'UTC timestamp of the underlying LCR calculation.',
+    VIEW_QUERY_TIMESTAMP COMMENT 'UTC timestamp when this view was queried.'
+)
     COMMENT = 'Consolidated LCR monitoring dashboard view combining all key liquidity metrics in a single row. Integrates latest daily LCR ratio, compliance status, HQLA breakdown (L1/L2A/L2B), deposit outflow analysis (Retail/Corporate/FI), trend metrics (7/30/90-day averages), volatility measures, and automated alert flags. Optimized for Treasury dashboards, executive reporting, and downstream application integration. Single source of truth for current liquidity position and regulatory compliance status. Updated in real-time via underlying dynamic tables for operational decision-making and management escalation.'
     AS
 WITH latest_lcr AS (
@@ -205,7 +239,8 @@ hqla_breakdown AS (
         ROUND(SUM(h.WEIGHTED_VALUE_CHF), 2) AS WEIGHTED_VALUE_CHF,
         LISTAGG(DISTINCT h.CURRENCY, ', ') WITHIN GROUP (ORDER BY h.CURRENCY) AS CURRENCIES
     FROM {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL h
-    WHERE h.AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL)
+    WHERE h.HQLA_ELIGIBLE
+      AND h.AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL)
     GROUP BY h.AS_OF_DATE, h.REGULATORY_LEVEL
 ),
 outflow_breakdown AS (
@@ -218,7 +253,8 @@ outflow_breakdown AS (
         ROUND(SUM(o.OUTFLOW_AMOUNT_CHF), 2) AS TOTAL_OUTFLOW_CHF,
         ROUND(AVG(o.FINAL_RUN_OFF_RATE) * 100, 2) AS AVG_RUN_OFF_PCT
     FROM {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL o
-    WHERE o.AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL)
+    WHERE o.ACCOUNT_STATUS = 'ACTIVE'
+      AND o.AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL)
     GROUP BY o.AS_OF_DATE, o.COUNTERPARTY_TYPE
 )
 SELECT
@@ -271,7 +307,16 @@ SELECT
 FROM latest_lcr l
 CROSS JOIN latest_trend t;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_ALERTS
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_ALERTS (
+    AS_OF_DATE COMMENT 'Reporting (cut-off) date of the record (daily COB snapshot).',
+    LCR_RATIO COMMENT 'Liquidity Coverage Ratio in percent (HQLA / net cash outflows x 100).',
+    LCR_STATUS COMMENT 'Status band: FAIL (<100%), WARNING (100% to <110%), PASS (>=110%).',
+    SEVERITY COMMENT 'Severity / colour of the status (RED, YELLOW, GREEN) or alert severity (CRITICAL, HIGH, MEDIUM, INFO).',
+    ALL_ALERTS COMMENT 'Array of alert objects (severity, type, message, action) for the latest date.',
+    TOTAL_ALERT_COUNT COMMENT 'Number of alerts raised for the latest date.',
+    HIGHEST_SEVERITY COMMENT 'Highest alert severity of the latest date (CRITICAL, HIGH, MEDIUM, INFO, NONE).',
+    ALERT_TIMESTAMP COMMENT 'UTC timestamp when the alerts were evaluated.'
+)
     COMMENT = 'Automated alert generation view for LCR compliance monitoring with structured alert messages and severity classification. Generates real-time alerts for regulatory breaches (LCR <100%), critical breaches (LCR <95%), high volatility (>10% daily change), sustained breaches (3+ consecutive days), and 40% cap violations. Each alert includes severity level (CRITICAL/HIGH/MEDIUM/INFO), alert type, descriptive message, and recommended action. Used by Treasury operations for real-time monitoring, by Compliance for breach documentation, and integrated with notification systems for management escalation. Critical for FINMA reporting obligations and audit trail maintenance.'
     AS
 WITH latest_lcr AS (
@@ -369,7 +414,39 @@ SELECT
     CURRENT_TIMESTAMP() AS ALERT_TIMESTAMP
 FROM alerts;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_LCR_CURRENT
+DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_LCR_CURRENT (
+    REPORTING_DATE COMMENT 'Reporting (cut-off) date of the LCR figures (daily COB snapshot).',
+    BANK_ID COMMENT 'Regulatory bank identifier used in SNB submissions (SYNTH-CH-999).',
+    LCR_RATIO_PCT COMMENT 'Liquidity Coverage Ratio in percent (HQLA / net cash outflows x 100).',
+    COMPLIANCE_STATUS COMMENT 'Status band: FAIL (<100%), WARNING (100% to <110%), PASS (>=110%).',
+    STATUS_COLOR COMMENT 'Dashboard colour of the status: RED, YELLOW, GREEN.',
+    HQLA_TOTAL_CHF COMMENT 'Stock of HQLA in CHF after the L2B and L2 caps (LCR numerator).',
+    LEVEL1_ASSETS_CHF COMMENT 'Level 1 HQLA in CHF (0% haircut).',
+    LEVEL2A_ASSETS_CHF COMMENT 'Level 2A HQLA in CHF after 15% haircut.',
+    LEVEL2B_ASSETS_CHF COMMENT 'Level 2B HQLA in CHF after 50% haircut, before the 15% cap.',
+    LEVEL2_ASSETS_AFTER_CAP_CHF COMMENT 'Level 2 HQLA in CHF after the L2B 15% and L2 40% caps.',
+    LEVEL2_ASSETS_BEFORE_CAP_CHF COMMENT 'Level 2 HQLA in CHF (L2A + L2B) before any cap.',
+    LEVEL1_PCT_OF_HQLA COMMENT 'Share of Level 1 in the HQLA stock in percent.',
+    LEVEL2_PCT_OF_HQLA COMMENT 'Share of capped Level 2 in the HQLA stock in percent.',
+    IS_40PCT_CAP_APPLIED COMMENT 'TRUE when the L2B 15% or L2 40% cap reduced the HQLA stock.',
+    DISCARDED_LEVEL2_CHF COMMENT 'Level 2 assets in CHF excluded by the caps.',
+    CAP_BUFFER_PCT COMMENT 'Headroom to the 40% L2 cap in percent of the cap (negative = cap binding).',
+    NET_CASH_OUTFLOWS_CHF COMMENT 'Net cash outflows in CHF = gross outflows - inflows capped at 75% (LCR denominator).',
+    RETAIL_OUTFLOWS_CHF COMMENT 'Stressed 30-day retail deposit outflows in CHF.',
+    CORPORATE_OUTFLOWS_CHF COMMENT 'Stressed 30-day corporate / SME deposit outflows in CHF.',
+    FINANCIAL_INST_OUTFLOWS_CHF COMMENT 'Stressed 30-day financial-institution deposit and interbank borrowing outflows in CHF.',
+    RETAIL_PCT_OF_OUTFLOWS COMMENT 'Share of retail outflows in total gross outflows in percent.',
+    CORPORATE_PCT_OF_OUTFLOWS COMMENT 'Share of corporate outflows in total gross outflows in percent.',
+    FI_PCT_OF_OUTFLOWS COMMENT 'Share of financial-institution outflows in total gross outflows in percent.',
+    LIQUIDITY_BUFFER_CHF COMMENT 'Liquidity buffer in CHF = HQLA - net cash outflows.',
+    BUFFER_PCT_OF_OUTFLOWS COMMENT 'Liquidity buffer in percent of net cash outflows.',
+    BUFFER_STRENGTH COMMENT 'Buffer classification: STRONG, ADEQUATE, MODERATE, MINIMAL, BREACH.',
+    HQLA_SECURITIES_COUNT COMMENT 'Number of eligible HQLA positions.',
+    DEPOSIT_ACCOUNTS_COUNT COMMENT 'Number of deposit and borrowing positions in the calculation.',
+    LAST_CALCULATED_UTC COMMENT 'UTC timestamp of the last LCR calculation (dynamic table refresh).',
+    CALCULATION_AGE_MINUTES COMMENT 'Minutes since the last LCR calculation.',
+    DATA_FRESHNESS COMMENT 'Freshness flag of the calculation: FRESH (<=60 min), RECENT (<=120 min), STALE.'
+)
 COMMENT = 'Current LCR status - single row with all key metrics for executive dashboard. Returns latest available LCR calculation with compliance status, HQLA composition, outflow breakdown, and buffer analysis. Optimized for fast retrieval and notebook queries.'
 AS
 SELECT
@@ -392,9 +469,9 @@ SELECT
 
     CAP_APPLIED AS IS_40PCT_CAP_APPLIED,
     DISCARDED_L2 AS DISCARDED_LEVEL2_CHF,
-    ROUND((L2_UNCAPPED / NULLIF(L1_TOTAL, 0) * 100 * 1.5) - 40, 1) AS CAP_BUFFER_PCT,  -- Distance to 40% cap
+    ROUND((2.0 / 3.0 * L1_TOTAL - L2_UNCAPPED) / NULLIF(2.0 / 3.0 * L1_TOTAL, 0) * 100, 1) AS CAP_BUFFER_PCT,  -- Headroom to the 40% L2 cap in % of the cap
 
-    OUTFLOW_TOTAL AS NET_CASH_OUTFLOWS_CHF,
+    NET_OUTFLOW AS NET_CASH_OUTFLOWS_CHF,
     OUTFLOW_RETAIL AS RETAIL_OUTFLOWS_CHF,
     OUTFLOW_CORP AS CORPORATE_OUTFLOWS_CHF,
     OUTFLOW_FI AS FINANCIAL_INST_OUTFLOWS_CHF,
@@ -428,7 +505,21 @@ FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_DAILY
 WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_DAILY)
 ;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_HQLA_BREAKDOWN
+DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_HQLA_BREAKDOWN (
+    REPORTING_DATE COMMENT 'Reporting (cut-off) date of the LCR figures (daily COB snapshot).',
+    ASSET_LEVEL COMMENT 'Basel III HQLA level of the asset type (L1, L2A, L2B).',
+    ASSET_TYPE COMMENT 'HQLA asset type code (e.g. CASH_SNB, GOVT_BOND_CHF, CANTON_BOND, EQUITY_SMI).',
+    MARKET_VALUE_CHF COMMENT 'Gross market value in CHF before regulatory haircuts.',
+    MARKET_VALUE_BILLIONS COMMENT 'Gross market value in CHF billions (display convenience).',
+    HAIRCUT_PCT COMMENT 'Regulatory haircut in percent (0 for L1, 15 for L2A, 50 for L2B).',
+    STANDARD_HAIRCUT_PCT COMMENT 'Standard Basel III haircut of the HQLA level in percent (0, 15, 50).',
+    HQLA_VALUE_CHF COMMENT 'Post-haircut HQLA value in CHF before the L2 caps.',
+    HQLA_VALUE_BILLIONS COMMENT 'Post-haircut HQLA value in CHF billions (display convenience).',
+    HOLDINGS_COUNT COMMENT 'Number of eligible HQLA positions in the group.',
+    PCT_OF_TOTAL_HQLA COMMENT 'Share of the group in total HQLA in percent.',
+    LEVEL_SORT_ORDER COMMENT 'Display order of the HQLA level (1 = L1, 2 = L2A, 3 = L2B).',
+    QUALITY_DESCRIPTION COMMENT 'Business description of the HQLA quality level and its haircut.'
+)
 COMMENT = 'HQLA composition by level (L1/L2A/L2B) and asset type with market value, haircuts, and percentage of total. Used for portfolio analysis, rebalancing decisions, and notebook queries about asset composition. Includes all HQLA holdings for latest reporting date.'
 AS
 WITH latest_date AS (
@@ -491,7 +582,24 @@ ORDER BY
     HQLA_VALUE_CHF DESC
 ;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_OUTFLOW_BREAKDOWN
+DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_OUTFLOW_BREAKDOWN (
+    REPORTING_DATE COMMENT 'Reporting (cut-off) date of the LCR figures (daily COB snapshot).',
+    COUNTERPARTY_TYPE COMMENT 'Outflow segment / counterparty type (RETAIL, CORPORATE, FINANCIAL_INSTITUTION, COMMITTED_FACILITIES).',
+    DEPOSIT_BALANCE_CHF COMMENT 'Gross amount of the outflow segment in CHF (balances, borrowings or undrawn facilities).',
+    DEPOSIT_BALANCE_BILLIONS COMMENT 'Gross amount of the outflow segment in CHF billions.',
+    AVG_RUN_OFF_RATE_PCT COMMENT 'Average effective run-off rate of the segment in percent.',
+    MIN_RUN_OFF_RATE_PCT COMMENT 'Minimum effective run-off rate of the segment in percent.',
+    MAX_RUN_OFF_RATE_PCT COMMENT 'Maximum effective run-off rate of the segment in percent.',
+    OUTFLOW_AMOUNT_CHF COMMENT 'Stressed 30-day outflow in CHF (balance x run-off rate).',
+    OUTFLOW_AMOUNT_BILLIONS COMMENT 'Stressed 30-day outflow in CHF billions (display convenience).',
+    ACCOUNT_COUNT COMMENT 'Number of positions (accounts, borrowings, facilities) in the segment.',
+    PCT_OF_TOTAL_OUTFLOWS COMMENT 'Share of the segment in total stressed outflows in percent.',
+    PCT_OF_TOTAL_DEPOSITS COMMENT 'Share of the segment in the total gross amount in percent.',
+    EFFECTIVE_RUN_OFF_PCT COMMENT 'Effective run-off rate of the segment in percent (outflow / gross amount).',
+    COUNTERPARTY_CATEGORY COMMENT 'Business label of the outflow segment (Retail, Corporate, Wholesale Funding, Committed Facilities).',
+    STABILITY_RATING COMMENT 'Funding stability rating derived from the average run-off rate.',
+    DISPLAY_ORDER COMMENT 'Display order of the outflow segment in charts and tables.'
+)
 COMMENT = 'Deposit outflow breakdown by counterparty type showing balances, run-off rates, and outflow amounts. Used for funding strategy analysis and notebook queries about deposit composition. Includes percentage breakdowns for executive reporting and waterfall chart visualization.'
 AS
 WITH latest_date AS (
@@ -510,9 +618,9 @@ SELECT
     SUM(o.BALANCE_CHF) AS DEPOSIT_BALANCE_CHF,
     ROUND(SUM(o.BALANCE_CHF) / 1e9, 2) AS DEPOSIT_BALANCE_BILLIONS,
 
-    AVG(o.RUN_OFF_RATE) AS AVG_RUN_OFF_RATE_PCT,
-    MIN(o.RUN_OFF_RATE) AS MIN_RUN_OFF_RATE_PCT,
-    MAX(o.RUN_OFF_RATE) AS MAX_RUN_OFF_RATE_PCT,
+    AVG(o.RUN_OFF_RATE) * 100 AS AVG_RUN_OFF_RATE_PCT,
+    MIN(o.RUN_OFF_RATE) * 100 AS MIN_RUN_OFF_RATE_PCT,
+    MAX(o.RUN_OFF_RATE) * 100 AS MAX_RUN_OFF_RATE_PCT,
 
     SUM(o.OUTFLOW_AMOUNT_CHF) AS OUTFLOW_AMOUNT_CHF,
     ROUND(SUM(o.OUTFLOW_AMOUNT_CHF) / 1e9, 2) AS OUTFLOW_AMOUNT_BILLIONS,
@@ -527,26 +635,24 @@ SELECT
         WHEN o.COUNTERPARTY_TYPE LIKE 'RETAIL%' THEN 'Retail Deposits'
         WHEN o.COUNTERPARTY_TYPE LIKE 'CORPORATE%' THEN 'Corporate Deposits'
         WHEN o.COUNTERPARTY_TYPE = 'FINANCIAL_INSTITUTION' THEN 'Wholesale Funding'
+        WHEN o.COUNTERPARTY_TYPE = 'COMMITTED_FACILITIES' THEN 'Committed Facilities'
         ELSE 'Other'
     END AS COUNTERPARTY_CATEGORY,
 
     CASE
-        WHEN AVG(o.RUN_OFF_RATE) <= 5 THEN 'Very Stable'
-        WHEN AVG(o.RUN_OFF_RATE) <= 15 THEN 'Stable'
-        WHEN AVG(o.RUN_OFF_RATE) <= 30 THEN 'Moderate Risk'
-        WHEN AVG(o.RUN_OFF_RATE) <= 50 THEN 'High Risk'
+        WHEN AVG(o.RUN_OFF_RATE) * 100 <= 5 THEN 'Very Stable'
+        WHEN AVG(o.RUN_OFF_RATE) * 100 <= 15 THEN 'Stable'
+        WHEN AVG(o.RUN_OFF_RATE) * 100 <= 30 THEN 'Moderate Risk'
+        WHEN AVG(o.RUN_OFF_RATE) * 100 <= 50 THEN 'High Risk'
         ELSE 'Very High Risk'
     END AS STABILITY_RATING,
 
     CASE
-        WHEN o.COUNTERPARTY_TYPE = 'RETAIL_STABLE' THEN 1
-        WHEN o.COUNTERPARTY_TYPE = 'RETAIL_LESS_STABLE' THEN 2
-        WHEN o.COUNTERPARTY_TYPE = 'RETAIL_INSURED' THEN 3
-        WHEN o.COUNTERPARTY_TYPE = 'CORPORATE_OPERATIONAL' THEN 4
-        WHEN o.COUNTERPARTY_TYPE = 'CORPORATE_NON_OPERATIONAL' THEN 5
-        WHEN o.COUNTERPARTY_TYPE = 'FINANCIAL_INSTITUTION' THEN 6
-        WHEN o.COUNTERPARTY_TYPE = 'WHOLESALE_FUNDING' THEN 7
-        ELSE 8
+        WHEN o.COUNTERPARTY_TYPE = 'RETAIL' THEN 1
+        WHEN o.COUNTERPARTY_TYPE = 'CORPORATE' THEN 2
+        WHEN o.COUNTERPARTY_TYPE = 'FINANCIAL_INSTITUTION' THEN 3
+        WHEN o.COUNTERPARTY_TYPE = 'COMMITTED_FACILITIES' THEN 4
+        ELSE 5
     END AS DISPLAY_ORDER
 
 FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_OUTFLOW o
@@ -562,7 +668,28 @@ ORDER BY
     DISPLAY_ORDER
 ;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_TREND_90DAY
+DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_TREND_90DAY (
+    REPORTING_DATE COMMENT 'Reporting (cut-off) date of the LCR figures (daily COB snapshot).',
+    LCR_RATIO_PCT COMMENT 'Liquidity Coverage Ratio in percent (HQLA / net cash outflows x 100).',
+    COMPLIANCE_STATUS COMMENT 'Status band: FAIL (<100%), WARNING (100% to <110%), PASS (>=110%).',
+    STATUS_COLOR COMMENT 'Dashboard colour of the status: RED, YELLOW, GREEN.',
+    HQLA_TOTAL_CHF COMMENT 'Stock of HQLA in CHF after the L2B and L2 caps (LCR numerator).',
+    OUTFLOW_TOTAL_CHF COMMENT 'Total gross stressed 30-day outflows in CHF incl. facility drawdowns.',
+    LIQUIDITY_BUFFER_CHF COMMENT 'Liquidity buffer in CHF = HQLA - net cash outflows.',
+    MA7_LCR_RATIO COMMENT '7-day moving average of the LCR in percent.',
+    MA30_LCR_RATIO COMMENT '30-day moving average of the LCR in percent.',
+    DAY_OVER_DAY_CHANGE_PCT COMMENT 'Day-over-day LCR change in percentage points.',
+    DAY_OVER_DAY_CHANGE_PERCENT COMMENT 'Day-over-day LCR change relative to the prior LCR in percent.',
+    VOLATILITY_RATING COMMENT 'Daily volatility rating of the LCR change (Stable, Moderate, High, Very High).',
+    IS_BREACH COMMENT 'TRUE when the LCR is below the 100% regulatory minimum.',
+    IS_WARNING COMMENT 'TRUE when the LCR is between 100% and 110% (internal warning band).',
+    CONSECUTIVE_BREACH_DAYS_3DAY COMMENT 'Number of days below 100% within the last 3 days.',
+    TREND_DIRECTION COMMENT 'Direction of the day-over-day move: Improving, Declining or Stable.',
+    DISTANCE_FROM_MINIMUM_PCT COMMENT 'LCR minus the 100% regulatory minimum in percentage points.',
+    DISTANCE_FROM_TARGET_PCT COMMENT 'LCR minus the 110% internal PASS threshold in percentage points.',
+    LAST_CALCULATED_UTC COMMENT 'UTC timestamp of the last LCR calculation (dynamic table refresh).',
+    IS_40PCT_CAP_APPLIED COMMENT 'TRUE when the L2B 15% or L2 40% cap reduced the HQLA stock.'
+)
 COMMENT = '90-day LCR historical trend with 7-day and 30-day moving averages. Used for volatility analysis, compliance tracking, and notebook queries about historical performance. Includes day-over-day change calculations and breach detection for management escalation.'
 AS
 SELECT
@@ -599,7 +726,7 @@ SELECT
     END AS VOLATILITY_RATING,
 
     CASE WHEN LCR_RATIO < 100 THEN TRUE ELSE FALSE END AS IS_BREACH,
-    CASE WHEN LCR_RATIO < 105 THEN TRUE ELSE FALSE END AS IS_WARNING,
+    CASE WHEN LCR_RATIO >= 100 AND LCR_RATIO < 110 THEN TRUE ELSE FALSE END AS IS_WARNING,
 
     SUM(CASE WHEN LCR_RATIO < 100 THEN 1 ELSE 0 END) OVER (
         ORDER BY AS_OF_DATE
@@ -613,7 +740,7 @@ SELECT
     END AS TREND_DIRECTION,
 
     ROUND(LCR_RATIO - 100, 1) AS DISTANCE_FROM_MINIMUM_PCT,
-    ROUND(LCR_RATIO - 110, 1) AS DISTANCE_FROM_TARGET_PCT,
+    ROUND(LCR_RATIO - 110, 1) AS DISTANCE_FROM_TARGET_PCT,  -- 110% = internal PASS threshold
 
     CALCULATION_TIMESTAMP AS LAST_CALCULATED_UTC,
     CAP_APPLIED AS IS_40PCT_CAP_APPLIED
@@ -625,7 +752,21 @@ WHERE AS_OF_DATE >= DATEADD(day, -90, CURRENT_DATE())
 ORDER BY AS_OF_DATE DESC
 ;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_ALERTS_ACTIVE
+DEFINE VIEW {{ db }}.{{ rep_agg }}.LCRS_AGG_VW_ALERTS_ACTIVE (
+    ALERT_DATE COMMENT 'Reporting date on which the alert was raised.',
+    ALERT_TYPE COMMENT 'Alert type (LCR_BREACH_CRITICAL, LCR_BREACH, LCR_WARNING, HIGH_VOLATILITY, MODERATE_VOLATILITY, L2_CAP_APPLIED).',
+    SEVERITY COMMENT 'Severity / colour of the status (RED, YELLOW, GREEN) or alert severity (CRITICAL, HIGH, MEDIUM, INFO).',
+    DESCRIPTION COMMENT 'Alert message describing the condition.',
+    CURRENT_LCR_RATIO COMMENT 'LCR in percent on the alert date.',
+    ALERT_THRESHOLD COMMENT 'Threshold that triggered the alert (95, 100 or 66.67); NULL for volatility alerts.',
+    RECOMMENDED_ACTION COMMENT 'Recommended action for Treasury / Compliance.',
+    SEVERITY_PRIORITY COMMENT 'Sort priority of the severity (1 = CRITICAL ... 4 = INFO).',
+    DAYS_SINCE_ALERT COMMENT 'Days between the alert date and today.',
+    ALERT_AGE COMMENT 'Alert age bucket: Today, Yesterday, This Week, Older.',
+    ALERT_CATEGORY COMMENT 'Alert category: Compliance, Risk, Portfolio or Operational Alert.',
+    ESCALATION_REQUIRED COMMENT 'TRUE when an LCR breach has not been resolved within 24 hours.',
+    ALERT_GENERATED_UTC COMMENT 'UTC timestamp when the alert was generated.'
+)
 COMMENT = 'Active LCR compliance alerts filtered for dashboard display. Pre-filtered to show only unresolved alerts requiring attention. Used for notebook queries and real-time monitoring dashboards. Includes severity classification and recommended actions for Treasury escalation.'
 AS
 WITH flattened_alerts AS (

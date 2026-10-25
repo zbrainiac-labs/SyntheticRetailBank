@@ -4,18 +4,19 @@ default_target: 'DEV'
 
 targets:
   DEV:
-    account_identifier: SFSEEUROPE-ZS28104
+    account_identifier: SFSEEUROPE-DEMO_MDAEPPEN
     project_name: 'AAA_DEV_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK'
     project_owner: CICD
     templating_config: 'DEV'
   PROD:
-    account_identifier: SFSEEUROPE-ZS28104
+    account_identifier: SFSEEUROPE-DEMO_MDAEPPEN
     project_name: 'AAA_PRD_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK'
     project_owner: CICD
     templating_config: 'PROD'
 
 templating:
   defaults:
+    semantic_views: 'true'   # 'false' only for the first deploy into an empty database
     db: 'AAA_DEV_SYNTHETIC_BANK'
     wh: 'MD_TEST_WH'
     lag: '60 MINUTE'

@@ -1,8 +1,9 @@
 import streamlit as st
 from utils.data_loaders import load_customer_360
 from utils.visualizations import plot_account_tier_distribution, plot_geographic_distribution
+from utils.ui_helpers import page_header
 
-st.header("Portfolio Analytics")
+page_header('Portfolio Analytics', 'Customer portfolio composition and performance')
 
 try:
     df_customers = load_customer_360()

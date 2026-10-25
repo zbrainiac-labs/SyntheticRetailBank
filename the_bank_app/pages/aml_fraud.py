@@ -4,8 +4,9 @@ from datetime import datetime
 from utils.data_loaders import load_customer_360, load_aml_alerts, load_aml_metrics
 from utils.visualizations import plot_aml_alert_trend
 from utils.ui_helpers import show_profile_picker
+from utils.ui_helpers import page_header
 
-st.header("AML & Fraud Detection")
+page_header('AML & Fraud Detection', 'Transaction monitoring, alerts and suspicious-activity patterns')
 
 tab_fraud, tab_aml = st.tabs(["Fraud Detection", "AML Monitoring"])
 

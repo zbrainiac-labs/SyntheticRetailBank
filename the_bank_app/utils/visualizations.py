@@ -10,13 +10,13 @@ import pandas as pd
 
 # Color palette for professional banking UI
 COLORS = {
-    'CRITICAL': '#DC143C',   # Crimson
-    'HIGH': '#FF8C00',       # Dark Orange
+    'CRITICAL': '#FF3B30',   # Crimson
+    'HIGH': '#FF9F0A',       # Dark Orange
     'MEDIUM': '#FFD700',     # Gold
-    'LOW': '#32CD32',        # Lime Green
+    'LOW': '#34C759',        # Lime Green
     'NO_RISK': '#1E90FF',    # Dodger Blue
-    'primary': '#003366',    # Dark Blue
-    'secondary': '#0066CC'   # Medium Blue
+    'primary': '#007AFF',    # Dark Blue
+    'secondary': '#007AFF'   # Medium Blue
 }
 
 
@@ -298,7 +298,7 @@ def plot_account_holdings_by_tier(df):
         name='Savings',
         x=account_summary.index,
         y=account_summary['SAVINGS_ACCOUNTS'],
-        marker_color='#ff7f0e'
+        marker_color='#FF9F0A'
     ))
     
     fig.add_trace(go.Bar(
@@ -312,7 +312,7 @@ def plot_account_holdings_by_tier(df):
         name='Investment',
         x=account_summary.index,
         y=account_summary['INVESTMENT_ACCOUNTS'],
-        marker_color='#d62728'
+        marker_color='#FF3B30'
     ))
     
     fig.update_layout(
@@ -723,15 +723,15 @@ def plot_lifecycle_stage_distribution(df):
     
     # Define colors for lifecycle stages
     lifecycle_colors = {
-        'NEW': '#4CAF50',        # Green
-        'ACTIVE': '#2196F3',     # Blue
-        'MATURE': '#FF9800',     # Orange
-        'DECLINING': '#FFC107',  # Amber
-        'DORMANT': '#9E9E9E',    # Grey
-        'CHURNED': '#F44336'     # Red
+        'NEW': '#34C759',        # Green
+        'ACTIVE': '#007AFF',     # Blue
+        'MATURE': '#FF9F0A',     # Orange
+        'DECLINING': '#FFCC00',  # Amber
+        'DORMANT': '#8E8E93',    # Grey
+        'CHURNED': '#FF3B30'     # Red
     }
     
-    colors = [lifecycle_colors.get(stage, '#CCCCCC') for stage in df['LIFECYCLE_STAGE']]
+    colors = [lifecycle_colors.get(stage, '#C7C7CC') for stage in df['LIFECYCLE_STAGE']]
     
     fig = px.pie(
         df,
@@ -818,15 +818,15 @@ def plot_lifecycle_revenue(df):
         return go.Figure()
     
     lifecycle_colors = {
-        'NEW': '#4CAF50',
-        'ACTIVE': '#2196F3',
-        'MATURE': '#FF9800',
-        'DECLINING': '#FFC107',
-        'DORMANT': '#9E9E9E',
-        'CHURNED': '#F44336'
+        'NEW': '#34C759',
+        'ACTIVE': '#007AFF',
+        'MATURE': '#FF9F0A',
+        'DECLINING': '#FFCC00',
+        'DORMANT': '#8E8E93',
+        'CHURNED': '#FF3B30'
     }
     
-    colors = [lifecycle_colors.get(stage, '#CCCCCC') for stage in df['LIFECYCLE_STAGE']]
+    colors = [lifecycle_colors.get(stage, '#C7C7CC') for stage in df['LIFECYCLE_STAGE']]
     
     fig = go.Figure(data=[
         go.Bar(
@@ -960,7 +960,7 @@ def plot_days_inactive_distribution(df):
         nbins=30,
         title="Distribution of Days Since Last Transaction",
         labels={'DAYS_SINCE_LAST_TRANSACTION': 'Days Inactive', 'count': 'Number of Customers'},
-        color_discrete_sequence=['#9E9E9E']
+        color_discrete_sequence=['#8E8E93']
     )
     
     # Add vertical line for dormant threshold (180 days)
@@ -1002,7 +1002,7 @@ def plot_lcr_trend(df):
         y=df['LCR_RATIO'],
         mode='lines+markers',
         name='LCR Ratio',
-        line=dict(color='#003366', width=3),
+        line=dict(color='#007AFF', width=3),
         marker=dict(size=6)
     ))
     
@@ -1013,7 +1013,7 @@ def plot_lcr_trend(df):
             y=df['LCR_7D_AVG'],
             mode='lines',
             name='7-Day Average',
-            line=dict(color='#0066CC', width=2, dash='dot')
+            line=dict(color='#007AFF', width=2, dash='dot')
         ))
     
     # Add 30-day average
@@ -1023,7 +1023,7 @@ def plot_lcr_trend(df):
             y=df['LCR_30D_AVG'],
             mode='lines',
             name='30-Day Average',
-            line=dict(color='#32CD32', width=2, dash='dash')
+            line=dict(color='#34C759', width=2, dash='dash')
         ))
     
     # Add regulatory threshold line at 100%
@@ -1076,9 +1076,9 @@ def plot_hqla_composition(df):
     level_totals = df.groupby('REGULATORY_LEVEL')['WEIGHTED_VALUE_CHF'].sum().reset_index()
     
     color_map = {
-        'L1': '#28A745',   # Green
-        'L2A': '#FFC107',  # Yellow
-        'L2B': '#FF8C00'   # Orange
+        'L1': '#34C759',   # Green
+        'L2A': '#FFCC00',  # Yellow
+        'L2B': '#FF9F0A'   # Orange
     }
     
     fig = px.pie(
@@ -1127,9 +1127,9 @@ def plot_hqla_by_asset_type(df):
         labels={'WEIGHTED_VALUE_CHF': 'Weighted Value (CHF)', 'ASSET_TYPE': 'Asset Type'},
         color='REGULATORY_LEVEL',
         color_discrete_map={
-            'L1': '#28A745',
-            'L2A': '#FFC107',
-            'L2B': '#FF8C00'
+            'L1': '#34C759',
+            'L2A': '#FFCC00',
+            'L2B': '#FF9F0A'
         }
     )
     
@@ -1167,9 +1167,9 @@ def plot_deposit_outflows_by_type(df):
         labels={'TOTAL_OUTFLOW_CHF': 'Total Outflow (CHF)', 'DEPOSIT_TYPE': 'Deposit Type'},
         color='COUNTERPARTY_TYPE',
         color_discrete_map={
-            'RETAIL': '#0066CC',
-            'CORPORATE': '#FF8C00',
-            'FINANCIAL_INSTITUTION': '#DC143C'
+            'RETAIL': '#007AFF',
+            'CORPORATE': '#FF9F0A',
+            'FINANCIAL_INSTITUTION': '#FF3B30'
         }
     )
     
@@ -1198,11 +1198,11 @@ def plot_lcr_gauge(current_lcr):
     """
     # Determine color based on value
     if current_lcr >= 105:
-        color = '#28A745'  # Green
+        color = '#34C759'  # Green
     elif current_lcr >= 100:
-        color = '#FFC107'  # Yellow
+        color = '#FFCC00'  # Yellow
     else:
-        color = '#DC143C'  # Red
+        color = '#FF3B30'  # Red
     
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
@@ -1267,9 +1267,9 @@ def plot_hqla_vs_outflows(df):
         text=[f"CHF {hqla:,.0f}", f"CHF {outflow:,.0f}", f"CHF {buffer:,.0f}"],
         textposition="outside",
         connector={"line": {"color": "rgb(63, 63, 63)"}},
-        decreasing={"marker": {"color": "#DC143C"}},
-        increasing={"marker": {"color": "#28A745"}},
-        totals={"marker": {"color": "#0066CC"}}
+        decreasing={"marker": {"color": "#FF3B30"}},
+        increasing={"marker": {"color": "#34C759"}},
+        totals={"marker": {"color": "#007AFF"}}
     ))
     
     fig.update_layout(
@@ -1299,7 +1299,7 @@ def plot_monthly_compliance_trend(df):
         x=df['REPORT_MONTH'],
         y=df['AVG_LCR_RATIO'],
         name='Average LCR',
-        marker_color='#003366',
+        marker_color='#007AFF',
         text=df['AVG_LCR_RATIO'].round(1),
         texttemplate='%{text}%',
         textposition='outside'

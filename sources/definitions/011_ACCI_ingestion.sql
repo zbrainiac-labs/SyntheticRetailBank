@@ -25,6 +25,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.ACCI_RAW_TK_LOAD_ACCOUNTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.ACCI_RAW_SM_ACCOUNT_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS (ACCOUNT_ID, ACCOUNT_TYPE, BASE_CURRENCY, CUSTOMER_ID, STATUS)
     FROM @{{ db }}.{{ crm_raw }}.ACCI_RAW_ST_ACCOUNTS
@@ -36,5 +37,31 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.ACCI_RAW_TK_CLEANUP_AFTER_LOAD_ACCOUNTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER account data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.ACCI_RAW_TK_LOAD_ACCOUNTS
+    STARTED
 AS
     CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.ACCI_RAW_ST_ACCOUNTS', 5);
+
+-- ============================================================
+-- FILE FORMATS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.ACCI_RAW_FF_ACCOUNT_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
+    COMMENT = 'CSV format for account master data files with multi-currency support. Expected columns: account_id, account_type, base_currency, customer_id, status';
+
+-- ============================================================
+-- STREAMS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.ACCI_RAW_SM_ACCOUNT_FILES
+    ON STAGE {{ db }}.{{ crm_raw }}.ACCI_RAW_ST_ACCOUNTS
+    COMMENT = 'Monitors ACCI_RAW_ST_ACCOUNTS stage for new account CSV files. Triggers ACCI_RAW_TK_LOAD_ACCOUNTS when files matching *accounts*.csv pattern are detected';

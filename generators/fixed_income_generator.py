@@ -138,6 +138,11 @@ class FixedIncomeTradeGenerator(BaseGenerator):
             end_date: End date for trade generation
         """
         super().__init__(config)
+        self.rng = random.Random(config.random_seed)
+        # Bond holdings per account: {account_id: {isin: {'notional': float, 'attrs': dict}}}
+        self.bond_holdings: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        self.bond_sell_ratio = 0.35  # share of bond trades that sell an existing holding
+        self.side_counts = {'1': 0, '2': 0}
         self.customers = customers
         self.accounts = accounts
         self.fx_rates = fx_rates
@@ -167,8 +172,8 @@ class FixedIncomeTradeGenerator(BaseGenerator):
     def _generate_isin(self, country_code: str, instrument_type: str) -> str:
         """Generate a realistic ISIN code"""
         # ISIN format: 2-char country + 9-char identifier + 1 check digit
-        identifier = ''.join([str(random.randint(0, 9)) for _ in range(9)])
-        return f"{country_code}{identifier}{random.randint(0, 9)}"
+        identifier = ''.join([str(self.rng.randint(0, 9)) for _ in range(9)])
+        return f"{country_code}{identifier}{self.rng.randint(0, 9)}"
     
     def _calculate_accrued_interest(self, notional: float, coupon_rate: float, 
                                    days_since_coupon: int) -> float:
@@ -198,61 +203,83 @@ class FixedIncomeTradeGenerator(BaseGenerator):
     
     def generate_bond_trade(self, customer_id: str, account: Dict, 
                            trade_date: date) -> FixedIncomeTrade:
-        """Generate a single bond trade"""
+        """Generate a single bond trade. Sells only reduce an existing holding of the account
+        (same ISIN, issuer, rating, coupon, maturity), never below zero."""
         
-        currency = random.choice(['CHF', 'EUR', 'USD', 'GBP'])
+        holdings = self.bond_holdings.setdefault(account['account_id'], {})
+        held = [isin for isin, h in holdings.items() if h['notional'] > 0]
+        is_sell = bool(held) and self.rng.random() < self.bond_sell_ratio
+        
+        if is_sell:
+            isin = self.rng.choice(held)
+            a = holdings[isin]['attrs']
+            currency, issuer_type, issuer, credit_rating = a['currency'], a['issuer_type'], a['issuer'], a['credit_rating']
+            tenor_years, maturity_date, coupon_rate = a['tenor_years'], a['maturity_date'], a['coupon_rate']
+            held_notional = holdings[isin]['notional']
+            # Sell the whole holding (~30%) or a round part of it
+            partial = [n for n in (10000, 25000, 50000, 100000, 250000, 500000) if n < held_notional]
+            notional = held_notional if (not partial or self.rng.random() < 0.3) else self.rng.choice(partial)
+        else:
+            currency = self.rng.choice(['CHF', 'EUR', 'USD', 'GBP'])
+            
+            # Determine issuer type and issuer
+            issuer_type = self.rng.choices(
+                ['SOVEREIGN', 'CORPORATE', 'SUPRANATIONAL'],
+                weights=[0.4, 0.5, 0.1]
+            )[0]
+            
+            if issuer_type == 'SOVEREIGN':
+                issuer = self.rng.choice(self.SOVEREIGN_ISSUERS.get(currency, ['Government']))
+                credit_rating = self.rng.choices(
+                    ['AAA', 'AA', 'A'],
+                    weights=[0.6, 0.3, 0.1]
+                )[0]
+            elif issuer_type == 'SUPRANATIONAL':
+                issuer = self.rng.choice(['European Investment Bank', 'World Bank', 
+                                       'International Finance Corporation'])
+                credit_rating = 'AAA'
+            else:  # CORPORATE
+                issuer = self.rng.choice(self.CORPORATE_ISSUERS)
+                credit_rating = self.rng.choices(
+                    ['AAA', 'AA', 'A', 'BBB', 'BB', 'B'],
+                    weights=[0.05, 0.15, 0.30, 0.30, 0.15, 0.05]
+                )[0]
+            
+            # Generate bond characteristics
+            tenor_years = self.rng.choice([1, 2, 3, 5, 7, 10, 15, 20, 30])
+            maturity_date = trade_date + timedelta(days=int(tenor_years * 365))
+            coupon_rate = round(self.rng.uniform(0.5, 5.0), 3)  # Annual coupon %
+            notional = self.rng.choice([10000, 25000, 50000, 100000, 250000, 500000, 1000000])
+            country_code = {'CHF': 'CH', 'EUR': 'DE', 'USD': 'US', 'GBP': 'GB'}.get(currency, 'CH')
+            isin = self._generate_isin(country_code, 'BOND')
+        
         fx_rate = self.fx_rates.get(currency, 1.0)
-        
-        # Determine issuer type and issuer
-        issuer_type = random.choices(
-            ['SOVEREIGN', 'CORPORATE', 'SUPRANATIONAL'],
-            weights=[0.4, 0.5, 0.1]
-        )[0]
-        
-        if issuer_type == 'SOVEREIGN':
-            issuer = random.choice(self.SOVEREIGN_ISSUERS.get(currency, ['Government']))
-            credit_rating = random.choices(
-                ['AAA', 'AA', 'A'],
-                weights=[0.6, 0.3, 0.1]
-            )[0]
-        elif issuer_type == 'SUPRANATIONAL':
-            issuer = random.choice(['European Investment Bank', 'World Bank', 
-                                   'International Finance Corporation'])
-            credit_rating = 'AAA'
-        else:  # CORPORATE
-            issuer = random.choice(self.CORPORATE_ISSUERS)
-            credit_rating = random.choices(
-                ['AAA', 'AA', 'A', 'BBB', 'BB', 'B'],
-                weights=[0.05, 0.15, 0.30, 0.30, 0.15, 0.05]
-            )[0]
-        
-        # Generate bond characteristics
-        tenor_years = random.choice([1, 2, 3, 5, 7, 10, 15, 20, 30])
-        maturity_date = trade_date + timedelta(days=int(tenor_years * 365))
-        
-        coupon_rate = round(random.uniform(0.5, 5.0), 3)  # Annual coupon %
         
         # Credit spread based on rating
         spread_range = self.CREDIT_RATINGS[credit_rating]
-        credit_spread_bps = round(random.uniform(*spread_range), 1)
+        credit_spread_bps = round(self.rng.uniform(*spread_range), 1)
         
         # Yield = risk-free rate + credit spread
         risk_free_rate = 2.5  # Simplified
         yield_rate = risk_free_rate + (credit_spread_bps / 100)
         
         # Price (as % of par) - bonds trade around par, adjusted for yield
-        price_deviation = random.uniform(-5, 5)
+        price_deviation = self.rng.uniform(-5, 5)
         price = round(100 + price_deviation, 2)
         
-        # Notional amount
-        notional = random.choice([10000, 25000, 50000, 100000, 250000, 500000, 1000000])
-        
         # Accrued interest (random days since last coupon)
-        days_since_coupon = random.randint(0, 180)
+        days_since_coupon = self.rng.randint(0, 180)
         accrued_interest = self._calculate_accrued_interest(notional, coupon_rate, days_since_coupon)
         
-        # Side (Buy or Sell)
-        side = random.choice(['1', '2'])  # 1=Buy, 2=Sell
+        # Side (1=Buy, 2=Sell) and holdings update
+        side = '2' if is_sell else '1'
+        self.side_counts[side] += 1
+        if is_sell:
+            holdings[isin]['notional'] -= notional
+        else:
+            holdings[isin] = {'notional': notional, 'attrs': dict(
+                currency=currency, issuer_type=issuer_type, issuer=issuer, credit_rating=credit_rating,
+                tenor_years=tenor_years, maturity_date=maturity_date, coupon_rate=coupon_rate)}
         
         # Gross amount (clean price + accrued interest)
         gross_amount = (price / 100) * notional + accrued_interest
@@ -260,7 +287,7 @@ class FixedIncomeTradeGenerator(BaseGenerator):
             gross_amount = -gross_amount
         
         # Commission (10-30 bps of notional)
-        commission = notional * random.uniform(0.0010, 0.0030)
+        commission = notional * self.rng.uniform(0.0010, 0.0030)
         
         # Net amount
         if side == '1':  # Buy
@@ -279,20 +306,16 @@ class FixedIncomeTradeGenerator(BaseGenerator):
         # Settlement date (T+1 for bonds in most markets)
         settlement_date = self._next_business_day(trade_date, days=1)
         
-        # ISIN
-        country_code = {'CHF': 'CH', 'EUR': 'DE', 'USD': 'US', 'GBP': 'GB'}.get(currency, 'CH')
-        isin = self._generate_isin(country_code, 'BOND')
-        
         # Market
-        market = random.choice(self.MARKETS.get(currency, ['OTC']))
+        market = self.rng.choice(self.MARKETS.get(currency, ['OTC']))
         
         # Liquidity score (1-10, sovereigns more liquid)
         if issuer_type == 'SOVEREIGN':
-            liquidity_score = random.uniform(7, 10)
+            liquidity_score = self.rng.uniform(7, 10)
         elif issuer_type == 'SUPRANATIONAL':
-            liquidity_score = random.uniform(6, 9)
+            liquidity_score = self.rng.uniform(6, 9)
         else:
-            liquidity_score = random.uniform(3, 8)
+            liquidity_score = self.rng.uniform(3, 8)
         
         return FixedIncomeTrade(
             trade_date=trade_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
@@ -327,7 +350,7 @@ class FixedIncomeTradeGenerator(BaseGenerator):
             credit_rating=credit_rating,
             credit_spread_bps=credit_spread_bps,
             market=market,
-            broker_id=f"BRK_{random.randint(100, 999)}",
+            broker_id=f"BRK_{self.rng.randint(100, 999)}",
             venue=market,
             liquidity_score=round(liquidity_score, 2),
             created_at=self.get_utc_timestamp()
@@ -337,33 +360,33 @@ class FixedIncomeTradeGenerator(BaseGenerator):
                            trade_date: date) -> FixedIncomeTrade:
         """Generate a single interest rate swap trade"""
         
-        currency = random.choice(['CHF', 'EUR', 'USD', 'GBP'])
+        currency = self.rng.choice(['CHF', 'EUR', 'USD', 'GBP'])
         fx_rate = self.fx_rates.get(currency, 1.0)
         
         # Swap characteristics
-        tenor_years = random.choice([1, 2, 3, 5, 7, 10])
+        tenor_years = self.rng.choice([1, 2, 3, 5, 7, 10])
         maturity_date = trade_date + timedelta(days=int(tenor_years * 365))
         
         # Fixed rate (swap rate)
-        fixed_rate = round(random.uniform(1.0, 4.5), 3)
+        fixed_rate = round(self.rng.uniform(1.0, 4.5), 3)
         
         # Floating rate index
         floating_rate_index = self.FLOATING_INDICES.get(currency, 'LIBOR')
         
         # Notional amount (swaps typically larger)
-        notional = random.choice([500000, 1000000, 2500000, 5000000, 10000000])
+        notional = self.rng.choice([500000, 1000000, 2500000, 5000000, 10000000])
         
         # Side: 1=Pay Fixed/Receive Floating, 2=Receive Fixed/Pay Floating
-        side = random.choice(['1', '2'])
+        side = self.rng.choice(['1', '2'])
         
         # Swap NPV at inception (typically near zero, small variation)
-        npv = notional * random.uniform(-0.002, 0.002)
+        npv = notional * self.rng.uniform(-0.002, 0.002)
         gross_amount = npv
         if side == '2':
             gross_amount = -gross_amount
         
         # Commission (smaller for swaps, 1-5 bps)
-        commission = notional * random.uniform(0.0001, 0.0005)
+        commission = notional * self.rng.uniform(0.0001, 0.0005)
         
         # Net amount
         if side == '1':
@@ -419,9 +442,9 @@ class FixedIncomeTradeGenerator(BaseGenerator):
             credit_rating='N/A',
             credit_spread_bps=0.0,
             market='OTC',
-            broker_id=f"BRK_{random.randint(100, 999)}",
+            broker_id=f"BRK_{self.rng.randint(100, 999)}",
             venue='OTC',
-            liquidity_score=round(random.uniform(5, 8), 2),
+            liquidity_score=round(self.rng.uniform(5, 8), 2),
             created_at=self.get_utc_timestamp()
         )
     
@@ -444,40 +467,42 @@ class FixedIncomeTradeGenerator(BaseGenerator):
         
         print(f"Generating {num_bonds} bond trades and {num_swaps} swap trades...")
         
+        # Draw all trade slots first and generate them in date order, so a bond sell
+        # always comes after the buy that created the holding
+        days_range = (self.end_date - self.start_date).days
+        slots = []
         for i in range(num_trades):
-            # Random customer and account
-            customer_id = random.choice(self.customers)
+            customer_id = self.rng.choice(self.customers)
             if customer_id not in self.customer_accounts:
                 continue
-            
-            account = random.choice(self.customer_accounts[customer_id])
-            
-            # Random trade date
-            days_range = (self.end_date - self.start_date).days
-            trade_date = self.start_date + timedelta(days=random.randint(0, days_range))
-            
-            # Ensure business day
+            account = self.rng.choice(self.customer_accounts[customer_id])
+            trade_date = self.start_date + timedelta(days=self.rng.randint(0, days_range))
             while not self._is_business_day(trade_date):
                 trade_date += timedelta(days=1)
-            
-            # Add random time
             trade_date = datetime.combine(trade_date, 
                                          datetime.min.time().replace(
-                                             hour=random.randint(9, 16),
-                                             minute=random.randint(0, 59),
-                                             second=random.randint(0, 59)))
-            
-            # Generate bond or swap
-            if i < num_bonds:
+                                             hour=self.rng.randint(9, 16),
+                                             minute=self.rng.randint(0, 59),
+                                             second=self.rng.randint(0, 59)))
+            slots.append((trade_date, i < num_bonds, customer_id, account))
+        slots.sort(key=lambda x: (x[0], x[2]))
+        
+        for n, (trade_date, is_bond, customer_id, account) in enumerate(slots, 1):
+            if is_bond:
                 trade = self.generate_bond_trade(customer_id, account, trade_date)
             else:
                 trade = self.generate_swap_trade(customer_id, account, trade_date)
-            
             trades.append(trade)
             
-            if (i + 1) % 100 == 0:
-                print(f"  Generated {i + 1}/{num_trades} trades...")
+            if n % 100 == 0:
+                print(f"  Generated {n}/{num_trades} trades...")
         
+        short = [(a, i) for a, h in self.bond_holdings.items() for i, x in h.items() if x['notional'] < 0]
+        if short:
+            raise AssertionError(f"Fixed income generator produced {len(short)} short bond positions, e.g. {short[:3]}")
+        sells = self.side_counts['2']
+        print(f"  Bonds: {self.side_counts['1']} buys, {sells} sells "
+              f"({100.0 * sells / max(1, sum(self.side_counts.values())):.1f}% sells), no short bond positions")
         print(f"✓ Generated {len(trades)} fixed income trades")
         return trades
     

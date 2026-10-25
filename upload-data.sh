@@ -989,6 +989,38 @@ upload_single_files \
     "LCR Deposit Balances" \
     "deposit_balances_*.csv"
 
+# Counterparty master (static)
+upload_single_files \
+    "$GENERATED_DATA_DIR/lcr" \
+    "LIQI_RAW_ST_COUNTERPARTIES" \
+    "REP_RAW_V001" \
+    "LCR Counterparties" \
+    "counterparties.csv"
+
+# Loans, facilities, interbank contracts (daily snapshots)
+upload_single_files \
+    "$GENERATED_DATA_DIR/lcr" \
+    "LIQI_RAW_ST_CONTRACTS" \
+    "REP_RAW_V001" \
+    "LCR Contracts" \
+    "contracts_*.csv"
+
+# Contractual cashflow schedules (daily snapshots)
+upload_single_files \
+    "$GENERATED_DATA_DIR/lcr" \
+    "LIQI_RAW_ST_CASHFLOWS" \
+    "REP_RAW_V001" \
+    "LCR Cashflows" \
+    "cashflows_*.csv"
+
+# Showcase events (ground truth for tests, annotations, agent)
+upload_single_files \
+    "$GENERATED_DATA_DIR/lcr" \
+    "LIQI_RAW_ST_EVENTS" \
+    "REP_RAW_V001" \
+    "LCR Events" \
+    "lcr_events.csv"
+
 # Refresh stream metadata for LCR files
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for LCR data..."
@@ -996,7 +1028,9 @@ if [[ "$DRY_RUN" != "true" ]]; then
         USE DATABASE AAA_DEV_SYNTHETIC_BANK;
         USE SCHEMA REP_RAW_V001;
         SELECT SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_HQLA_FILES') AS hqla_stream_has_data,
-               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_DEPOSIT_FILES') AS deposit_stream_has_data;
+               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_DEPOSIT_FILES') AS deposit_stream_has_data,
+               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_CONTRACT_FILES') AS contract_stream_has_data,
+               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_CASHFLOW_FILES') AS cashflow_stream_has_data;
     " > /dev/null 2>&1
 fi
 

@@ -3,8 +3,9 @@ import pandas as pd
 from datetime import datetime
 from utils.snowflake_connection import get_snowflake_session
 from utils.data_loaders import load_customer_360
+from utils.ui_helpers import page_header
 
-st.header("Customer 360")
+page_header('Customer 360', 'Complete view of a customer: profile, accounts, activity and risk')
 
 try:
     df_customers = load_customer_360()

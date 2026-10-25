@@ -44,13 +44,13 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_PORTFOLIO_PERFORMANCE(
     CMD_RETURN_PERCENTAGE DECIMAL(38,4) COMMENT 'Commodity return percentage',
 
     CURRENT_CASH_VALUE_CHF DECIMAL(38,2) COMMENT 'Current cash position value (CHF)',
-    CURRENT_EQUITY_POSITIONS NUMBER(10,0) COMMENT 'Number of open equity positions',
-    CURRENT_EQUITY_VALUE_CHF DECIMAL(38,2) COMMENT 'Current value of equity positions (at cost, CHF)',
-    CURRENT_FI_POSITIONS NUMBER(10,0) COMMENT 'Number of open fixed income positions',
-    CURRENT_FI_VALUE_CHF DECIMAL(38,2) COMMENT 'Current value of fixed income positions (at cost, CHF)',
-    CURRENT_CMD_POSITIONS NUMBER(10,0) COMMENT 'Number of open commodity positions',
-    CURRENT_CMD_VALUE_CHF DECIMAL(38,2) COMMENT 'Current value of commodity positions (at cost, CHF)',
-    TOTAL_PORTFOLIO_VALUE_CHF DECIMAL(38,2) COMMENT 'Total portfolio value (cash + all asset classes at cost)',
+    CURRENT_EQUITY_POSITIONS NUMBER(10,0) COMMENT 'Number of held (long) equity positions',
+    CURRENT_EQUITY_VALUE_CHF DECIMAL(38,2) COMMENT 'Held equity positions at average cost (held quantity x average buy price, CHF)',
+    CURRENT_FI_POSITIONS NUMBER(10,0) COMMENT 'Number of held (long) fixed income positions',
+    CURRENT_FI_VALUE_CHF DECIMAL(38,2) COMMENT 'Held fixed income positions at average cost (held notional x average buy price, CHF)',
+    CURRENT_CMD_POSITIONS NUMBER(10,0) COMMENT 'Number of held (long) commodity positions',
+    CURRENT_CMD_VALUE_CHF DECIMAL(38,2) COMMENT 'Held commodity positions at average cost (held quantity x average buy price, CHF)',
+    TOTAL_PORTFOLIO_VALUE_CHF DECIMAL(38,2) COMMENT 'Total portfolio value (cash + held positions of all asset classes at average cost)',
     CASH_ALLOCATION_PERCENTAGE DECIMAL(38,4) COMMENT 'Percentage of portfolio in cash',
     EQUITY_ALLOCATION_PERCENTAGE DECIMAL(38,4) COMMENT 'Percentage of portfolio in equities',
     FI_ALLOCATION_PERCENTAGE DECIMAL(38,4) COMMENT 'Percentage of portfolio in fixed income',
@@ -70,7 +70,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_PORTFOLIO_PERFORMANCE(
     TRADING_DAYS NUMBER(10,0) COMMENT 'Number of days with trading activity',
 
     PERFORMANCE_CATEGORY VARCHAR(30) COMMENT 'Performance classification (EXCELLENT/GOOD/NEUTRAL/POOR/NEGATIVE)',
-    RISK_CATEGORY VARCHAR(20) COMMENT 'Risk classification (LOW/MODERATE/HIGH/VERY_HIGH)',
+    RISK_CATEGORY VARCHAR(20) COMMENT 'Risk classification by risky-asset share (equity + commodity) of the portfolio (cash floored at 0, positions at cost): LOW <20% (also cash-only or empty), MODERATE 20-50%, HIGH 50-80%, VERY_HIGH >80%',
     PORTFOLIO_TYPE VARCHAR(30) COMMENT 'Portfolio composition type (CASH_ONLY/EQUITY_FOCUSED/FI_FOCUSED/COMMODITY_FOCUSED/BALANCED/MULTI_ASSET)',
 
     CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'Integrated Multi-Asset Portfolio Measurement: To deliver a single, comprehensive performance report that combines all asset classes (cash, equity, fixed income, commodities) into a single portfolio view. Calculates the Time Weighted Return (TWR).                                       
@@ -161,36 +161,35 @@ current_balances AS (
     FROM {{ db }}.{{ pay_agg }}.PAYA_AGG_DT_ACCOUNT_BALANCES b
 ),
 
+-- Held positions only, valued at average cost: held quantity x (total buy amount / total bought).
+-- Uncovered sells (net quantity <= 0) add nothing, so AUM cannot go negative from trading.
 current_equity_positions AS (
     SELECT 
         p.ACCOUNT_ID,
-        COUNT(*) as open_positions,
-        SUM(p.NET_INVESTMENT_CHF) as equity_value_at_cost,
+        COUNT_IF(p.TOTAL_QUANTITY > 0) as open_positions,
+        GREATEST(SUM(IFF(p.TOTAL_QUANTITY > 0, p.TOTAL_QUANTITY * p.TOTAL_BUY_AMOUNT_CHF / NULLIF(p.TOTAL_BUYS, 0), 0)), 0) as equity_value_at_cost,
         SUM(p.REALIZED_PL_CHF) as total_realized_pl
     FROM {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_PORTFOLIO_POSITIONS p
-    WHERE p.POSITION_STATUS != 'CLOSED'
     GROUP BY p.ACCOUNT_ID
 ),
 
 current_fi_positions AS (
     SELECT 
         p.ACCOUNT_ID,
-        COUNT(*) as fi_open_positions,
-        SUM(p.NET_INVESTMENT_CHF) as fi_value_at_cost,
+        COUNT_IF(p.TOTAL_NOTIONAL > 0) as fi_open_positions,
+        GREATEST(SUM(IFF(p.TOTAL_NOTIONAL > 0, p.TOTAL_NOTIONAL * p.TOTAL_BUY_AMOUNT_CHF / NULLIF(p.TOTAL_BUY_NOTIONAL, 0), 0)), 0) as fi_value_at_cost,
         SUM(p.REALIZED_PL_CHF) as fi_total_realized_pl
     FROM {{ db }}.{{ fii_agg }}.FIIA_AGG_DT_PORTFOLIO_POSITIONS p
-    WHERE p.POSITION_STATUS != 'CLOSED'
     GROUP BY p.ACCOUNT_ID
 ),
 
 current_cmd_positions AS (
     SELECT 
         p.ACCOUNT_ID,
-        COUNT(*) as cmd_open_positions,
-        SUM(p.NET_INVESTMENT_CHF) as cmd_value_at_cost,
+        COUNT_IF(p.TOTAL_QUANTITY > 0) as cmd_open_positions,
+        GREATEST(SUM(IFF(p.TOTAL_QUANTITY > 0, p.TOTAL_QUANTITY * p.TOTAL_BUY_AMOUNT_CHF / NULLIF(p.TOTAL_BUY_QUANTITY, 0), 0)), 0) as cmd_value_at_cost,
         SUM(p.REALIZED_PL_CHF) as cmd_total_realized_pl
     FROM {{ db }}.{{ cmd_agg }}.CMDA_AGG_DT_PORTFOLIO_POSITIONS p
-    WHERE p.POSITION_STATUS != 'CLOSED'
     GROUP BY p.ACCOUNT_ID
 )
 
@@ -528,7 +527,21 @@ SELECT
         ELSE 'NEGATIVE_PERFORMANCE'
     END as PERFORMANCE_CATEGORY,
 
-    'LOW_RISK' as RISK_CATEGORY, 
+    -- Risky-asset share = (equity + commodity) / (non-negative cash + all held positions at cost)
+    CASE 
+        WHEN (GREATEST(COALESCE(cb.current_cash_balance, 0), 0) + COALESCE(ceqp.equity_value_at_cost, 0) +
+              COALESCE(cfip.fi_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) <= 0 THEN 'LOW'
+        WHEN (COALESCE(ceqp.equity_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) /
+             (GREATEST(COALESCE(cb.current_cash_balance, 0), 0) + COALESCE(ceqp.equity_value_at_cost, 0) +
+              COALESCE(cfip.fi_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) > 0.80 THEN 'VERY_HIGH'
+        WHEN (COALESCE(ceqp.equity_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) /
+             (GREATEST(COALESCE(cb.current_cash_balance, 0), 0) + COALESCE(ceqp.equity_value_at_cost, 0) +
+              COALESCE(cfip.fi_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) > 0.50 THEN 'HIGH'
+        WHEN (COALESCE(ceqp.equity_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) /
+             (GREATEST(COALESCE(cb.current_cash_balance, 0), 0) + COALESCE(ceqp.equity_value_at_cost, 0) +
+              COALESCE(cfip.fi_value_at_cost, 0) + COALESCE(ccmdp.cmd_value_at_cost, 0)) >= 0.20 THEN 'MODERATE'
+        ELSE 'LOW'
+    END as RISK_CATEGORY,
 
     CASE 
         WHEN COALESCE(ep.equity_trades_count, 0) = 0 
@@ -562,3 +575,34 @@ WHERE COALESCE(cb.starting_cash_balance, 0) > 0
    OR COALESCE(fip.fi_total_invested_chf, 0) > 0
    OR COALESCE(cmdp.cmd_total_invested_chf, 0) > 0
 ORDER BY TOTAL_PORTFOLIO_VALUE_CHF DESC;
+
+-- ============================================================
+-- WEALTH MANAGEMENT VIEWS FOR SEMANTIC LAYER (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPA_SV_WEALTH_MANAGEMENT_DETAILED
+COMMENT = 'Detailed wealth management view with customer context (for complex queries requiring joins)'
+AS
+SELECT 
+  p.*,
+  pii.FULL_NAME AS CUSTOMER_NAME,
+  c.COUNTRY AS CUSTOMER_COUNTRY,
+  c.ACCOUNT_TIER AS CUSTOMER_TIER,
+  c.OVERALL_RISK_RATING AS CUSTOMER_RISK_RATING
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_PORTFOLIO_PERFORMANCE p
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
+    ON p.CUSTOMER_ID = c.CUSTOMER_ID
+LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii
+    ON p.CUSTOMER_ID = pii.CUSTOMER_ID;
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPA_SV_PORTFOLIO_PERFORMANCE
+COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (portfolio subset)'
+AS SELECT * FROM {{ db }}.{{ rep_agg }}.REPA_SV_WEALTH_MANAGEMENT_DETAILED;
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPA_SV_CREDIT_RISK_IRB
+COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (credit risk subset)'
+AS SELECT * FROM {{ db }}.{{ rep_agg }}.REPA_SV_WEALTH_MANAGEMENT_DETAILED;
+
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPA_SV_EQUITY_TRADING
+COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (equity subset)'
+AS SELECT * FROM {{ db }}.{{ rep_agg }}.REPA_SV_WEALTH_MANAGEMENT_DETAILED;

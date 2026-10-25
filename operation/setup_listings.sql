@@ -4,6 +4,11 @@
  * Run: snow sql -c <connection> --role ACCOUNTADMIN -f operation/setup_listings.sql
  */
 
+-- Step 0: Account-level privilege for the DCM project owner CICD.
+-- Lets the data metric functions attached in 905_governance.sql run under CICD;
+-- grants no data access by itself. Survives a database drop.
+GRANT EXECUTE DATA METRIC FUNCTION ON ACCOUNT TO ROLE CICD;
+
 -- Step 1: Accept the Global Sanctions Data listing
 CREATE DATABASE IF NOT EXISTS AAA_DEV_SYNTHETIC_BANK_REF_DAP_GLOBAL_SANCTIONS_DATA_SET
     FROM LISTING 'GZT1ZVEJH9';

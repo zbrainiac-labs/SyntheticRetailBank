@@ -10,8 +10,9 @@ from utils.visualizations import (
     plot_churn_risk_by_tier, plot_days_inactive_distribution
 )
 from utils.ui_helpers import show_profile_picker
+from utils.ui_helpers import page_header
 
-st.header("Churn & Lifecycle")
+page_header('Churn & Lifecycle', 'Customer lifecycle, dormancy and churn-risk signals')
 
 try:
     df_lifecycle = load_customer_lifecycle()

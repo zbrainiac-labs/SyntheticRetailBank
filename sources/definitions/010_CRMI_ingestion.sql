@@ -137,6 +137,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMERS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
         CUSTOMER_ID, 
@@ -191,6 +192,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_ADDRESSES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_ADDRESS_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
         CUSTOMER_ID, 
@@ -220,6 +222,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_EXPOSED_PERSON
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_EXPOSED_PERSON_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
         EXPOSED_PERSON_ID, 
@@ -250,6 +253,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_EVENT_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
         EVENT_ID,
@@ -293,6 +297,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_STATUS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_STATUS_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS (
         STATUS_ID,
@@ -324,6 +329,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_CUSTOMERS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER customer data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMERS
+    STARTED
 AS
     CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS', 5);
 
@@ -331,6 +337,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_ADDRESSES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER address data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_ADDRESSES
+    STARTED
 AS
     CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES', 5);
 
@@ -338,5 +345,141 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_EXPOSED_PERSON
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER PEP data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_EXPOSED_PERSON
+    STARTED
 AS
     CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON', 5);
+
+-- ============================================================
+-- FILE FORMATS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.CRMI_RAW_FF_CUSTOMER_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
+    COMMENT = 'CSV format for customer master data with EMEA localization support';
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.CRMI_RAW_FF_ADDRESS_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'
+    COMMENT = 'CSV format for customer address data with SCD Type 2 support via INSERT_TIMESTAMP_UTC';
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.CRMI_RAW_FF_EXPOSED_PERSON_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
+    COMMENT = 'CSV format for PEP (Politically Exposed Persons) compliance data';
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.CRMI_RAW_FF_CUSTOMER_EVENT_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'
+    COMMENT = 'CSV format for customer lifecycle event files with JSON event details (using single quotes in JSON for CSV compatibility)';
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.CRMI_RAW_FF_CUSTOMER_STATUS_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'
+    COMMENT = 'CSV format for customer status history files (SCD Type 2)';
+
+-- ============================================================
+-- PROCEDURES (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE PROCEDURE {{ db }}.{{ crm_raw }}.CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
+    STAGE_NAME STRING,  
+    KEEP_N     NUMBER   
+)
+RETURNS STRING
+LANGUAGE SQL
+COMMENT = 'Generic stage cleanup utility for {{ crm_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files. Deletes in batches of 200 (one REMOVE ... PATTERN per batch); a failing REMOVE fails the call. Useful for managing stage storage costs and data retention policies.'
+EXECUTE AS CALLER
+AS
+$$
+DECLARE
+  V_FILES   NUMBER := 0;
+  V_BATCHES NUMBER := 0;
+  V_PATTERN STRING;
+  RS RESULTSET;
+BEGIN
+  -- One REMOVE ... PATTERN per batch of 200 files instead of one REMOVE per file
+  -- (a backlog of ~7,000 files took 15+ minutes as single statements).
+  EXECUTE IMMEDIATE 'SELECT RELATIVE_PATH, ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) AS RN FROM DIRECTORY(@' || STAGE_NAME || ')';
+  RS := (
+    SELECT LISTAGG(REGEXP_REPLACE(RELATIVE_PATH, '([.^$|()\\[\\]{}*+?\\\\])', '\\\\\\1'), '|') AS PAT,
+           COUNT(*) AS N
+    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+    WHERE RN > :KEEP_N
+    GROUP BY FLOOR((RN - :KEEP_N - 1) / 200)
+  );
+  FOR R IN RS DO
+    -- Regex-escaped exact file names; errors are not swallowed so a failing cleanup fails the task
+    V_PATTERN := '(.*/)?(' || R.PAT || ')';
+    EXECUTE IMMEDIATE 'REMOVE @' || STAGE_NAME || ' PATTERN = ''' || REPLACE(REPLACE(V_PATTERN, '\\', '\\\\'), '''', '\\''') || '''';
+    V_FILES   := V_FILES + R.N;
+    V_BATCHES := V_BATCHES + 1;
+  END FOR;
+
+  RETURN 'Stage cleanup completed. Deleted: ' || V_FILES || ' files in ' || V_BATCHES || ' batches, Kept: ' || KEEP_N || ' most recent files.';
+END;
+$$;
+
+-- ============================================================
+-- STREAMS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_FILES
+    ON STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS
+    COMMENT = 'Monitors CRMI_RAW_ST_CUSTOMERS stage for new customer CSV files. Triggers CRMI_RAW_TK_LOAD_CUSTOMERS when files matching *customers*.csv pattern are detected';
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_ADDRESS_FILES
+    ON STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES
+    COMMENT = 'Monitors CRMI_RAW_ST_ADDRESSES stage for new address CSV files. Triggers CRMI_RAW_TK_LOAD_ADDRESSES for SCD Type 2 processing when files matching *customer_addresses*.csv pattern are detected';
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_EXPOSED_PERSON_FILES
+    ON STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON
+    COMMENT = 'Monitors CRMI_RAW_ST_EXPOSED_PERSON stage for new PEP compliance CSV files. Triggers CRMI_RAW_TK_LOAD_EXPOSED_PERSON when files matching *pep*.csv pattern are detected';
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_EVENT_FILES 
+    ON STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
+    COMMENT = 'Monitors CRMI_RAW_ST_CUSTOMER_EVENTS stage for new lifecycle event CSV files. Triggers CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS when files matching *customer_events*.csv pattern are detected';
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_STATUS_FILES 
+    ON STAGE {{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
+    COMMENT = 'Monitors CRMI_RAW_ST_CUSTOMER_EVENTS stage for new status history CSV files. Triggers CRMI_RAW_TK_LOAD_CUSTOMER_STATUS when files matching *customer_status*.csv pattern are detected';

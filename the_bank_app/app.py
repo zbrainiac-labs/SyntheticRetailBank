@@ -5,6 +5,8 @@ Synthetic Retail Bank - Modern Multi-Page App
 import streamlit as st
 from datetime import datetime
 
+import utils.ui_helpers  # noqa: F401  registers the Apple Plotly template as default
+
 st.set_page_config(
     page_title="Synthetic Retail Bank",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Snowflake_Logo.svg/32px-Snowflake_Logo.svg.png",
@@ -39,7 +41,7 @@ nav = st.navigation(pages)
 
 with st.sidebar:
     st.markdown("### Synthetic Retail Bank")
-    st.caption("Comprehensive Customer Intelligence")
+    st.caption("Customer, risk and liquidity intelligence")
     st.divider()
 
     from utils.snowflake_connection import get_snowflake_session, test_connection
@@ -54,14 +56,8 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown(
-        """<a href="https://ai.snowflake.com/sfseeurope/demo_mdaeppen" target="_blank"
-        style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;
-        background:#1a73e8;color:white;border-radius:8px;text-decoration:none;
-        font-weight:500;font-size:14px;width:100%;justify-content:center;">
-        Open Snowflake CoWork</a>""",
-        unsafe_allow_html=True,
-    )
+    st.link_button("Open Snowflake CoWork", "https://ai.snowflake.com/sfseeurope/demo_mdaeppen",
+                   icon=":material/open_in_new:", type="primary", width="stretch")
 
     st.divider()
 

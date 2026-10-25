@@ -103,7 +103,7 @@ SELECT CASE
   THEN OBJECT_CONSTRUCT('route', 'loan_portfolio', 'match_strength', 'EXACT')
 
   -- Liquidity domain
-  WHEN REGEXP_LIKE(q, '.*(lcr ratio|lcr |hqla|deposit outflow|finma|liquidity ratio|nsfr|cash buffer|liquidity position|liquidity coverage).*')
+  WHEN REGEXP_LIKE(q, '.*(lcr ratio|lcr |hqla|deposit outflow|finma|liquidity ratio|nsfr|cash buffer|liquidity position|liquidity coverage|liquidity stress|stress scenario|breakeven withdrawal|deposit withdrawal|withdraws|run-off|runoff|what-if lcr|lcr what-if|lcr drop|lcr breach|variance driver|liquidity event).*')
   THEN OBJECT_CONSTRUCT('route', 'liquidity_risk', 'match_strength', 'EXACT')
 
   -- Wealth domain
@@ -251,6 +251,7 @@ RETURNS VARCHAR
 LANGUAGE SQL
 COMMENT = 'Three-tier route resolver: regex -> AI_CLASSIFY -> UNCERTAIN. Returns JSON {route, confidence, method}.'
 AS
+$$
 DECLARE
     regex_result VARIANT;
     route_name VARCHAR;
@@ -273,6 +274,7 @@ BEGIN
 
     RETURN OBJECT_CONSTRUCT('route', 'MULTI', 'confidence', 'LOW', 'method', 'UNCERTAIN')::VARCHAR;
 END;
+$$;
 
 
 CREATE OR REPLACE PROCEDURE CALL_SUB_AGENT(
@@ -284,6 +286,7 @@ RETURNS VARCHAR
 LANGUAGE SQL
 COMMENT = 'Generic sub-agent caller via DATA_AGENT_RUN. Parses response and appends SQL.'
 AS
+$$
 DECLARE
     effective_query VARCHAR;
     request_body VARCHAR;
@@ -326,6 +329,7 @@ BEGIN
 
     RETURN BUILD_AGENT_RESPONSE(:text_answer, :sql_queries);
 END;
+$$;
 
 
 CREATE OR REPLACE PROCEDURE ASK_MASTER_ROUTED(
@@ -336,6 +340,7 @@ RETURNS VARCHAR
 LANGUAGE SQL
 COMMENT = 'Main dispatcher: cache -> hybrid route (regex + AI_CLASSIFY) -> sub-agent dispatch -> log.'
 AS
+$$
 DECLARE
     effective_query VARCHAR;
     normalized_query VARCHAR;
@@ -463,6 +468,7 @@ BEGIN
 
     RETURN :response;
 END;
+$$;
 
 
 CREATE OR REPLACE PROCEDURE RUN_GOLDEN_REGRESSION(RUN_MODE VARCHAR DEFAULT 'DEPLOY')
@@ -470,6 +476,7 @@ RETURNS VARCHAR
 LANGUAGE SQL
 COMMENT = 'Runs golden dataset tests against ASK_MASTER_ROUTED. Validates route, latency, answer.'
 AS
+$$
 DECLARE
     run_mode_upper VARCHAR;
     test_rs RESULTSET;
@@ -593,6 +600,7 @@ BEGIN
         || ' Pass=' || :pass_count
         || ' Fail=' || :fail_count;
 END;
+$$;
 
 
 -- ============================================================
@@ -671,7 +679,10 @@ USING (
         (9,  'Find PLATINUM customers with anomalous transactions',                      NULL, 'Route match only', 60000, 'crm_customer_360', FALSE),
         (10, 'Which high-AUM wealth clients also have compliance flags?',                NULL, 'Route match only', 90000, 'MULTI',             TRUE),
         (11, 'Give me an executive risk dashboard: LCR ratio, total loan exposure, and top 5 wealth clients by AUM', NULL, 'Route match only', 120000, 'MULTI', FALSE),
-        (12, 'Cross-check: do any high churn-risk customers have pending loan applications?', NULL, 'Route match only', 90000, 'MULTI',        FALSE)
+        (12, 'Cross-check: do any high churn-risk customers have pending loan applications?', NULL, 'Route match only', 90000, 'MULTI',        FALSE),
+        (13, 'Why did the LCR drop on 2026-08-26 and which client caused it?', NULL, 'Route match only', 90000, 'liquidity_risk', TRUE),
+        (14, 'What happens to the LCR if a corporate client withdraws CHF 100M?', NULL, 'Route match only', 90000, 'liquidity_risk', TRUE),
+        (15, 'How low does the LCR go under the combined stress scenario?', NULL, 'Route match only', 60000, 'liquidity_risk', FALSE)
 ) AS s
 ON t.TEST_ID = s.TEST_ID
 WHEN NOT MATCHED THEN INSERT (TEST_ID, QUESTION, EXPECTED_ANSWER, VALIDATION_METRIC, MAX_LATENCY_MS, EXPECTED_SUB_AGENT, IS_DEPLOY_SMOKE)

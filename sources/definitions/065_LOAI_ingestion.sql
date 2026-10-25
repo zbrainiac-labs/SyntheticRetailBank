@@ -130,6 +130,7 @@ DEFINE TASK {{ db }}.{{ loa_raw }}.LOAI_RAW_TK_EXTRACT_MAIL_DATA
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'SMALL'
     SCHEDULE = '60 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ loa_raw }}.LOAI_RAW_SM_EMAIL_FILES')
+    STARTED
 AS
 INSERT INTO {{ db }}.{{ loa_raw }}.LOAI_RAW_TB_EMAIL_INBOUND_LOAN_EXTRACT (
     FILE_NAME,
@@ -156,6 +157,7 @@ WHERE RELATIVE_PATH LIKE '%mortgage%'
 DEFINE TASK {{ db }}.{{ loa_raw }}.LOAI_RAW_TK_FLAT_MAIL_DATA
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     AFTER {{ db }}.{{ loa_raw }}.LOAI_RAW_TK_EXTRACT_MAIL_DATA
+    STARTED
 AS
 INSERT INTO {{ db }}.{{ loa_raw }}.LOAI_RAW_TB_EMAIL_INBOUND_LOAN_EXTRACT_FLAT (
     FILE_NAME,
@@ -291,3 +293,11 @@ WHERE NOT EXISTS (
       WHERE f.FILE_NAME = s.FILE_NAME
         AND f.EXTRACTION_TIMESTAMP = s.EXTRACTION_TIMESTAMP
   );
+
+-- ============================================================
+-- STREAMS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE STREAM {{ db }}.{{ loa_raw }}.LOAI_RAW_SM_EMAIL_FILES
+ON STAGE {{ db }}.{{ loa_raw }}.LOAI_RAW_ST_EMAIL_INBOUND
+COMMENT = 'Stream to detect new email files arriving on the stage. Triggers LOAI_RAW_TK_EXTRACT_MAIL_DATA when new .txt files are uploaded.';

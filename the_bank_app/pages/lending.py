@@ -10,9 +10,9 @@ from utils.data_loaders import (
 )
 from utils.visualizations import plot_credit_risk_distribution
 from utils.ui_helpers import show_profile_picker
+from utils.ui_helpers import page_header
 
-st.header("Lending & Loans")
-st.caption("Retail Loans & Mortgages Portfolio Analysis")
+page_header('Lending & Loans', 'Retail Loans & Mortgages Portfolio Analysis')
 
 with st.spinner("Loading loan portfolio data..."):
     df_portfolio = load_loan_portfolio_summary()
@@ -70,7 +70,7 @@ if not df_portfolio.empty:
                 status = df_portfolio.groupby(['COUNTRY', 'APPLICATION_STATUS'])['LOAN_COUNT'].sum().reset_index()
                 fig = px.bar(status, x='COUNTRY', y='LOAN_COUNT', color='APPLICATION_STATUS',
                            title='Status by Country', barmode='stack',
-                           color_discrete_map={'APPROVED': '#28A745', 'DECLINED': '#DC3545', 'UNDER_REVIEW': '#FFC107'})
+                           color_discrete_map={'APPROVED': '#34C759', 'DECLINED': '#FF3B30', 'UNDER_REVIEW': '#FFCC00'})
                 st.plotly_chart(fig, width="stretch")
             with col2:
                 avg = df_portfolio.groupby('COUNTRY')['AVG_REQUESTED_AMOUNT'].mean().reset_index()
@@ -120,7 +120,7 @@ if not df_portfolio.empty:
                 s = df_funnel.groupby('COUNTRY').agg({'APPROVED_COUNT': 'sum', 'DECLINED_COUNT': 'sum', 'UNDER_REVIEW_COUNT': 'sum'}).reset_index()
                 fig = px.bar(s, x='COUNTRY', y=['APPROVED_COUNT', 'UNDER_REVIEW_COUNT', 'DECLINED_COUNT'],
                            title='Status by Country', barmode='stack',
-                           color_discrete_map={'APPROVED_COUNT': '#28A745', 'UNDER_REVIEW_COUNT': '#FFC107', 'DECLINED_COUNT': '#DC3545'})
+                           color_discrete_map={'APPROVED_COUNT': '#34C759', 'UNDER_REVIEW_COUNT': '#FFCC00', 'DECLINED_COUNT': '#FF3B30'})
                 st.plotly_chart(fig, width="stretch")
             with col2:
                 r = df_funnel.groupby('COUNTRY')['APPROVAL_RATE_PCT'].mean().reset_index()
@@ -176,7 +176,7 @@ if not df_portfolio.empty:
                 rc = df_compliance['OVERALL_RISK_RATING'].value_counts().reset_index()
                 rc.columns = ['Risk', 'Count']
                 fig = px.bar(rc, x='Risk', y='Count', title='By Risk Rating', color='Risk',
-                           color_discrete_map={'CRITICAL': '#DC3545', 'HIGH': '#FF8C00', 'MEDIUM': '#FFC107', 'LOW': '#28A745'})
+                           color_discrete_map={'CRITICAL': '#FF3B30', 'HIGH': '#FF9F0A', 'MEDIUM': '#FFCC00', 'LOW': '#34C759'})
                 st.plotly_chart(fig, width="stretch")
             st.dataframe(df_compliance, width="stretch", height=400)
         else:

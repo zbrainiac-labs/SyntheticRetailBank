@@ -2,27 +2,40 @@ import streamlit as st
 from utils.snowflake_connection import get_snowflake_session
 from utils.data_loaders import load_advisor_performance, load_advisor_capacity, load_team_performance
 from utils.visualizations import plot_advisor_aum_distribution, plot_advisor_capacity
+from utils.ui_helpers import page_header
 
-st.header("Wealth Management")
+page_header('Wealth Management', 'Advisors, client portfolios and capacity')
 
 tab_wealth, tab_advisor = st.tabs(["Portfolio Overview", "Advisor Management"])
 
 with tab_wealth:
     df_wealth = load_advisor_performance()
+    df_capacity = load_advisor_capacity()
     if df_wealth is not None and len(df_wealth) > 0 and not df_wealth.empty:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Advisors", len(df_wealth))
-        with col2:
-            if 'TOTAL_AUM' in df_wealth.columns:
-                st.metric("Total AUM", f"CHF {df_wealth['TOTAL_AUM'].sum():,.0f}M")
-        with col3:
-            if 'CLIENT_COUNT' in df_wealth.columns:
-                st.metric("Total Clients", f"{df_wealth['CLIENT_COUNT'].sum():,.0f}")
-        with col4:
-            if 'TOTAL_AUM' in df_wealth.columns and 'CLIENT_COUNT' in df_wealth.columns:
-                avg = df_wealth['TOTAL_AUM'].sum() / max(df_wealth['CLIENT_COUNT'].sum(), 1)
-                st.metric("Avg AUM/Client", f"CHF {avg:,.0f}K")
+        # Collect all available KPIs as (label, value) pairs
+        kpis = [("Total Advisors", f"{len(df_wealth)}")]
+        if 'TOTAL_AUM' in df_wealth.columns:
+            kpis.append(("Total AUM", f"CHF {df_wealth['TOTAL_AUM'].sum():,.0f}M"))
+        if 'CLIENT_COUNT' in df_wealth.columns:
+            kpis.append(("Total Clients", f"{df_wealth['CLIENT_COUNT'].sum():,.0f}"))
+        if 'TOTAL_AUM' in df_wealth.columns and 'CLIENT_COUNT' in df_wealth.columns:
+            avg = df_wealth['TOTAL_AUM'].sum() / max(df_wealth['CLIENT_COUNT'].sum(), 1)
+            kpis.append(("Avg AUM/Client", f"CHF {avg:,.0f}K"))
+        if df_capacity is not None and not df_capacity.empty:
+            if 'WORKLOAD_STATUS' in df_capacity.columns:
+                avail = len(df_capacity[df_capacity['WORKLOAD_STATUS'] == 'AVAILABLE'])
+                kpis.append(("Available", f"{avail}"))
+                at_cap = len(df_capacity[df_capacity['WORKLOAD_STATUS'] == 'AT_CAPACITY'])
+                kpis.append(("At Capacity", f"{at_cap}"))
+            if 'AVAILABLE_CAPACITY' in df_capacity.columns:
+                kpis.append(("Total Slots", f"{int(df_capacity['AVAILABLE_CAPACITY'].sum())}"))
+            if 'CAPACITY_UTILIZATION_PCT' in df_capacity.columns:
+                avg_util = df_capacity['CAPACITY_UTILIZATION_PCT'].mean()
+                kpis.append(("Avg Util.", f"{avg_util:.0f}%"))
+        # Render all KPIs on one line, no gaps
+        cols = st.columns(len(kpis))
+        for col, (label, value) in zip(cols, kpis):
+            col.metric(label, value)
 
         st.divider()
         col1, col2 = st.columns(2)
@@ -44,20 +57,20 @@ with tab_wealth:
 with tab_advisor:
     df_capacity = load_advisor_capacity()
     if df_capacity is not None and len(df_capacity) > 0 and not df_capacity.empty:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Advisors", len(df_capacity))
-        with col2:
-            if 'WORKLOAD_STATUS' in df_capacity.columns:
-                avail = len(df_capacity[df_capacity['WORKLOAD_STATUS'] == 'AVAILABLE'])
-                st.metric("Available Capacity", avail)
-        with col3:
-            if 'WORKLOAD_STATUS' in df_capacity.columns:
-                at_cap = len(df_capacity[df_capacity['WORKLOAD_STATUS'] == 'AT_CAPACITY'])
-                st.metric("At Capacity", at_cap)
-        with col4:
-            if 'AVAILABLE_CAPACITY' in df_capacity.columns:
-                st.metric("Total Slots", int(df_capacity['AVAILABLE_CAPACITY'].sum()))
+        kpis = [("Total Advisors", f"{len(df_capacity)}")]
+        if 'WORKLOAD_STATUS' in df_capacity.columns:
+            avail = len(df_capacity[df_capacity['WORKLOAD_STATUS'] == 'AVAILABLE'])
+            kpis.append(("Available Capacity", f"{avail}"))
+            at_cap = len(df_capacity[df_capacity['WORKLOAD_STATUS'] == 'AT_CAPACITY'])
+            kpis.append(("At Capacity", f"{at_cap}"))
+        if 'AVAILABLE_CAPACITY' in df_capacity.columns:
+            kpis.append(("Total Slots", f"{int(df_capacity['AVAILABLE_CAPACITY'].sum())}"))
+        if 'CAPACITY_UTILIZATION_PCT' in df_capacity.columns:
+            avg_util = df_capacity['CAPACITY_UTILIZATION_PCT'].mean()
+            kpis.append(("Avg Util.", f"{avg_util:.0f}%"))
+        cols = st.columns(len(kpis))
+        for col, (label, value) in zip(cols, kpis):
+            col.metric(label, value)
 
         st.divider()
         display_cols = [c for c in ['EMPLOYEE_ID', 'ADVISOR_NAME', 'TOTAL_CLIENTS', 'AVAILABLE_CAPACITY',

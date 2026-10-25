@@ -1,386 +1,347 @@
 /*
  * 360_LIQA_analytics.sql
- * Liquidity analytics: LCR computation and monitoring
+ * LCR engine - part 2: scenario positions, components, scenario daily results,
+ * and the existing LCR dynamic tables rebuilt on the BASE (regulatory) scenario.
+ * (REQ-ENG-03/04/05). Reads REPP_AGG_DT_LCR_POSITIONS from 359_LIQA_engine_base.sql.
  */
-DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_HQLA(
-    AS_OF_DATE DATE COMMENT 'Reporting date for HQLA positions (daily COB snapshot). Primary time dimension for portfolio composition analysis, asset allocation monitoring, and strategic rebalancing decisions. Used for time-series analysis of HQLA mix evolution and regulatory level distribution trends.',
-    HQLA_LEVEL VARCHAR(10) COMMENT 'Basel III HQLA regulatory level classification: L1 (highest quality, 0% haircut), L2A (high quality, 15% haircut), L2B (acceptable quality, 50% haircut). Primary grouping dimension for regulatory reporting, cap rule monitoring, and portfolio quality assessment. Critical for automated compliance validation.',
-    ASSET_TYPE VARCHAR(50) COMMENT 'HQLA asset type code from eligibility rules (e.g., CASH_SNB, GOVT_BOND_CHF, CANTON_BOND, EQUITY_SMI). Secondary grouping dimension for granular portfolio analysis, concentration risk monitoring, and strategic asset allocation. Links to LIQI_RAW_TB_HQLA_ELIGIBILITY for regulatory metadata.',
-    HOLDINGS_COUNT NUMBER(10,0) COMMENT 'Number of individual securities/positions within this asset type for this reporting date. Portfolio diversification metric indicating concentration risk. Low counts (1-2) indicate potential single-security dependence; high counts (20+) indicate well-diversified holdings. Used for issuer concentration analysis and custody risk assessment.',
-    MARKET_VALUE_CHF NUMBER(18,2) COMMENT 'Total gross market value in CHF before regulatory haircuts. Sum of all securities in this asset type at market prices. Used for portfolio valuation, P&L attribution, and comparing pre-haircut vs post-haircut values. Represents fair value of holdings before regulatory adjustments for liquidity stress.',
-    HAIRCUT_PCT NUMBER(5,2) COMMENT 'Regulatory haircut percentage applied to this asset type per Basel III (0%, 15%, or 50%). Standard haircut from LIQI_RAW_TB_HQLA_ELIGIBILITY reference table. Used for user-friendly reporting in dashboards and executive summaries. Displayed as percentage for business readability.',
-    HQLA_VALUE_CHF NUMBER(18,2) COMMENT 'Total HQLA value in CHF after applying regulatory haircuts (Market_Value × Haircut_Factor). The actual liquidity buffer contribution from this asset type. Used for LCR numerator calculation, portfolio optimization, and rebalancing decisions. Represents stressed value available during 30-day liquidity crisis per Basel III assumptions.',
-    PCT_OF_TOTAL_HQLA NUMBER(5,2) COMMENT 'Percentage of total HQLA stock represented by this asset type. Portfolio composition metric for strategic asset allocation monitoring and diversification assessment. High percentages (over 30% in single asset type) may indicate concentration risk. Used for portfolio rebalancing triggers and strategic liquidity planning.',
-    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp when this aggregation was executed in Snowflake. Used for data lineage tracking, audit trail maintenance, and validating calculation freshness. Critical for ensuring portfolio metrics reflect latest market values and holdings changes. Monitored for SLA compliance (must be within 60 minutes of AS_OF_DATE).'
-) COMMENT = 'Daily HQLA holdings aggregated by regulatory level (L1, L2A, L2B) and asset type (CASH_SNB, GOVT_BOND_CHF, etc.). Provides intermediate-level detail between raw security holdings and fully aggregated HQLA totals. Includes market values, regulatory haircuts, HQLA values after haircuts, and holding counts for diversification analysis. Source data for semantic views, portfolio composition dashboards, and AI agent queries about HQLA breakdown. Used by Treasury for strategic asset allocation, by Risk for concentration monitoring, and by Compliance for regulatory reporting preparation. Updated hourly for near-real-time portfolio composition visibility.'
+DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_POSITIONS(
+    AS_OF_DATE DATE COMMENT 'Snapshot (cut-off) date of the position (daily COB).',
+    STRESS_SCENARIO VARCHAR(20) COMMENT 'Scenario the position is evaluated in: BASE (regulatory FINMA LCR), BANK_STRESS, MARKET_STRESS, COMBINED (REQ-ENG-05).',
+    POSITION_ID VARCHAR(50) COMMENT 'Atomic position key (holding id, deposit account id or contract id); driver key for variance attribution and drill-down.',
+    SOURCE_SYSTEM VARCHAR(20) COMMENT 'Source feed of the position: HOLDINGS, DEPOSITS or CONTRACTS.',
+    PRODUCT_TYPE VARCHAR(50) COMMENT 'Source product code (asset type, deposit type or contract product type).',
+    POSITION_NAME VARCHAR(200) COMMENT 'Display name of the position (security name, account id or contract id).',
+    PRODUCT_GROUP VARCHAR(40) COMMENT 'Level-2 taxonomy (product group) from LIQI_RAW_TB_PRODUCT_MAPPING.',
+    ASSET_CLASS VARCHAR(40) COMMENT 'Level-1 LCR taxonomy (e.g. HQLA_L1_CASH, RETAIL_DEPOSITS, LOANS) from the product mapping.',
+    LCR_TREATMENT VARCHAR(20) COMMENT 'How the position enters the LCR: HQLA, OUTFLOW, INFLOW or FACILITY.',
+    HQLA_LEVEL VARCHAR(5) COMMENT 'HQLA level L1 / L2A / L2B for HQLA positions; NULL otherwise.',
+    COUNTERPARTY_ID VARCHAR(50) COMMENT 'Counterparty / issuer of the position.',
+    COUNTERPARTY_NAME VARCHAR(200) COMMENT 'Counterparty name shown in drill-downs and Top-10 driver lists.',
+    COUNTERPARTY_SECTOR VARCHAR(30) COMMENT 'Rule sector used for the behavioral rule lookup (deposit counterparty type, contract sector, ALL for HQLA).',
+    BUSINESS_UNIT VARCHAR(30) COMMENT 'Owning business unit for filtering (REQ-UI-02).',
+    CURRENCY VARCHAR(3) COMMENT 'Original currency of the position (ISO 4217).',
+    RATING VARCHAR(10) COMMENT 'Instrument / counterparty rating for rating filters.',
+    SIM_CATEGORY VARCHAR(30) COMMENT 'Simulator component the position belongs to (e.g. RETAIL_STABLE, CORP_NON_OPERATIONAL, FI_FUNDING, FACILITIES, INFLOW_NONFIN, INFLOW_FI, L1_CASH, L2A). Target of what-if multipliers.',
+    EXPOSURE_CHF NUMBER(18,2) COMMENT 'Exposure in CHF: market value (HQLA), balance (deposits) or drawn outstanding (contracts).',
+    UNDRAWN_CHF NUMBER(18,2) COMMENT 'Undrawn committed facility amount in CHF (basis of drawdown outflows).',
+    CF_IN_30D_CHF NUMBER(18,2) COMMENT 'Contractual cash inflows (principal + interest) due within 30 days in CHF.',
+    CF_OUT_30D_CHF NUMBER(18,2) COMMENT 'Contractual cash outflows (e.g. interbank borrowing repayments) due within 30 days in CHF.',
+    COMPONENT_GROSS_CHF NUMBER(18,2) COMMENT 'Gross amount the scenario factor is applied to: market value (HQLA), balance (deposits), 30-day outflow (interbank borrowing), undrawn amount (facilities), 30-day performing inflow (loans).',
+    APPLIED_FACTOR NUMBER(8,4) COMMENT 'Scenario factor applied to COMPONENT_GROSS_CHF: haircut multiplier (HQLA, incl. stress add-on), run-off rate (deposits incl. account adjustments, clamped to 3%-100%), drawdown rate (facilities) or inflow rate (0 for non-performing).',
+    HQLA_WEIGHTED_CHF NUMBER(18,2) COMMENT 'Post-haircut HQLA value in CHF before the L2 caps (numerator contribution).',
+    OUTFLOW_CHF NUMBER(18,2) COMMENT 'Stressed 30-day outflow in CHF (denominator contribution).',
+    INFLOW_CHF NUMBER(18,2) COMMENT 'Weighted 30-day inflow in CHF before the 75% inflow cap.',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh.'
+) COMMENT = 'Position-level LCR contributions for every scenario (REQ-ENG-03/04/05): each valid in-scope position from REPP_AGG_DT_LCR_POSITIONS is combined with the scenario-specific behavioral rule (run-off, inflow, drawdown, haircut add-on) to produce weighted HQLA, outflow and inflow amounts. Single source for scenario components, variance attribution, drill-down and the simulator.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-WITH hqla_base AS (
-    SELECT
-        h.AS_OF_DATE,
-        h.HOLDING_ID,
-        h.ASSET_TYPE,
-        h.MARKET_VALUE_CHF,
-        h.HQLA_ELIGIBLE,
-        e.REGULATORY_LEVEL,
-        e.HAIRCUT_PCT,
-        e.HAIRCUT_FACTOR,
-        h.MARKET_VALUE_CHF * e.HAIRCUT_FACTOR AS HQLA_VALUE_CHF
-    FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_HOLDINGS h
-    INNER JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_ELIGIBILITY e
-        ON h.ASSET_TYPE = e.ASSET_TYPE
-    WHERE h.HQLA_ELIGIBLE = TRUE
-      AND e.IS_ACTIVE = TRUE
+WITH cf30 AS (
+    SELECT AS_OF_DATE, CONTRACT_ID,
+           SUM(IFF(DIRECTION = 'IN', AMOUNT_CCY, 0)) AS IN_CCY,
+           SUM(IFF(DIRECTION = 'OUT', AMOUNT_CCY, 0)) AS OUT_CCY
+    FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CASHFLOWS
+    WHERE CF_DATE > AS_OF_DATE AND CF_DATE <= DATEADD(day, 30, AS_OF_DATE)
+    GROUP BY AS_OF_DATE, CONTRACT_ID
 ),
-hqla_aggregated AS (
-    SELECT
-        AS_OF_DATE,
-        REGULATORY_LEVEL AS HQLA_LEVEL,
-        ASSET_TYPE,
-        COUNT(*) AS HOLDINGS_COUNT,
-        SUM(MARKET_VALUE_CHF) AS MARKET_VALUE_CHF,
-        MAX(HAIRCUT_PCT) AS HAIRCUT_PCT,  -- Same for all in group
-        SUM(HQLA_VALUE_CHF) AS HQLA_VALUE_CHF
-    FROM hqla_base
-    GROUP BY AS_OF_DATE, REGULATORY_LEVEL, ASSET_TYPE
+base AS (
+    SELECT p.*, s.SCENARIO_CODE, r.SIM_CATEGORY, r.RUNOFF_RATE, r.INFLOW_RATE, r.DRAWDOWN_RATE, r.HAIRCUT_ADDON_PCT,
+           (COALESCE(c.IN_CCY, 0) * p.FX_RATE_TO_CHF) AS CF_IN_CHF,
+           (COALESCE(c.OUT_CCY, 0) * p.FX_RATE_TO_CHF) AS CF_OUT_CHF
+    FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_POSITIONS p
+    CROSS JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_SCENARIOS s
+    JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_BEHAVIORAL_RULES r
+        ON r.PRODUCT_TYPE = p.PRODUCT_TYPE AND r.COUNTERPARTY_SECTOR = p.COUNTERPARTY_SECTOR
+       AND r.STRESS_SCENARIO = s.SCENARIO_CODE AND r.IS_ACTIVE
+    LEFT JOIN cf30 c
+        ON c.AS_OF_DATE = p.AS_OF_DATE AND c.CONTRACT_ID = p.POSITION_ID AND p.SOURCE_SYSTEM = 'CONTRACTS'
+    WHERE p.DQ_STATUS = 'OK' AND p.INCLUDED_IN_LCR
 ),
-total_hqla_per_date AS (
-    SELECT
-        AS_OF_DATE,
-        SUM(HQLA_VALUE_CHF) AS TOTAL_HQLA
-    FROM hqla_aggregated
-    GROUP BY AS_OF_DATE
+calc AS (
+    SELECT b.*,
+        CASE b.LCR_TREATMENT
+            WHEN 'HQLA' THEN b.AMOUNT_CHF
+            WHEN 'OUTFLOW' THEN IFF(b.SOURCE_SYSTEM = 'DEPOSITS', b.AMOUNT_CHF, b.CF_OUT_CHF)
+            WHEN 'FACILITY' THEN b.UNDRAWN_CHF
+            WHEN 'INFLOW' THEN IFF(b.IS_PERFORMING, b.CF_IN_CHF, 0)
+        END AS GROSS_CHF,
+        CASE b.LCR_TREATMENT
+            WHEN 'HQLA' THEN GREATEST(0, b.HAIRCUT_FACTOR - COALESCE(b.HAIRCUT_ADDON_PCT, 0) / 100)
+            WHEN 'OUTFLOW' THEN IFF(b.SOURCE_SYSTEM = 'DEPOSITS',
+                                    GREATEST(0.03, LEAST(1, b.RUNOFF_RATE + b.RUNOFF_ADJUSTMENT)), b.RUNOFF_RATE)
+            WHEN 'FACILITY' THEN b.DRAWDOWN_RATE
+            WHEN 'INFLOW' THEN IFF(b.IS_PERFORMING, b.INFLOW_RATE, 0)
+        END AS FACTOR
+    FROM base b
 )
 SELECT
-    h.AS_OF_DATE,
-    h.HQLA_LEVEL,
-    h.ASSET_TYPE,
-    h.HOLDINGS_COUNT,
-    ROUND(h.MARKET_VALUE_CHF, 2) AS MARKET_VALUE_CHF,
-    h.HAIRCUT_PCT,
-    ROUND(h.HQLA_VALUE_CHF, 2) AS HQLA_VALUE_CHF,
-    ROUND((h.HQLA_VALUE_CHF / NULLIF(t.TOTAL_HQLA, 0)) * 100, 2) AS PCT_OF_TOTAL_HQLA,
-    CURRENT_TIMESTAMP() AS CALCULATION_TIMESTAMP
-FROM hqla_aggregated h
-LEFT JOIN total_hqla_per_date t
-    ON h.AS_OF_DATE = t.AS_OF_DATE
-ORDER BY h.AS_OF_DATE DESC, h.HQLA_LEVEL, h.HQLA_VALUE_CHF DESC;
+    AS_OF_DATE, SCENARIO_CODE, POSITION_ID, SOURCE_SYSTEM, PRODUCT_TYPE, POSITION_NAME, PRODUCT_GROUP, ASSET_CLASS,
+    LCR_TREATMENT, HQLA_LEVEL, COUNTERPARTY_ID, COUNTERPARTY_NAME, COUNTERPARTY_SECTOR, BUSINESS_UNIT, CURRENCY, RATING,
+    SIM_CATEGORY, AMOUNT_CHF, UNDRAWN_CHF, CF_IN_CHF::NUMBER(18,2), CF_OUT_CHF::NUMBER(18,2), GROSS_CHF::NUMBER(18,2),
+    FACTOR::NUMBER(8,4),
+    IFF(LCR_TREATMENT = 'HQLA', GROSS_CHF * FACTOR, 0)::NUMBER(18,2),
+    IFF(LCR_TREATMENT IN ('OUTFLOW', 'FACILITY'), GROSS_CHF * FACTOR, 0)::NUMBER(18,2),
+    IFF(LCR_TREATMENT = 'INFLOW', GROSS_CHF * FACTOR, 0)::NUMBER(18,2),
+    CURRENT_TIMESTAMP()
+FROM calc;
+
+DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_COMPONENTS(
+    AS_OF_DATE DATE COMMENT 'Snapshot (cut-off) date.',
+    STRESS_SCENARIO VARCHAR(20) COMMENT 'Scenario code (BASE, BANK_STRESS, MARKET_STRESS, COMBINED).',
+    COMPONENT_TYPE VARCHAR(10) COMMENT 'LCR side of the component: HQLA (numerator), OUTFLOW (incl. facility drawdowns) or INFLOW.',
+    SIM_CATEGORY VARCHAR(30) COMMENT 'Simulator component category (e.g. L1_CASH, L2B_EQUITY, RETAIL_STABLE, FI_FUNDING, FACILITIES, INFLOW_FI).',
+    HQLA_LEVEL VARCHAR(5) COMMENT 'HQLA level for HQLA components (L1, L2A, L2B); NULL for flows.',
+    GROSS_AMOUNT_CHF NUMBER(18,2) COMMENT 'Sum of gross amounts the scenario factors apply to (market value, balance, undrawn, 30-day contractual flow).',
+    WEIGHTED_AMOUNT_CHF NUMBER(18,2) COMMENT 'Sum of weighted amounts (post-haircut HQLA, stressed outflow or weighted inflow) before LCR caps.',
+    POSITION_COUNT NUMBER(10,0) COMMENT 'Number of positions in the component.',
+    COUNTERPARTY_COUNT NUMBER(10,0) COMMENT 'Number of distinct counterparties in the component.',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh.'
+) COMMENT = 'Compact LCR component vectors per date and scenario (a few dozen rows per day). Input for REPP_AGG_DT_LCR_SCENARIO_DAILY, the scenario simulator procedure and the agent what-if tool, so what-if recalculations run in milliseconds without touching position data.'
+TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+AS
+SELECT AS_OF_DATE, STRESS_SCENARIO,
+       IFF(LCR_TREATMENT = 'FACILITY', 'OUTFLOW', LCR_TREATMENT)::VARCHAR(10),
+       SIM_CATEGORY, HQLA_LEVEL,
+       SUM(COMPONENT_GROSS_CHF)::NUMBER(18,2),
+       SUM(HQLA_WEIGHTED_CHF + OUTFLOW_CHF + INFLOW_CHF)::NUMBER(18,2),
+       COUNT(*), COUNT(DISTINCT COUNTERPARTY_ID), CURRENT_TIMESTAMP()
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_POSITIONS
+GROUP BY AS_OF_DATE, STRESS_SCENARIO, IFF(LCR_TREATMENT = 'FACILITY', 'OUTFLOW', LCR_TREATMENT), SIM_CATEGORY, HQLA_LEVEL;
+
+DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_DAILY(
+    AS_OF_DATE DATE COMMENT 'Snapshot (cut-off) date.',
+    STRESS_SCENARIO VARCHAR(20) COMMENT 'Scenario code; BASE is the regulatory FINMA LCR.',
+    SCENARIO_NAME VARCHAR(100) COMMENT 'Scenario display name.',
+    IS_REGULATORY BOOLEAN COMMENT 'TRUE for the regulatory BASE scenario.',
+    L1_TOTAL NUMBER(18,2) COMMENT 'Level 1 HQLA after haircut (0% regulatory; stress add-ons in stress scenarios).',
+    L2A_TOTAL NUMBER(18,2) COMMENT 'Level 2A HQLA after 15% haircut (plus stress add-on) before caps.',
+    L2B_TOTAL NUMBER(18,2) COMMENT 'Level 2B HQLA after 50% haircut (plus stress add-on) before caps.',
+    L2B_CAPPED NUMBER(18,2) COMMENT 'Level 2B after the 15% cap: min(L2B, 15/85 x (L1 + L2A)).',
+    L2_UNCAPPED NUMBER(18,2) COMMENT 'L2A + L2B before any cap.',
+    L2_CAPPED NUMBER(18,2) COMMENT 'Level 2 after the 40% cap: min(L2A + L2B_CAPPED, 2/3 x L1).',
+    HQLA_TOTAL NUMBER(18,2) COMMENT 'Stock of HQLA = L1 + L2_CAPPED (LCR numerator).',
+    L2B_CAP_APPLIED BOOLEAN COMMENT 'TRUE when the 15% L2B cap reduced the stock.',
+    L2_CAP_APPLIED BOOLEAN COMMENT 'TRUE when the 40% L2 cap reduced the stock.',
+    OUTFLOW_RETAIL NUMBER(18,2) COMMENT 'Stressed 30-day outflows from retail deposits.',
+    OUTFLOW_CORP NUMBER(18,2) COMMENT 'Stressed 30-day outflows from corporate / SME deposits.',
+    OUTFLOW_FI NUMBER(18,2) COMMENT 'Stressed 30-day outflows from financial-institution deposits and interbank borrowing.',
+    OUTFLOW_FACILITIES NUMBER(18,2) COMMENT 'Drawdown outflows on undrawn committed credit and liquidity facilities.',
+    OUTFLOW_TOTAL NUMBER(18,2) COMMENT 'Total gross stressed 30-day outflows (retail + corporate + FI + facilities).',
+    INFLOW_NONFIN NUMBER(18,2) COMMENT 'Weighted 30-day inflows from retail, SME and corporate loans.',
+    INFLOW_FI NUMBER(18,2) COMMENT 'Weighted 30-day inflows from interbank placements.',
+    INFLOW_TOTAL NUMBER(18,2) COMMENT 'Total weighted 30-day inflows before the cap.',
+    INFLOW_CAPPED NUMBER(18,2) COMMENT 'Inflows after the 75% cap: min(INFLOW_TOTAL, 0.75 x OUTFLOW_TOTAL).',
+    INFLOW_CAP_APPLIED BOOLEAN COMMENT 'TRUE when the 75% inflow cap was binding.',
+    NET_OUTFLOW NUMBER(18,2) COMMENT 'Net cash outflows = OUTFLOW_TOTAL - INFLOW_CAPPED (LCR denominator).',
+    LCR_RATIO NUMBER(8,2) COMMENT 'LCR in percent = HQLA_TOTAL / NET_OUTFLOW x 100 (9999.99 if no net outflows).',
+    LCR_STATUS VARCHAR(10) COMMENT 'FAIL (< 100%), WARNING (100% to < 110%), PASS (>= 110%).',
+    SEVERITY VARCHAR(10) COMMENT 'Dashboard colour for LCR_STATUS: RED, YELLOW, GREEN.',
+    LCR_BUFFER_CHF NUMBER(18,2) COMMENT 'HQLA_TOTAL - NET_OUTFLOW: liquidity buffer above the 100% minimum.',
+    RETAIL_ACCOUNTS NUMBER(10,0) COMMENT 'Number of retail deposit positions in the calculation.',
+    CORP_ACCOUNTS NUMBER(10,0) COMMENT 'Number of corporate / SME deposit positions in the calculation.',
+    FI_ACCOUNTS NUMBER(10,0) COMMENT 'Number of FI deposit and interbank borrowing positions in the calculation.',
+    L1_COUNT NUMBER(10,0) COMMENT 'Number of Level 1 HQLA positions.',
+    L2A_COUNT NUMBER(10,0) COMMENT 'Number of Level 2A HQLA positions.',
+    L2B_COUNT NUMBER(10,0) COMMENT 'Number of Level 2B HQLA positions.',
+    RETAIL_BALANCE_CHF NUMBER(18,2) COMMENT 'Gross retail deposit balance (basis for the effective retail run-off rate).',
+    CORP_BALANCE_CHF NUMBER(18,2) COMMENT 'Gross corporate deposit balance (basis for the effective corporate run-off rate).',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh.'
+) COMMENT = 'Daily LCR result per scenario (REQ-ENG-05): HQLA by level with both regulatory caps, outflows by segment, inflows with the 75% cap, net outflows, LCR ratio and status (FAIL < 100%, WARNING 100-110%, PASS >= 110%). All values computed with the shared REPP_AGG_FN_LCR_CALC formula. BASE rows feed the regulatory LCR dynamic tables.'
+TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+AS
+WITH c AS (
+    SELECT AS_OF_DATE, STRESS_SCENARIO,
+        SUM(IFF(COMPONENT_TYPE = 'HQLA' AND HQLA_LEVEL = 'L1', WEIGHTED_AMOUNT_CHF, 0)) AS L1,
+        SUM(IFF(COMPONENT_TYPE = 'HQLA' AND HQLA_LEVEL = 'L2A', WEIGHTED_AMOUNT_CHF, 0)) AS L2A,
+        SUM(IFF(COMPONENT_TYPE = 'HQLA' AND HQLA_LEVEL = 'L2B', WEIGHTED_AMOUNT_CHF, 0)) AS L2B,
+        SUM(IFF(SIM_CATEGORY IN ('RETAIL_STABLE', 'RETAIL_LESS_STABLE'), WEIGHTED_AMOUNT_CHF, 0)) AS O_RETAIL,
+        SUM(IFF(SIM_CATEGORY IN ('CORP_OPERATIONAL', 'CORP_NON_OPERATIONAL'), WEIGHTED_AMOUNT_CHF, 0)) AS O_CORP,
+        SUM(IFF(SIM_CATEGORY = 'FI_FUNDING', WEIGHTED_AMOUNT_CHF, 0)) AS O_FI,
+        SUM(IFF(SIM_CATEGORY = 'FACILITIES', WEIGHTED_AMOUNT_CHF, 0)) AS O_FAC,
+        SUM(IFF(COMPONENT_TYPE = 'OUTFLOW', WEIGHTED_AMOUNT_CHF, 0)) AS O_TOT,
+        SUM(IFF(SIM_CATEGORY = 'INFLOW_NONFIN', WEIGHTED_AMOUNT_CHF, 0)) AS I_NONFIN,
+        SUM(IFF(SIM_CATEGORY = 'INFLOW_FI', WEIGHTED_AMOUNT_CHF, 0)) AS I_FI,
+        SUM(IFF(COMPONENT_TYPE = 'INFLOW', WEIGHTED_AMOUNT_CHF, 0)) AS I_TOT,
+        SUM(IFF(SIM_CATEGORY IN ('RETAIL_STABLE', 'RETAIL_LESS_STABLE'), POSITION_COUNT, 0)) AS N_RETAIL,
+        SUM(IFF(SIM_CATEGORY IN ('CORP_OPERATIONAL', 'CORP_NON_OPERATIONAL'), POSITION_COUNT, 0)) AS N_CORP,
+        SUM(IFF(SIM_CATEGORY = 'FI_FUNDING', POSITION_COUNT, 0)) AS N_FI,
+        SUM(IFF(HQLA_LEVEL = 'L1', POSITION_COUNT, 0)) AS N_L1,
+        SUM(IFF(HQLA_LEVEL = 'L2A', POSITION_COUNT, 0)) AS N_L2A,
+        SUM(IFF(HQLA_LEVEL = 'L2B', POSITION_COUNT, 0)) AS N_L2B,
+        SUM(IFF(SIM_CATEGORY IN ('RETAIL_STABLE', 'RETAIL_LESS_STABLE'), GROSS_AMOUNT_CHF, 0)) AS B_RETAIL,
+        SUM(IFF(SIM_CATEGORY IN ('CORP_OPERATIONAL', 'CORP_NON_OPERATIONAL'), GROSS_AMOUNT_CHF, 0)) AS B_CORP
+    FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_COMPONENTS
+    GROUP BY AS_OF_DATE, STRESS_SCENARIO
+),
+r AS (
+    SELECT c.*, {{ db }}.{{ rep_agg }}.REPP_AGG_FN_LCR_CALC(L1, L2A, L2B, O_TOT, I_TOT, 0.75) AS RES
+    FROM c
+)
+SELECT
+    r.AS_OF_DATE, r.STRESS_SCENARIO, s.SCENARIO_NAME, s.IS_REGULATORY,
+    r.L1::NUMBER(18,2), r.L2A::NUMBER(18,2), r.L2B::NUMBER(18,2),
+    RES:L2B_CAPPED::NUMBER(18,2), (r.L2A + r.L2B)::NUMBER(18,2), RES:L2_CAPPED::NUMBER(18,2), RES:HQLA::NUMBER(18,2),
+    RES:L2B_CAP_APPLIED::BOOLEAN, RES:L2_CAP_APPLIED::BOOLEAN,
+    r.O_RETAIL::NUMBER(18,2), r.O_CORP::NUMBER(18,2), r.O_FI::NUMBER(18,2), r.O_FAC::NUMBER(18,2), r.O_TOT::NUMBER(18,2),
+    r.I_NONFIN::NUMBER(18,2), r.I_FI::NUMBER(18,2), r.I_TOT::NUMBER(18,2),
+    RES:INFLOW_CAPPED::NUMBER(18,2), RES:INFLOW_CAP_APPLIED::BOOLEAN, RES:NET_OUTFLOW::NUMBER(18,2),
+    COALESCE(RES:LCR::NUMBER(8,2), 9999.99) AS LCR_RATIO_V,
+    CASE WHEN LCR_RATIO_V < 100 THEN 'FAIL' WHEN LCR_RATIO_V < 110 THEN 'WARNING' ELSE 'PASS' END,
+    CASE WHEN LCR_RATIO_V < 100 THEN 'RED' WHEN LCR_RATIO_V < 110 THEN 'YELLOW' ELSE 'GREEN' END,
+    (RES:HQLA - RES:NET_OUTFLOW)::NUMBER(18,2),
+    r.N_RETAIL, r.N_CORP, r.N_FI, r.N_L1, r.N_L2A, r.N_L2B,
+    r.B_RETAIL::NUMBER(18,2), r.B_CORP::NUMBER(18,2),
+    CURRENT_TIMESTAMP()
+FROM r
+JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_SCENARIOS s ON s.SCENARIO_CODE = r.STRESS_SCENARIO;
+
+-- ============================================================
+-- Existing LCR dynamic tables, rebuilt on the BASE scenario.
+-- Column lists unchanged; new columns appended at the end.
+-- ============================================================
+
+DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_HQLA(
+    AS_OF_DATE DATE COMMENT 'Reporting date for HQLA positions (daily COB snapshot). Primary time dimension for portfolio composition and asset allocation trends.',
+    HQLA_LEVEL VARCHAR(10) COMMENT 'Basel III HQLA level: L1 (0% haircut), L2A (15% haircut), L2B (50% haircut). Primary grouping for regulatory reporting and cap monitoring.',
+    ASSET_TYPE VARCHAR(50) COMMENT 'HQLA asset type code (e.g. CASH_SNB, GOVT_BOND_CHF, CANTON_BOND, CORPORATE_BOND_AA, CORPORATE_BOND_A_BBB, EQUITY_SMI). Links to LIQI_RAW_TB_HQLA_ELIGIBILITY.',
+    HOLDINGS_COUNT NUMBER(10,0) COMMENT 'Number of eligible positions of this asset type on the date; diversification / concentration indicator.',
+    MARKET_VALUE_CHF NUMBER(18,2) COMMENT 'Gross market value in CHF (end-of-day FX) before regulatory haircuts.',
+    HAIRCUT_PCT NUMBER(5,2) COMMENT 'Regulatory haircut percentage of the asset type (0, 15 or 50) from LIQI_RAW_TB_HQLA_ELIGIBILITY.',
+    HQLA_VALUE_CHF NUMBER(18,2) COMMENT 'HQLA value after the regulatory haircut (Market_Value x Haircut_Factor), before the L2B and L2 caps.',
+    PCT_OF_TOTAL_HQLA NUMBER(5,2) COMMENT 'Share of this asset type in total post-haircut (pre-cap) HQLA in percent; concentration indicator.',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh for lineage and freshness monitoring.'
+) COMMENT = 'Daily regulatory (BASE scenario) HQLA holdings aggregated by HQLA level and asset type: holding counts, gross market value, haircut and post-haircut value. Built from REPP_AGG_DT_LCR_SCENARIO_POSITIONS so the composition always matches the LCR numerator. Used by semantic views, composition dashboards and the liquidity agent.'
+TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+AS
+WITH agg AS (
+    SELECT p.AS_OF_DATE, p.HQLA_LEVEL, p.PRODUCT_TYPE AS ASSET_TYPE, COUNT(*) AS HOLDINGS_COUNT,
+           SUM(p.EXPOSURE_CHF) AS MARKET_VALUE_CHF, SUM(p.HQLA_WEIGHTED_CHF) AS HQLA_VALUE_CHF
+    FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_POSITIONS p
+    WHERE p.STRESS_SCENARIO = 'BASE' AND p.LCR_TREATMENT = 'HQLA'
+    GROUP BY p.AS_OF_DATE, p.HQLA_LEVEL, p.PRODUCT_TYPE
+)
+SELECT a.AS_OF_DATE, a.HQLA_LEVEL::VARCHAR(10), a.ASSET_TYPE, a.HOLDINGS_COUNT,
+       ROUND(a.MARKET_VALUE_CHF, 2), e.HAIRCUT_PCT, ROUND(a.HQLA_VALUE_CHF, 2),
+       ROUND(a.HQLA_VALUE_CHF / NULLIF(SUM(a.HQLA_VALUE_CHF) OVER (PARTITION BY a.AS_OF_DATE), 0) * 100, 2),
+       CURRENT_TIMESTAMP()
+FROM agg a
+LEFT JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_ELIGIBILITY e ON e.ASSET_TYPE = a.ASSET_TYPE;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_OUTFLOW(
-    AS_OF_DATE DATE COMMENT 'Reporting date for deposit positions (daily COB snapshot). Primary time dimension for funding composition analysis, deposit stability monitoring, and customer relationship assessment. Used for time-series analysis of funding mix evolution and run-off rate trends by counterparty segment.',
-    COUNTERPARTY_TYPE VARCHAR(50) COMMENT 'Counterparty classification: RETAIL (individuals), CORPORATE (businesses), FINANCIAL_INSTITUTION (banks/insurers). Primary grouping dimension for regulatory reporting, funding strategy development, and Basel III compliance. Determines base run-off rate assumptions and concentration limits per FINMA Circular 2015/2.',
-    ACCOUNT_COUNT NUMBER(10,0) COMMENT 'Number of active deposit accounts in this counterparty segment for this reporting date. Deposit base breadth metric indicating diversification and concentration risk. High counts (over 5000) provide statistical diversification benefits; low counts (under 100) indicate concentration vulnerability. Used for customer acquisition effectiveness and retention program targeting.',
-    CUSTOMER_COUNT NUMBER(10,0) COMMENT 'Number of unique customers with deposits in this counterparty segment. Customer relationship breadth metric distinct from account count (customers may have multiple accounts). Used for customer-level concentration analysis, relationship banking program effectiveness, and deposit insurance calculation (retail customers within CHF 100K limit).',
-    BALANCE_CHF NUMBER(18,2) COMMENT 'Total deposit balance in CHF for this counterparty segment before stressed outflows. Aggregate funding base by customer type. Used for funding composition analysis, customer segment contribution assessment, and strategic pricing decisions. Represents total available funding under normal operating conditions.',
-    RUN_OFF_RATE NUMBER(8,4) COMMENT 'Weighted average effective run-off rate as decimal (0.03 to 1.00) after applying relationship discounts, direct debit adjustments, and tenure penalties. Blended rate reflecting customer relationship quality and account maturity. Lower rates (under 0.06) indicate stable retail funding; higher rates (over 0.40) indicate volatile wholesale funding. Used for funding stability benchmarking.',
-    OUTFLOW_AMOUNT_CHF NUMBER(18,2) COMMENT 'Total expected 30-day stressed outflow in CHF for this counterparty segment (Balance × Run_Off_Rate). Aggregate withdrawal amount assumed during Basel III liquidity stress scenario. Used for LCR denominator calculation, funding gap analysis, and contingency funding plan development. Represents required HQLA coverage for this funding segment.',
-    PCT_OF_TOTAL_OUTFLOWS NUMBER(5,2) COMMENT 'Percentage of total stressed outflows represented by this counterparty segment. Funding composition metric for strategic funding strategy and concentration monitoring. High percentages (over 50% from single segment) may indicate funding concentration risk requiring diversification. Used for funding source optimization and deposit pricing strategy.',
-    PCT_OF_TOTAL_DEPOSITS NUMBER(5,2) COMMENT 'Percentage of total deposit balances represented by this counterparty segment. Funding base composition metric distinct from outflow percentage. Comparison of PCT_OF_TOTAL_DEPOSITS vs PCT_OF_TOTAL_OUTFLOWS reveals relative stability (retail high deposits, low outflows = stable). Used for strategic funding mix optimization.',
-    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp when this aggregation was executed in Snowflake. Used for data lineage tracking, audit trail maintenance, and validating calculation freshness. Critical for ensuring funding metrics reflect latest deposit balances and customer relationship changes. Monitored for SLA compliance (must be within 60 minutes of AS_OF_DATE).'
-) COMMENT = 'Daily deposit balances and stressed outflows aggregated by counterparty type (RETAIL, CORPORATE, FINANCIAL_INSTITUTION). Provides intermediate-level detail between individual accounts and fully aggregated outflow totals. Includes balances, weighted average run-off rates after relationship adjustments, outflow amounts, and account/customer counts. Source data for semantic views, funding composition dashboards, and AI agent queries about deposit breakdown. Used by Treasury for funding strategy, by ALM for stress testing, and by Retail Banking for relationship management. Updated hourly for near-real-time funding composition visibility.'
+    AS_OF_DATE DATE COMMENT 'Reporting date (daily COB snapshot). Primary time dimension for funding composition and run-off trends.',
+    COUNTERPARTY_TYPE VARCHAR(50) COMMENT 'Outflow segment: RETAIL, CORPORATE (incl. SME), FINANCIAL_INSTITUTION (FI deposits and interbank borrowing) or COMMITTED_FACILITIES (undrawn credit / liquidity facility drawdowns).',
+    ACCOUNT_COUNT NUMBER(10,0) COMMENT 'Number of positions (deposit accounts, borrowings or facilities) in the segment.',
+    CUSTOMER_COUNT NUMBER(10,0) COMMENT 'Number of distinct counterparties in the segment.',
+    BALANCE_CHF NUMBER(18,2) COMMENT 'Gross amount the run-off applies to in CHF: deposit balances, 30-day borrowing repayments or undrawn facility amounts.',
+    RUN_OFF_RATE NUMBER(8,4) COMMENT 'Weighted effective run-off / drawdown rate (decimal) = OUTFLOW_AMOUNT_CHF / BALANCE_CHF, after account-level adjustments.',
+    OUTFLOW_AMOUNT_CHF NUMBER(18,2) COMMENT 'Stressed 30-day outflow of the segment in CHF (regulatory BASE scenario).',
+    PCT_OF_TOTAL_OUTFLOWS NUMBER(5,2) COMMENT 'Share of the segment in total gross outflows in percent.',
+    PCT_OF_TOTAL_DEPOSITS NUMBER(5,2) COMMENT 'Share of the segment in the total gross amount (BALANCE_CHF) in percent.',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh.'
+) COMMENT = 'Daily regulatory (BASE scenario) stressed outflows by segment: retail, corporate, financial institutions (deposits + interbank borrowing) and committed facilities. Gross amounts, effective run-off rates, outflows and shares. Built from REPP_AGG_DT_LCR_SCENARIO_POSITIONS so totals equal OUTFLOW_TOTAL of REPP_AGG_DT_LCR_DAILY.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-WITH deposit_enriched AS (
-    SELECT
-        d.AS_OF_DATE,
-        d.ACCOUNT_ID,
-        d.CUSTOMER_ID,
-        d.DEPOSIT_TYPE,
-        d.BALANCE_CHF,
-        d.IS_INSURED,
-        d.PRODUCT_COUNT,
-        d.ACCOUNT_TENURE_DAYS,
-        d.HAS_DIRECT_DEBIT,
-        d.IS_OPERATIONAL,
-        d.COUNTERPARTY_TYPE,
-        d.CUSTOMER_SEGMENT,
-        dt.BASE_RUN_OFF_RATE,
-        dt.ALLOWS_RELATIONSHIP_DISCOUNT,
-        CASE
-            WHEN dt.ALLOWS_RELATIONSHIP_DISCOUNT AND d.PRODUCT_COUNT >= 3
-            THEN dt.BASE_RUN_OFF_RATE - 0.02  -- -2% for 3+ products
-            ELSE dt.BASE_RUN_OFF_RATE
-        END AS ADJUSTED_RUN_OFF_STEP1,
-        CASE
-            WHEN dt.ALLOWS_RELATIONSHIP_DISCOUNT AND d.HAS_DIRECT_DEBIT
-            THEN ADJUSTED_RUN_OFF_STEP1 - 0.01  -- -1% for direct debit
-            ELSE ADJUSTED_RUN_OFF_STEP1
-        END AS ADJUSTED_RUN_OFF_STEP2,
-        CASE
-            WHEN d.ACCOUNT_TENURE_DAYS < (18 * 30)
-            THEN ADJUSTED_RUN_OFF_STEP2 + 0.05  -- +5% for new accounts
-            ELSE ADJUSTED_RUN_OFF_STEP2
-        END AS ADJUSTED_RUN_OFF_STEP3,
-        GREATEST(0.03, LEAST(1.00, ADJUSTED_RUN_OFF_STEP3)) AS FINAL_RUN_OFF_RATE
-    FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_BALANCES d
-    INNER JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_TYPES dt
-        ON d.DEPOSIT_TYPE = dt.DEPOSIT_TYPE
-    WHERE d.ACCOUNT_STATUS = 'ACTIVE'
-      AND dt.IS_ACTIVE = TRUE
-),
-deposit_outflows AS (
-    SELECT
-        AS_OF_DATE,
-        ACCOUNT_ID,
-        CUSTOMER_ID,
-        COUNTERPARTY_TYPE,
-        BALANCE_CHF,
-        FINAL_RUN_OFF_RATE,
-        BALANCE_CHF * FINAL_RUN_OFF_RATE AS OUTFLOW_AMOUNT_CHF
-    FROM deposit_enriched
-),
-outflows_by_type AS (
-    SELECT
-        AS_OF_DATE,
-        COUNTERPARTY_TYPE,
-        COUNT(*) AS ACCOUNT_COUNT,
-        COUNT(DISTINCT CUSTOMER_ID) AS CUSTOMER_COUNT,
-        SUM(BALANCE_CHF) AS BALANCE_CHF,
-        SUM(OUTFLOW_AMOUNT_CHF) / NULLIF(SUM(BALANCE_CHF), 0) AS RUN_OFF_RATE,
-        SUM(OUTFLOW_AMOUNT_CHF) AS OUTFLOW_AMOUNT_CHF
-    FROM deposit_outflows
-    GROUP BY AS_OF_DATE, COUNTERPARTY_TYPE
-),
-total_per_date AS (
-    SELECT
-        AS_OF_DATE,
-        SUM(BALANCE_CHF) AS TOTAL_DEPOSITS,
-        SUM(OUTFLOW_AMOUNT_CHF) AS TOTAL_OUTFLOWS
-    FROM outflows_by_type
-    GROUP BY AS_OF_DATE
+WITH seg AS (
+    SELECT p.AS_OF_DATE,
+           CASE WHEN p.LCR_TREATMENT = 'FACILITY' THEN 'COMMITTED_FACILITIES'
+                WHEN p.SIM_CATEGORY = 'FI_FUNDING' THEN 'FINANCIAL_INSTITUTION'
+                WHEN p.SIM_CATEGORY LIKE 'RETAIL%' THEN 'RETAIL'
+                ELSE 'CORPORATE' END AS COUNTERPARTY_TYPE,
+           COUNT(*) AS ACCOUNT_COUNT, COUNT(DISTINCT p.COUNTERPARTY_ID) AS CUSTOMER_COUNT,
+           SUM(p.COMPONENT_GROSS_CHF) AS BALANCE_CHF, SUM(p.OUTFLOW_CHF) AS OUTFLOW_AMOUNT_CHF
+    FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_POSITIONS p
+    WHERE p.STRESS_SCENARIO = 'BASE' AND p.LCR_TREATMENT IN ('OUTFLOW', 'FACILITY')
+    GROUP BY 1, 2
 )
-SELECT
-    o.AS_OF_DATE,
-    o.COUNTERPARTY_TYPE,
-    o.ACCOUNT_COUNT,
-    o.CUSTOMER_COUNT,
-    ROUND(o.BALANCE_CHF, 2) AS BALANCE_CHF,
-    ROUND(o.RUN_OFF_RATE, 4) AS RUN_OFF_RATE,
-    ROUND(o.OUTFLOW_AMOUNT_CHF, 2) AS OUTFLOW_AMOUNT_CHF,
-    ROUND((o.OUTFLOW_AMOUNT_CHF / NULLIF(t.TOTAL_OUTFLOWS, 0)) * 100, 2) AS PCT_OF_TOTAL_OUTFLOWS,
-    ROUND((o.BALANCE_CHF / NULLIF(t.TOTAL_DEPOSITS, 0)) * 100, 2) AS PCT_OF_TOTAL_DEPOSITS,
-    CURRENT_TIMESTAMP() AS CALCULATION_TIMESTAMP
-FROM outflows_by_type o
-LEFT JOIN total_per_date t
-    ON o.AS_OF_DATE = t.AS_OF_DATE
-ORDER BY o.AS_OF_DATE DESC, o.OUTFLOW_AMOUNT_CHF DESC;
+SELECT AS_OF_DATE, COUNTERPARTY_TYPE, ACCOUNT_COUNT, CUSTOMER_COUNT, ROUND(BALANCE_CHF, 2),
+       ROUND(OUTFLOW_AMOUNT_CHF / NULLIF(BALANCE_CHF, 0), 4), ROUND(OUTFLOW_AMOUNT_CHF, 2),
+       ROUND(OUTFLOW_AMOUNT_CHF / NULLIF(SUM(OUTFLOW_AMOUNT_CHF) OVER (PARTITION BY AS_OF_DATE), 0) * 100, 2),
+       ROUND(BALANCE_CHF / NULLIF(SUM(BALANCE_CHF) OVER (PARTITION BY AS_OF_DATE), 0) * 100, 2),
+       CURRENT_TIMESTAMP()
+FROM seg;
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_HQLA_CALCULATION(
-    AS_OF_DATE DATE COMMENT 'Reporting date for HQLA positions (daily COB snapshot). Primary time dimension for LCR trend analysis, historical liquidity monitoring, and monthly SNB regulatory submissions. Used for time-series analysis of liquidity buffer evolution and stress testing scenarios.',
-    L1_TOTAL NUMBER(18,2) COMMENT 'Total Level 1 HQLA value in CHF after 0% haircut. Includes SNB reserves (highest quality), physical cash, Swiss Confederation bonds, and foreign government bonds rated AA- or higher. Most liquid and highest-quality assets with immediate convertibility and no restrictions. Core liquidity buffer providing maximum LCR benefit. Used for strategic liquidity planning and overnight funding decisions.',
-    L2A_TOTAL NUMBER(18,2) COMMENT 'Total Level 2A HQLA value in CHF after 15% regulatory haircut. Includes Swiss canton bonds (cantonal government debt) and covered bonds (Pfandbriefe mortgage-backed securities). High-quality liquid assets with minor marketability discount. Used for yield optimization while maintaining strong LCR contribution. Preferred over L2B for liquidity buffer composition.',
-    L2B_TOTAL NUMBER(18,2) COMMENT 'Total Level 2B HQLA value in CHF after 50% regulatory haircut. Includes SMI constituent equities (major Swiss stocks) and AA- rated corporate bonds. Lower-quality liquid assets with significant haircut reflecting higher volatility and liquidation risk. Used for portfolio diversification but limited by 40% cap rule. Subject to Treasury rebalancing when cap is breached.',
-    L2_UNCAPPED NUMBER(18,2) COMMENT 'Total Level 2 assets (L2A + L2B) before applying 40% regulatory cap. Gross exposure to Level 2 assets before cap enforcement. Used for monitoring proximity to cap threshold, triggering pre-emptive portfolio rebalancing, and identifying over-concentration in Level 2 holdings. Gap between uncapped and capped indicates portfolio optimization opportunity.',
-    L2_CAPPED NUMBER(18,2) COMMENT 'Total Level 2 assets after applying Basel III 40% cap rule (max 2/3 of L1). Final L2 value included in HQLA numerator per FINMA Circular 2015/2. When L2_Uncapped exceeds cap, excess is discarded and cannot contribute to LCR. Triggers Treasury alert to convert L2B to L1 assets for LCR optimization. Critical for accurate regulatory reporting.',
-    HQLA_TOTAL NUMBER(18,2) COMMENT 'Final total HQLA stock in CHF (L1 + L2_capped). The numerator in LCR ratio calculation: LCR = (HQLA_Total / Net_Outflows) × 100. Must maintain minimum CHF 2B for systemic banks per Swiss regulation. Critical metric for daily liquidity risk management, intraday monitoring, and monthly FINMA/SNB reporting. Board-level metric for strategic liquidity risk appetite.',
-    L1_COUNT NUMBER(10,0) COMMENT 'Number of Level 1 HQLA securities in portfolio. Used for Level 1 diversification analysis across asset types (cash, SNB reserves, government bonds). Low count with high concentration may indicate over-reliance on single security type. Monitored for operational risk and custody concentration. Typically 5-15 positions for mid-sized bank.',
-    L2A_COUNT NUMBER(10,0) COMMENT 'Number of Level 2A HQLA securities in portfolio. Used for canton bond and covered bond diversification assessment. High count indicates well-diversified Level 2A holdings reducing single-issuer concentration risk. Monitored for issuer limits and custodian concentration. Optimal range 10-30 positions depending on portfolio size.',
-    L2B_COUNT NUMBER(10,0) COMMENT 'Number of Level 2B HQLA securities in portfolio. Used for equity and corporate bond diversification within Level 2B classification. SMI stocks should be spread across sectors to reduce correlation risk. High count may indicate fragmented portfolio; low count may indicate concentration risk. Balance between diversification and operational complexity.',
-    TOTAL_HOLDINGS NUMBER(10,0) COMMENT 'Total number of HQLA securities across all regulatory levels. Portfolio complexity metric for operational management, custody arrangements, and collateral management systems. High count (over 100) may indicate over-diversification and operational inefficiency; low count (under 20) may indicate concentration risk. Used for staffing decisions and technology requirements.',
-    CAP_APPLIED BOOLEAN COMMENT 'Boolean flag indicating whether 40% Basel III cap was triggered (TRUE = L2 exceeded 2/3 of L1 and was reduced). When TRUE, triggers Treasury alert to rebalance portfolio by converting L2B to L1 assets or increasing L1 holdings. Chronic TRUE status indicates structural portfolio imbalance requiring strategic adjustment. Monitored daily by ALM and reported to ALCO monthly.',
-    DISCARDED_L2 NUMBER(18,2) COMMENT 'CHF amount of Level 2 assets excluded from HQLA stock due to 40% cap breach. Represents opportunity cost - liquidity buffer that provides no LCR benefit. Can be optimized by: (1) converting to L1 assets, (2) using for other balance sheet purposes, or (3) reducing holdings. High values (over CHF 100M) trigger strategic review by Treasury and ALCO.',
-    MAX_L2_ALLOWED NUMBER(18,2) COMMENT 'Maximum Level 2 assets allowed under 40% cap rule: 2/3 × L1_Total. Treasury operational limit for Level 2 portfolio management. When L2_Uncapped approaches this threshold (within 90%), pre-emptive portfolio rebalancing initiated. Used for forward-looking capacity planning and strategic asset allocation decisions. Daily monitoring by Treasury desk.',
-    L2_TO_L1_PCT NUMBER(8,2) COMMENT 'Level 2 to Level 1 ratio expressed as percentage. Regulatory maximum 66.67% (2/3) per Basel III. Target operating range typically 40-60% for buffer below cap. Values approaching 66% trigger rebalancing actions. Key metric for Treasury dashboards, ALCO reporting, and regulatory submissions to SNB. Used for assessing portfolio composition quality and optimization opportunities.',
-    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp when this HQLA calculation was executed in Snowflake. Used for data lineage tracking, audit trail maintenance, and validating calculation freshness. Critical for ensuring LCR metrics reflect latest market values and portfolio changes. Monitored for SLA compliance (must be within 60 minutes of AS_OF_DATE for intraday reporting).'
-) COMMENT = 'Daily HQLA stock calculation with Basel III 40% cap rule applied. Aggregates eligible liquid assets by regulatory level (L1, L2A, L2B), applies required haircuts, and implements the regulatory cap limiting Level 2 assets to 2/3 of Level 1 assets. Forms the numerator of the LCR ratio calculation. Updated hourly for real-time liquidity monitoring and FINMA compliance reporting. Critical for Treasury decision-making and regulatory submissions to Swiss National Bank (SNB).'
+    AS_OF_DATE DATE COMMENT 'Reporting date (daily COB snapshot) of the HQLA stock calculation.',
+    L1_TOTAL NUMBER(18,2) COMMENT 'Level 1 HQLA in CHF (0% haircut): SNB reserves, vault cash, Swiss Confederation and 0%-risk-weight foreign government bonds.',
+    L2A_TOTAL NUMBER(18,2) COMMENT 'Level 2A HQLA in CHF after 15% haircut: canton bonds, covered bonds (Pfandbriefe), AA- or better corporate bonds.',
+    L2B_TOTAL NUMBER(18,2) COMMENT 'Level 2B HQLA in CHF after 50% haircut, before the 15% cap: SMI equities and A+/BBB- corporate bonds.',
+    L2_UNCAPPED NUMBER(18,2) COMMENT 'L2A + L2B before any regulatory cap.',
+    L2_CAPPED NUMBER(18,2) COMMENT 'Level 2 included in HQLA after the L2B 15% cap and the L2 40% cap (max 2/3 of L1).',
+    HQLA_TOTAL NUMBER(18,2) COMMENT 'Stock of HQLA = L1_TOTAL + L2_CAPPED (LCR numerator).',
+    L1_COUNT NUMBER(10,0) COMMENT 'Number of Level 1 positions.',
+    L2A_COUNT NUMBER(10,0) COMMENT 'Number of Level 2A positions.',
+    L2B_COUNT NUMBER(10,0) COMMENT 'Number of Level 2B positions.',
+    TOTAL_HOLDINGS NUMBER(10,0) COMMENT 'Total number of eligible HQLA positions.',
+    CAP_APPLIED BOOLEAN COMMENT 'TRUE when either the L2B 15% cap or the L2 40% cap reduced the HQLA stock.',
+    DISCARDED_L2 NUMBER(18,2) COMMENT 'Level 2 assets excluded by the caps (L2_UNCAPPED - L2_CAPPED).',
+    MAX_L2_ALLOWED NUMBER(18,2) COMMENT 'Maximum Level 2 allowed under the 40% cap: 2/3 x L1_TOTAL.',
+    L2_TO_L1_PCT NUMBER(8,2) COMMENT 'L2_CAPPED / L1_TOTAL in percent (regulatory maximum 66.67%).',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh.',
+    L2B_CAPPED NUMBER(18,2) COMMENT 'Level 2B after the 15% cap: min(L2B, 15/85 x (L1 + L2A)).',
+    L2B_CAP_APPLIED BOOLEAN COMMENT 'TRUE when the 15% L2B cap was binding.',
+    L2B_DISCARDED NUMBER(18,2) COMMENT 'Level 2B excluded by the 15% cap (L2B_TOTAL - L2B_CAPPED).'
+) COMMENT = 'Daily regulatory (BASE) HQLA stock with both Basel III / FINMA caps: L2B limited to 15/85 of (L1 + L2A) and L2 limited to 2/3 of L1. LCR numerator. Built from REPP_AGG_DT_LCR_SCENARIO_DAILY (shared formula REPP_AGG_FN_LCR_CALC).'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-WITH hqla_base AS (
-    SELECT
-        h.AS_OF_DATE,
-        h.HOLDING_ID,
-        h.ASSET_TYPE,
-        h.ISIN,
-        h.SECURITY_NAME,
-        h.MARKET_VALUE_CHF,
-        h.HQLA_ELIGIBLE,
-        h.INELIGIBILITY_REASON,
-        e.REGULATORY_LEVEL,
-        e.HAIRCUT_FACTOR,
-        e.SNB_COORDINATE,
-        h.MARKET_VALUE_CHF * e.HAIRCUT_FACTOR AS WEIGHTED_VALUE_CHF
-    FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_HOLDINGS h
-    INNER JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_ELIGIBILITY e
-        ON h.ASSET_TYPE = e.ASSET_TYPE
-    WHERE h.HQLA_ELIGIBLE = TRUE
-      AND e.IS_ACTIVE = TRUE
-),
-hqla_by_level AS (
-    SELECT
-        AS_OF_DATE,
-        REGULATORY_LEVEL,
-        COUNT(*) AS HOLDING_COUNT,
-        SUM(MARKET_VALUE_CHF) AS GROSS_VALUE_CHF,
-        SUM(WEIGHTED_VALUE_CHF) AS WEIGHTED_VALUE_CHF
-    FROM hqla_base
-    GROUP BY AS_OF_DATE, REGULATORY_LEVEL
-),
-hqla_pivot AS (
-    SELECT
-        AS_OF_DATE,
-        MAX(CASE WHEN REGULATORY_LEVEL = 'L1' THEN WEIGHTED_VALUE_CHF ELSE 0 END) AS L1_TOTAL,
-        MAX(CASE WHEN REGULATORY_LEVEL = 'L2A' THEN WEIGHTED_VALUE_CHF ELSE 0 END) AS L2A_TOTAL,
-        MAX(CASE WHEN REGULATORY_LEVEL = 'L2B' THEN WEIGHTED_VALUE_CHF ELSE 0 END) AS L2B_TOTAL,
-        MAX(CASE WHEN REGULATORY_LEVEL = 'L1' THEN HOLDING_COUNT ELSE 0 END) AS L1_COUNT,
-        MAX(CASE WHEN REGULATORY_LEVEL = 'L2A' THEN HOLDING_COUNT ELSE 0 END) AS L2A_COUNT,
-        MAX(CASE WHEN REGULATORY_LEVEL = 'L2B' THEN HOLDING_COUNT ELSE 0 END) AS L2B_COUNT
-    FROM hqla_by_level
-    GROUP BY AS_OF_DATE
-),
-hqla_capped AS (
-    SELECT
-        AS_OF_DATE,
-        L1_TOTAL,
-        L2A_TOTAL,
-        L2B_TOTAL,
-        L1_COUNT,
-        L2A_COUNT,
-        L2B_COUNT,
-        (2.0 / 3.0) * L1_TOTAL AS MAX_L2_ALLOWED,
-        L2A_TOTAL + L2B_TOTAL AS L2_UNCAPPED,
-        CASE
-            WHEN (L2A_TOTAL + L2B_TOTAL) <= (2.0 / 3.0) * L1_TOTAL THEN L2A_TOTAL + L2B_TOTAL
-            ELSE (2.0 / 3.0) * L1_TOTAL
-        END AS L2_CAPPED,
-        (L2A_TOTAL + L2B_TOTAL) > (2.0 / 3.0) * L1_TOTAL AS CAP_APPLIED,
-        CASE
-            WHEN (L2A_TOTAL + L2B_TOTAL) > (2.0 / 3.0) * L1_TOTAL
-            THEN (L2A_TOTAL + L2B_TOTAL) - (2.0 / 3.0) * L1_TOTAL
-            ELSE 0
-        END AS DISCARDED_L2
-    FROM hqla_pivot
-)
-SELECT
-    AS_OF_DATE,
-    L1_TOTAL,
-    L2A_TOTAL,
-    L2B_TOTAL,
-    L2_UNCAPPED,
-    L2_CAPPED,
-    L1_TOTAL + L2_CAPPED AS HQLA_TOTAL,
-    L1_COUNT,
-    L2A_COUNT,
-    L2B_COUNT,
-    L1_COUNT + L2A_COUNT + L2B_COUNT AS TOTAL_HOLDINGS,
-    CAP_APPLIED,
-    DISCARDED_L2,
-    MAX_L2_ALLOWED,
-    ROUND((L2_CAPPED / NULLIF(L1_TOTAL, 0)) * 100, 2) AS L2_TO_L1_PCT,
-    CURRENT_TIMESTAMP() AS CALCULATION_TIMESTAMP
-FROM hqla_capped
-ORDER BY AS_OF_DATE DESC;
+SELECT AS_OF_DATE, L1_TOTAL, L2A_TOTAL, L2B_TOTAL, L2_UNCAPPED, L2_CAPPED, HQLA_TOTAL,
+       L1_COUNT, L2A_COUNT, L2B_COUNT, L1_COUNT + L2A_COUNT + L2B_COUNT,
+       (L2B_CAP_APPLIED OR L2_CAP_APPLIED), (L2_UNCAPPED - L2_CAPPED)::NUMBER(18,2),
+       (2.0 / 3.0 * L1_TOTAL)::NUMBER(18,2), ROUND(L2_CAPPED / NULLIF(L1_TOTAL, 0) * 100, 2),
+       CURRENT_TIMESTAMP(), L2B_CAPPED, L2B_CAP_APPLIED, (L2B_TOTAL - L2B_CAPPED)::NUMBER(18,2)
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_DAILY
+WHERE STRESS_SCENARIO = 'BASE';
 
 DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_OUTFLOW_CALCULATION(
-    AS_OF_DATE DATE COMMENT 'Reporting date for deposit positions (daily COB snapshot). Primary time dimension for funding stability analysis, deposit base evolution tracking, and monthly SNB regulatory submissions. Used for time-series analysis of outflow trends and stress testing deposit retention under Basel III scenarios.',
-    OUTFLOW_RETAIL NUMBER(18,2) COMMENT 'Total expected 30-day outflows from retail customer deposits in CHF under stress scenario. Aggregates stable insured deposits (base 3% run-off), stable deposits (base 5%), and less-stable deposits (base 10%) with relationship-based discounts applied (-2% for 3+ products, -1% for direct debit). Typically most stable funding source due to deposit insurance, payment behavior, and relationship banking. Critical for retail funding strategy and customer relationship management.',
-    OUTFLOW_CORP NUMBER(18,2) COMMENT 'Total expected 30-day outflows from corporate business deposits in CHF under stress scenario. Separates operational deposits (25% run-off for payroll, clearing accounts) from non-operational deposits (40% run-off for treasury deposits). Higher run-off rates reflect corporate treasury optimization behavior and active cash management. Used for commercial banking funding strategy and operational deposit designation validation.',
-    OUTFLOW_FI NUMBER(18,2) COMMENT 'Total expected 30-day outflows from financial institution deposits (banks, insurance companies) in CHF. Assumes 100% immediate run-off per Basel III stress assumptions reflecting highly unstable wholesale funding. Most volatile and concentration-sensitive funding source. Monitored daily for counterparty concentration limits. Triggers immediate liquidity coverage requirements. Used for wholesale funding risk management and counterparty exposure limits.',
-    OUTFLOW_TOTAL NUMBER(18,2) COMMENT 'Total expected 30-day stressed net cash outflows in CHF across all deposit types. The denominator in LCR ratio formula: LCR = (HQLA / Outflow_Total) × 100. Must maintain sufficient HQLA to cover this amount and achieve minimum 100% LCR per FINMA regulation. Critical metric for daily liquidity planning, intraday monitoring, funding cost optimization, and monthly regulatory reporting to SNB. Board-level metric for funding risk appetite.',
-    RETAIL_ACCOUNTS NUMBER(10,0) COMMENT 'Count of active retail deposit accounts contributing to funding base. Used for deposit base size assessment, customer retention metrics, and relationship banking program effectiveness. Large stable retail base (over 10K accounts) provides diversification benefits and pricing power. Monitored for deposit concentration risk (no single retail customer should exceed 5% of retail deposits).',
-    CORP_ACCOUNTS NUMBER(10,0) COMMENT 'Count of active corporate deposit accounts in commercial banking portfolio. Used for business banking client base analysis, operational deposit penetration rate calculation, and commercial relationship quality assessment. High operational account ratio indicates strong commercial relationships. Monitored for large depositor concentration risk per Basel III concentration limits.',
-    FI_ACCOUNTS NUMBER(10,0) COMMENT 'Count of active financial institution deposit accounts (wholesale funding counterparties). Used for wholesale funding concentration monitoring and counterparty exposure management. High count indicates diversified wholesale funding; low count indicates concentration risk. Each FI counterparty subject to credit limits and monitored for credit rating changes. Target maximum 10% of total deposits from any single FI.',
-    TOTAL_ACCOUNTS NUMBER(10,0) COMMENT 'Total number of active deposit accounts across all counterparty segments. Deposit base breadth metric for operational complexity, customer acquisition effectiveness, and funding diversification. Large account base (over 50K) provides statistical diversification benefits and reduces concentration risk. Used for operational staffing decisions, technology capacity planning, and deposit insurance calculations.',
-    RETAIL_EFFECTIVE_RUN_OFF_PCT NUMBER(8,2) COMMENT 'Weighted average effective run-off rate for retail deposits as percentage after applying relationship discounts and tenure penalties. Lower values (under 6%) indicate strong customer relationships with multiple products and direct debit mandates. Higher values (over 8%) suggest less-stable retail base requiring deposit retention programs. Key performance indicator for Retail Banking relationship quality and deposit pricing strategy. Benchmark against peer banks for competitive positioning.',
-    CORP_EFFECTIVE_RUN_OFF_PCT NUMBER(8,2) COMMENT 'Weighted average effective run-off rate for corporate deposits as percentage. Lower values (under 30%) indicate high operational deposit ratio and strong commercial relationships. Higher values (over 35%) suggest treasury deposits vulnerable to rate competition. Used for commercial relationship quality assessment, operational deposit designation strategy, and corporate pricing decisions. Drives commercial banking product bundling and cash management service offerings.',
-    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp when this outflow calculation was executed in Snowflake. Used for data lineage tracking, audit trail maintenance, and validating calculation freshness. Critical for ensuring outflow metrics reflect latest deposit balances and customer relationship changes. Monitored for SLA compliance (must be within 60 minutes of AS_OF_DATE). Required for regulatory audit trail per FINMA data quality requirements.'
-) COMMENT = 'Daily net cash outflow calculation with deposit run-off rates and relationship-based discounts. Applies Basel III stress assumptions to deposit balances, incorporating customer relationship strength (product count, direct debit) and account maturity. Aggregates expected 30-day outflows by counterparty type for liquidity planning. Forms the denominator of the LCR ratio calculation. Updated hourly for real-time liquidity monitoring and FINMA compliance reporting. Critical for funding risk assessment and deposit retention strategies.'
+    AS_OF_DATE DATE COMMENT 'Reporting date (daily COB snapshot) of the net cash outflow calculation.',
+    OUTFLOW_RETAIL NUMBER(18,2) COMMENT 'Stressed 30-day retail deposit outflows (3-10% base rates with relationship discounts and tenure penalty).',
+    OUTFLOW_CORP NUMBER(18,2) COMMENT 'Stressed 30-day corporate / SME deposit outflows (25% operational, 40% non-operational).',
+    OUTFLOW_FI NUMBER(18,2) COMMENT 'Stressed 30-day outflows from FI deposits and interbank borrowing maturing within 30 days (100%).',
+    OUTFLOW_TOTAL NUMBER(18,2) COMMENT 'Total gross stressed 30-day outflows incl. facility drawdowns (OUTFLOW_RETAIL + OUTFLOW_CORP + OUTFLOW_FI + OUTFLOW_FACILITIES). The LCR denominator is NET_OUTFLOW.',
+    RETAIL_ACCOUNTS NUMBER(10,0) COMMENT 'Number of active retail deposit accounts.',
+    CORP_ACCOUNTS NUMBER(10,0) COMMENT 'Number of active corporate / SME deposit accounts.',
+    FI_ACCOUNTS NUMBER(10,0) COMMENT 'Number of FI deposit and interbank borrowing positions.',
+    TOTAL_ACCOUNTS NUMBER(10,0) COMMENT 'Total number of deposit and borrowing positions.',
+    RETAIL_EFFECTIVE_RUN_OFF_PCT NUMBER(8,2) COMMENT 'Effective retail run-off rate in percent (OUTFLOW_RETAIL / retail balance).',
+    CORP_EFFECTIVE_RUN_OFF_PCT NUMBER(8,2) COMMENT 'Effective corporate run-off rate in percent (OUTFLOW_CORP / corporate balance).',
+    CALCULATION_TIMESTAMP TIMESTAMP_NTZ COMMENT 'UTC timestamp of the dynamic table refresh.',
+    OUTFLOW_FACILITIES NUMBER(18,2) COMMENT 'Drawdown outflows on undrawn committed credit and liquidity facilities.',
+    INFLOW_TOTAL NUMBER(18,2) COMMENT 'Weighted 30-day contractual inflows before the 75% cap (50% non-financial, 100% financial, 0% non-performing).',
+    INFLOW_CAPPED NUMBER(18,2) COMMENT 'Inflows after the 75% cap: min(INFLOW_TOTAL, 0.75 x OUTFLOW_TOTAL).',
+    NET_OUTFLOW NUMBER(18,2) COMMENT 'Net cash outflows = OUTFLOW_TOTAL - INFLOW_CAPPED (LCR denominator).'
+) COMMENT = 'Daily regulatory (BASE) net cash outflow calculation: stressed outflows by segment incl. facility drawdowns, weighted contractual inflows with the 75% cap, and net outflows (LCR denominator). Built from REPP_AGG_DT_LCR_SCENARIO_DAILY (shared formula REPP_AGG_FN_LCR_CALC).'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
 AS
-WITH deposit_enriched AS (
-    SELECT
-        d.AS_OF_DATE,
-        d.ACCOUNT_ID,
-        d.CUSTOMER_ID,
-        d.DEPOSIT_TYPE,
-        d.BALANCE_CHF,
-        d.IS_INSURED,
-        d.PRODUCT_COUNT,
-        d.ACCOUNT_TENURE_DAYS,
-        d.HAS_DIRECT_DEBIT,
-        d.IS_OPERATIONAL,
-        d.COUNTERPARTY_TYPE,
-        d.CUSTOMER_SEGMENT,
-        dt.BASE_RUN_OFF_RATE,
-        dt.ALLOWS_RELATIONSHIP_DISCOUNT,
-        dt.SNB_COORDINATE,
-        CASE
-            WHEN dt.ALLOWS_RELATIONSHIP_DISCOUNT AND d.PRODUCT_COUNT >= 3
-            THEN dt.BASE_RUN_OFF_RATE - 0.02  -- -2% for 3+ products
-            ELSE dt.BASE_RUN_OFF_RATE
-        END AS ADJUSTED_RUN_OFF_STEP1,
-        CASE
-            WHEN dt.ALLOWS_RELATIONSHIP_DISCOUNT AND d.HAS_DIRECT_DEBIT
-            THEN ADJUSTED_RUN_OFF_STEP1 - 0.01  -- -1% for direct debit
-            ELSE ADJUSTED_RUN_OFF_STEP1
-        END AS ADJUSTED_RUN_OFF_STEP2,
-        CASE
-            WHEN d.ACCOUNT_TENURE_DAYS < (18 * 30)
-            THEN ADJUSTED_RUN_OFF_STEP2 + 0.05  -- +5% for new accounts
-            ELSE ADJUSTED_RUN_OFF_STEP2
-        END AS ADJUSTED_RUN_OFF_STEP3,
-        GREATEST(0.03, LEAST(1.00, ADJUSTED_RUN_OFF_STEP3)) AS FINAL_RUN_OFF_RATE
-    FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_BALANCES d
-    INNER JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_TYPES dt
-        ON d.DEPOSIT_TYPE = dt.DEPOSIT_TYPE
-    WHERE d.ACCOUNT_STATUS = 'ACTIVE'
-      AND dt.IS_ACTIVE = TRUE
-),
-deposit_outflows AS (
-    SELECT
-        AS_OF_DATE,
-        ACCOUNT_ID,
-        CUSTOMER_ID,
-        DEPOSIT_TYPE,
-        COUNTERPARTY_TYPE,
-        BALANCE_CHF,
-        FINAL_RUN_OFF_RATE,
-        BALANCE_CHF * FINAL_RUN_OFF_RATE AS OUTFLOW_AMOUNT_CHF,
-        SNB_COORDINATE
-    FROM deposit_enriched
-),
-outflows_by_type AS (
-    SELECT
-        AS_OF_DATE,
-        COUNTERPARTY_TYPE,
-        COUNT(*) AS ACCOUNT_COUNT,
-        COUNT(DISTINCT CUSTOMER_ID) AS CUSTOMER_COUNT,
-        SUM(BALANCE_CHF) AS TOTAL_BALANCE_CHF,
-        SUM(OUTFLOW_AMOUNT_CHF) AS TOTAL_OUTFLOW_CHF,
-        ROUND(SUM(OUTFLOW_AMOUNT_CHF) / NULLIF(SUM(BALANCE_CHF), 0) * 100, 2) AS EFFECTIVE_RUN_OFF_PCT
-    FROM deposit_outflows
-    GROUP BY AS_OF_DATE, COUNTERPARTY_TYPE
-),
-outflows_pivot AS (
-    SELECT
-        AS_OF_DATE,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'RETAIL' THEN TOTAL_OUTFLOW_CHF ELSE 0 END) AS OUTFLOW_RETAIL,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'CORPORATE' THEN TOTAL_OUTFLOW_CHF ELSE 0 END) AS OUTFLOW_CORP,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'FINANCIAL_INSTITUTION' THEN TOTAL_OUTFLOW_CHF ELSE 0 END) AS OUTFLOW_FI,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'RETAIL' THEN ACCOUNT_COUNT ELSE 0 END) AS RETAIL_ACCOUNTS,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'CORPORATE' THEN ACCOUNT_COUNT ELSE 0 END) AS CORP_ACCOUNTS,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'FINANCIAL_INSTITUTION' THEN ACCOUNT_COUNT ELSE 0 END) AS FI_ACCOUNTS,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'RETAIL' THEN EFFECTIVE_RUN_OFF_PCT ELSE 0 END) AS RETAIL_EFFECTIVE_RUN_OFF_PCT,
-        MAX(CASE WHEN COUNTERPARTY_TYPE = 'CORPORATE' THEN EFFECTIVE_RUN_OFF_PCT ELSE 0 END) AS CORP_EFFECTIVE_RUN_OFF_PCT
-    FROM outflows_by_type
-    GROUP BY AS_OF_DATE
-)
-SELECT
-    AS_OF_DATE,
-    OUTFLOW_RETAIL,
-    OUTFLOW_CORP,
-    OUTFLOW_FI,
-    OUTFLOW_RETAIL + OUTFLOW_CORP + OUTFLOW_FI AS OUTFLOW_TOTAL,
-    RETAIL_ACCOUNTS,
-    CORP_ACCOUNTS,
-    FI_ACCOUNTS,
-    RETAIL_ACCOUNTS + CORP_ACCOUNTS + FI_ACCOUNTS AS TOTAL_ACCOUNTS,
-    RETAIL_EFFECTIVE_RUN_OFF_PCT,
-    CORP_EFFECTIVE_RUN_OFF_PCT,
-    CURRENT_TIMESTAMP() AS CALCULATION_TIMESTAMP
-FROM outflows_pivot
-ORDER BY AS_OF_DATE DESC;
+SELECT AS_OF_DATE, OUTFLOW_RETAIL, OUTFLOW_CORP, OUTFLOW_FI, OUTFLOW_TOTAL,
+       RETAIL_ACCOUNTS, CORP_ACCOUNTS, FI_ACCOUNTS, RETAIL_ACCOUNTS + CORP_ACCOUNTS + FI_ACCOUNTS,
+       ROUND(OUTFLOW_RETAIL / NULLIF(RETAIL_BALANCE_CHF, 0) * 100, 2),
+       ROUND(OUTFLOW_CORP / NULLIF(CORP_BALANCE_CHF, 0) * 100, 2),
+       CURRENT_TIMESTAMP(), OUTFLOW_FACILITIES, INFLOW_TOTAL, INFLOW_CAPPED, NET_OUTFLOW
+FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LCR_SCENARIO_DAILY
+WHERE STRESS_SCENARIO = 'BASE';
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL (
+    AS_OF_DATE COMMENT 'Reporting (cut-off) date of the record (daily COB snapshot).',
+    HOLDING_ID COMMENT 'Persistent HQLA position identifier from the treasury system.',
+    ASSET_TYPE COMMENT 'HQLA asset type code (e.g. CASH_SNB, GOVT_BOND_CHF, CANTON_BOND, EQUITY_SMI).',
+    ASSET_NAME COMMENT 'Descriptive name of the HQLA asset type.',
+    REGULATORY_LEVEL COMMENT 'Basel III HQLA level (L1, L2A, L2B) from LIQI_RAW_TB_HQLA_ELIGIBILITY.',
+    ISIN COMMENT 'ISO 6166 security identifier; NULL for cash positions.',
+    SECURITY_NAME COMMENT 'Descriptive name of the security or cash balance.',
+    CURRENCY COMMENT 'Original currency of the position (ISO 4217).',
+    QUANTITY COMMENT 'Number of shares held (equities only).',
+    MARKET_VALUE_CCY COMMENT 'Market value in original currency at COB prices.',
+    MARKET_VALUE_CHF COMMENT 'Gross market value in CHF before regulatory haircuts.',
+    HAIRCUT_PCT COMMENT 'Regulatory haircut in percent (0 for L1, 15 for L2A, 50 for L2B).',
+    HAIRCUT_FACTOR COMMENT 'Haircut multiplier applied to market value (1.00, 0.85, 0.50).',
+    WEIGHTED_VALUE_CHF COMMENT 'Post-haircut value in CHF (market value x haircut factor), before caps.',
+    MATURITY_DATE COMMENT 'Final maturity date of the security; NULL for cash and equities.',
+    CREDIT_RATING COMMENT 'Credit rating of the security (S&P scale).',
+    SMI_CONSTITUENT COMMENT 'TRUE when the equity is a Swiss Market Index constituent (L2B eligibility).',
+    HQLA_ELIGIBLE COMMENT 'TRUE when the holding passes all FINMA eligibility criteria and counts as HQLA.',
+    INELIGIBILITY_REASON COMMENT 'Reason why the holding is excluded from HQLA (e.g. rating downgrade).',
+    PORTFOLIO_CODE COMMENT 'Treasury portfolio of the position (TREASURY_LIQ, ALM_BUFFER, TREASURY_INV).',
+    CUSTODIAN COMMENT 'Institution holding the security (SNB, SIX SIS, Euroclear, Clearstream).',
+    SNB_COORDINATE COMMENT 'SNB LCR reporting template coordinate for regulatory submission mapping.'
+)
     COMMENT = 'Security-level detail view of HQLA holdings with regulatory level classification and haircut calculations. Provides drill-down capability from aggregate HQLA metrics to individual securities for portfolio analysis, concentration risk monitoring, and regulatory reporting. Includes market values, weighted values after haircuts, credit ratings, and SNB coordinate mappings. Used by Treasury for portfolio rebalancing decisions and by Compliance for regulatory submission preparation.'
     AS
 SELECT
@@ -412,7 +373,31 @@ INNER JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_ELIGIBILITY e
 WHERE e.IS_ACTIVE = TRUE
 ORDER BY h.AS_OF_DATE DESC, h.MARKET_VALUE_CHF DESC;
 
-DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL
+DEFINE VIEW {{ db }}.{{ rep_agg }}.REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL (
+    AS_OF_DATE COMMENT 'Reporting (cut-off) date of the record (daily COB snapshot).',
+    ACCOUNT_ID COMMENT 'Deposit account identifier (links to core banking accounts).',
+    CUSTOMER_ID COMMENT 'Customer / counterparty identifier of the deposit (links to CRM).',
+    DEPOSIT_TYPE COMMENT 'Deposit run-off class (e.g. RETAIL_STABLE_INSURED, CORPORATE_OPERATIONAL).',
+    DEPOSIT_NAME COMMENT 'Descriptive name of the deposit run-off class.',
+    COUNTERPARTY_TYPE COMMENT 'Outflow segment / counterparty type (RETAIL, CORPORATE, FINANCIAL_INSTITUTION, COMMITTED_FACILITIES).',
+    CUSTOMER_SEGMENT COMMENT 'Customer segment of the depositor (MASS, AFFLUENT, PRIVATE, CORPORATE).',
+    CURRENCY COMMENT 'Original currency of the position (ISO 4217).',
+    BALANCE_CCY COMMENT 'Deposit balance in original currency.',
+    BALANCE_CHF COMMENT 'Deposit balance converted to CHF.',
+    BASE_RUN_OFF_RATE COMMENT 'Base regulatory run-off rate of the deposit type (decimal).',
+    DISCOUNT_STEP1 COMMENT 'Run-off rate after the -2pp discount for 3+ products (where allowed).',
+    DISCOUNT_STEP2 COMMENT 'Run-off rate after the additional -1pp direct-debit discount (where allowed).',
+    PENALTY_APPLIED COMMENT 'Run-off rate after the +5pp penalty for accounts younger than 18 months.',
+    FINAL_RUN_OFF_RATE COMMENT 'Final run-off rate after adjustments, clamped to 3%-100% (decimal).',
+    OUTFLOW_AMOUNT_CHF COMMENT 'Stressed 30-day outflow in CHF (balance x run-off rate).',
+    IS_INSURED COMMENT 'TRUE when the balance is within the CHF 100k deposit insurance limit.',
+    PRODUCT_COUNT COMMENT 'Number of products the customer holds (3+ qualifies for a run-off discount).',
+    ACCOUNT_TENURE_DAYS COMMENT 'Days since account opening (under 540 days adds a +5pp penalty).',
+    HAS_DIRECT_DEBIT COMMENT 'TRUE when the account has a direct-debit mandate (-1pp discount).',
+    IS_OPERATIONAL COMMENT 'TRUE for operational deposits (payroll, clearing) with lower run-off.',
+    ACCOUNT_STATUS COMMENT 'Account status; only ACTIVE accounts enter the LCR.',
+    SNB_COORDINATE COMMENT 'SNB LCR reporting template coordinate for regulatory submission mapping.'
+)
     COMMENT = 'Account-level detail view of deposit balances with run-off rate calculations and relationship-based discount logic. Provides drill-down capability from aggregate outflow metrics to individual accounts for funding stability analysis, customer relationship quality assessment, and deposit retention strategy optimization. Includes base run-off rates, relationship discounts (product count, direct debit), tenure penalties, and final calculated outflow amounts. Used by Treasury for funding planning and by Retail Banking for customer relationship management.'
     AS
 SELECT

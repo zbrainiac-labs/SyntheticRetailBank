@@ -23,6 +23,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS(
     SOURCE_TABLE VARCHAR(50) COMMENT 'Source table reference for data lineage (CRM_RAW_v001.ACCI_RAW_TB_ACCOUNTS)'
 ) COMMENT = '1:1 aggregation of account master data from raw layer (CRM_RAW_v001.ACCI_RAW_TB_ACCOUNTS). Provides clean aggregation layer access for downstream analytics, balance calculations, and reporting. Maintains real-time refresh for data currency while serving as bridge between raw data and analytical data products.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+DATA_METRIC_SCHEDULE = '60 MINUTE'
 AS
 SELECT 
     ACCOUNT_ID,

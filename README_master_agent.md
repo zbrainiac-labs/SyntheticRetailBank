@@ -22,42 +22,46 @@ Key patterns adopted from a customer production implementation (AIM_AGENT_V3), i
 ## Architecture
 
 ```
-                         User Query
-                             |
-                    +--------v--------+
-                    |  MASTER_AGENT   |
-                    |  (Cortex Agent) |
-                    +--------+--------+
-                             |
-               Step 0.5: Single-domain?
-                      /            \
-                    YES             NO (multi-domain)
-                     |               |
-            +--------v---------+     +--------v---------+
-            | ASK_MASTER_ROUTED|     | Parallel/DAG     |
-            | (generic tool)   |     | agent_toolset    |
-            +--------+---------+     | calls (Steps 1-6)|
-                     |               +---------+--------+
-         +-----------+-----------+            |
-         |           |           |     loan_portfolio
-   Cache hit?   IS_BANK_ROUTE    |     liquidity_risk
-   (641ms)     (regex, ~1ms)     |     wealth_advisor
-         |           |           |     crm_customer_360
-         |     EXACT? --------+  |     hr_employee
-         |       YES    NO    |  |
-         |        |      |    |  |
-         |        | CLASSIFY_BANK_ROUTE
-         |        | (AI_CLASSIFY, ~300ms)
-         |        |      |
-         |        |  Single domain?
-         |        |   YES    NO
-         |        |    |      |
-         |        v    v      v
-         |   CALL_SUB_AGENT  [[ROUTE_UNCERTAIN]]
-         |   (DATA_AGENT_RUN) --> falls back to
-         |        |               full LLM orchestration
-         v        v
-     ROUTER_LOG + AGENT_RESPONSE_CACHE
+                              User Query
+                                  |
+                         +--------v--------+
+                         |  MASTER_AGENT   |
+                         |  (Cortex Agent) |
+                         +--------+--------+
+                                  |
+                    Step 0.5: Obviously multi-domain?
+                    (dashboard, cross-check, compare X with Y)
+                           /                \
+                         NO                  YES
+                    (default path)      (skip router)
+                         |                    |
+                +--------v---------+    +-----v-----------+
+                | ASK_MASTER_ROUTED|    | Parallel/DAG    |
+                | (generic tool)   |    | agent_toolset   |
+                +--------+---------+    | calls (Steps 1-6)
+                         |              +-----+-----------+
+              +----------+----------+         |
+              |          |          |    loan_portfolio
+        Cache hit?  IS_BANK_ROUTE  |    liquidity_risk
+        (~600ms)   (regex, ~1ms)   |    wealth_advisor
+              |          |         |    crm_customer_360
+              |    EXACT? ------+  |    hr_employee
+              |     YES    NO   |  |
+              |      |      |   |  |
+              |      | CLASSIFY_BANK_ROUTE
+              |      | (AI_CLASSIFY, ~300ms)
+              |      |      |
+              |      |  Single domain?
+              |      |   YES    NO
+              |      |    |      |
+              |      v    v      v
+              |  CALL_SUB_AGENT  [[ROUTE_UNCERTAIN]]
+              |  (DATA_AGENT_RUN)    |
+              |      |               v
+              |      |     LLM falls back to
+              |      |     full orchestration
+              v      v     (Steps 1-6)
+          ROUTER_LOG + AGENT_RESPONSE_CACHE
 ```
 
 **Expected query distribution:**
@@ -73,8 +77,7 @@ Key patterns adopted from a customer production implementation (AIM_AGENT_V3), i
 
 | File | Purpose |
 |------|---------|
-| `post_deploy_master-agent.sql` | All objects: 10 UDFs, 4 tables, 4 procedures, 5 views, 12 golden test cases, agent DDL |
-| `master-agent/Snowflake_codes/` | Customer reference implementation (AIM_AGENT_V3) used as design input |
+| `post_deploy_master-agent.sql` | All objects: 10 UDFs, 4 tables, 4 procedures, 5 views, golden test cases, agent DDL |
 | `deploy.sh` | Deployment script: `./deploy.sh DEV` chains DCM deploy + post_deploy + master-agent |
 
 ## Deployed Objects

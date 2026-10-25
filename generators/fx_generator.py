@@ -38,7 +38,9 @@ class FXRateGenerator:
     def __init__(self, config: GeneratorConfig):
         self.config = config
         self.base_currency = "USD"  # Base currency for all conversions
-        self.currencies = config.available_currencies
+        # CHF is always generated (needed for LCR CHF reporting) without changing
+        # the currency mix used by other generators (payments, accounts)
+        self.currencies = list(dict.fromkeys(list(config.available_currencies) + ["CHF"]))
         
         # Initial exchange rates (approximate real-world rates)
         self.base_rates = {
@@ -46,7 +48,8 @@ class FXRateGenerator:
             "EUR": 0.8500,  # 1 USD = 0.85 EUR
             "GBP": 0.7500,  # 1 USD = 0.75 GBP
             "JPY": 150.0000,  # 1 USD = 150 JPY
-            "CAD": 1.3500   # 1 USD = 1.35 CAD
+            "CAD": 1.3500,  # 1 USD = 1.35 CAD
+            "CHF": 0.8000   # 1 USD = 0.80 CHF
         }
         
         # Volatility parameters for each currency pair
@@ -54,7 +57,8 @@ class FXRateGenerator:
             "EUR": 0.008,  # 0.8% daily volatility
             "GBP": 0.012,  # 1.2% daily volatility
             "JPY": 0.010,  # 1.0% daily volatility
-            "CAD": 0.006   # 0.6% daily volatility
+            "CAD": 0.006,  # 0.6% daily volatility
+            "CHF": 0.005   # 0.5% daily volatility
         }
     
     def generate_fx_rates(self) -> List[FXRate]:
@@ -64,11 +68,11 @@ class FXRateGenerator:
         
         current_date = self.config.start_date
         while current_date <= self.config.end_date:
-            # Skip weekends for FX rates (markets closed)
+            # End-of-day rate for EVERY calendar day so consumers can use equality joins.
+            # Weekends carry the last business-day close (markets closed, no evolution).
+            daily_rates = self._generate_daily_rates(current_date, current_rates)
+            fx_rates.extend(daily_rates)
             if current_date.weekday() < 5:  # Monday = 0, Friday = 4
-                daily_rates = self._generate_daily_rates(current_date, current_rates)
-                fx_rates.extend(daily_rates)
-                
                 # Update current rates for next day (market evolution)
                 current_rates = self._evolve_rates(current_rates)
             

@@ -83,16 +83,16 @@ EMPA_AGG_VW_CURRENT_ASSIGNMENTS -- Client-advisor relationships
 CRMA_SV_CUSTOMER_360 -- Customer 360 semantic view for Cortex AI
 CRMA_AGG_VW_CUSTOMER_RISK_PROFILE -- Risk metrics view
 
--- LCR (Liquidity Coverage Ratio) tables (in REP_AGG_001, for LCR Monitoring tab)
+-- LCR (Liquidity Coverage Ratio) tables (in REP_AGG_V001, for LCR Monitoring tab)
 REPP_AGG_DT_LCR_DAILY -- Daily LCR calculations
 REPP_AGG_DT_LCR_TREND -- 90-day rolling trend analysis
 REPP_AGG_VW_LCR_HQLA_HOLDINGS_DETAIL -- HQLA holdings breakdown
 REPP_AGG_VW_LCR_DEPOSIT_BALANCES_DETAIL -- Deposit outflows detail
 REPP_AGG_VW_LCR_ALERTS -- Active LCR alerts
 REPP_AGG_VW_LCR_MONTHLY_SUMMARY -- Monthly compliance summary
-REPP_VW_LCR_MONITORING -- Consolidated LCR monitoring view
+REPP_AGG_VW_LCR_MONITORING -- Consolidated LCR monitoring view
 
--- Loan Portfolio tables (in REP_AGG_001, for Loans Portfolio tab)
+-- Loan Portfolio tables (in REP_AGG_V001, for Loans Portfolio tab)
 LOAR_AGG_DT_PORTFOLIO_SUMMARY -- Portfolio summary by country/product
 LOAR_AGG_DT_LTV_DISTRIBUTION -- LTV ratio distribution analysis
 LOAR_AGG_DT_APPLICATION_FUNNEL -- Application status funnel
@@ -451,19 +451,12 @@ docker run -p 8501:8501 \
 
 ## UI/UX Design
 
-### Color Palette
+### Design System (Apple-inspired)
 
-```python
-COLORS = {
- 'CRITICAL': '#DC143C', # Crimson (Red)
- 'HIGH': '#FF8C00', # Dark Orange
- 'MEDIUM': '#FFD700', # Gold (Yellow)
- 'LOW': '#32CD32', # Lime Green
- 'NO_RISK': '#1E90FF', # Dodger Blue
- 'primary': '#003366', # Dark Blue (brand)
- 'secondary': '#0066CC' # Medium Blue
-}
-```
+- **Theme:** `.streamlit/config.toml` - light and dark palettes (blue `#007AFF` / `#0A84FF`, greys `#F5F5F7` / `#1C1C1E`), Inter font with system fallback, 12px radius, pill buttons, Apple chart palette. No custom CSS.
+- **Charts:** `utils/ui_helpers.py` registers the Plotly template `apple` (transparent background, hairline grid) as default; imported in `app.py`.
+- **Helpers (`utils/ui_helpers.py`):** `page_header(title, subtitle)`, `section`, `kpi_row` (bordered metric cards, short labels with unit, e.g. `HQLA (CHF)` / `721M`), `status_badge`, `empty_state`, `STATUS_COLORS` (PASS `#34C759`, WARNING `#FF9F0A`, FAIL `#FF3B30`).
+- **Regression test:** `venv/bin/python tests/test_all_pages.py` renders every page headless; `tests/test_lcr_page.py` checks the LCR page (tabs, KPIs, simulator, breach banner).
 
 ### Risk Indicators
 

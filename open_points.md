@@ -4,12 +4,11 @@
 
 | # | Priority | Item | Details |
 |---|----------|------|---------|
-| O5 | Low | **No data quality expectations** | Add `ATTACH DATA METRIC FUNCTION` for null checks, freshness |
-| O7 | Low | **WITH TAG moved to post_deploy** | 63 tags removed from DEFINE (DCM unsupported), ALTER TAG in post_deploy |
 | O8 | Low | **Cross-schema dependency: REPA_SV_WEALTH_MANAGEMENT_DETAILED** | SonarQube `Disallow_Cross_Schema_Dependencies` -- SV in `REP_AGG_V001` references `CRMA_AGG_DT_CUSTOMER_360` in `CRM_AGG_V001`. Architecturally intentional (wealth report joins customer + portfolio data). Accept or restructure. |
 | O9 | Low | **Python code design issues (SonarQube)** | ~90 issues: S3776 cognitive complexity (32), S3358 nested ternaries (22), S1192 duplicate literals (21), S7498 format spec (15). Major refactoring required. |
 | O10 | Medium | **SWIFT generation slow** | 2400 subprocess calls for 5K customers (~30 min). Consider batch mode or direct Python XML generation instead of subprocess per pair. |
 | O11 | Low | **generate_all_files always runs** | When specific flags are passed (e.g. --generate-swift), base data (customers, transactions, equity) is always regenerated. Consider caching or skip-if-exists logic. |
+| O12 | Medium | **Share grants rely on secondary roles** | The 3 shares (`SH_CUSTOMER_360_KYC`, `SH_CUSTOMER_PII_VAULT`, `SH_EMPLOYEE_PII_VAULT`) are owned by ACCOUNTADMIN, so `post_deploy.sql` (as CICD) can only grant to them through the deploying user's secondary roles. Verified 2026-10-25: with `USE SECONDARY ROLES NONE` it fails at the first share ("current role has no privileges on it"). Share ownership cannot be transferred (GRANT OWNERSHIP does not support shares). Fix: drop the 3 listings and shares once (consumers lose access briefly) and let `post_deploy.sql` recreate them as CICD, which has CREATE SHARE and CREATE LISTING. A CI service user without secondary roles fails until then. |
 
 ## Closed
 
@@ -22,6 +21,9 @@
 | C5 | 2026-05-12 | **SWIFT generator script not found** | Default path `swift_message_generator.py` not found from project root. Fixed to `generators/swift_message_generator.py` in both `main.py` and `swift_generator.py`. |
 | C6 | 2026-05-12 | **CI workflow SOURCE_SCHEMA** | `update-local-repo.yml` updated from `AAA_DCM` to `AAA_RAW_V001` |
 | C7 | 2026-05-12 | **CI workflow CLONE_PER_BUILD** | Removed `CLONE_PER_BUILD: true` from CI workflow |
+| C8 | 2026-10-25 | **No data quality expectations (O5)** | 8 DMF attachments with expectations in DCM (`905_governance.sql`), checked by `EXECUTE DCM PROJECT ... TEST ALL` |
+| C9 | 2026-10-25 | **Obsolete per-file DCM test** | Deleted `operation/test_dcm_individual.sh` (files reference each other, single-file plans fail); replaced by `operation/full_rebuild_test.sh` |
+| C10 | 2026-10-25 | **WITH TAG moved to post_deploy (O7)** | Tags are back in DCM: 41 tag assignments via `ATTACH TAG` in `905_governance.sql`; no tag statements left in `post_deploy.sql` |
 
 ## Architecture
 

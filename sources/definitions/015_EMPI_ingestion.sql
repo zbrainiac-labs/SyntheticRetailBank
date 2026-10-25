@@ -71,6 +71,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
     SCHEDULE = '60 MINUTE'
 WHEN
     SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_EMPLOYEE_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE
     FROM @{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES
@@ -83,6 +84,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
     SCHEDULE = '60 MINUTE'
 WHEN
     SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.EMPI_RAW_SM_ASSIGNMENT_FILES')
+    STARTED
 AS
     COPY INTO {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_CLIENT_ASSIGNMENT
     FROM @{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS
@@ -94,6 +96,7 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_CLEANUP_AFTER_LOAD_EMPLOYEES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER employee data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_EMPLOYEES
+    STARTED
 AS
     CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES', 5);
 
@@ -101,5 +104,48 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_CLEANUP_AFTER_LOAD_ASSIGNMENTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
     COMMENT = 'Automated stage cleanup AFTER client assignment data load. Keeps last 5 files to manage storage costs.'
     AFTER {{ db }}.{{ crm_raw }}.EMPI_RAW_TK_LOAD_ASSIGNMENTS
+    STARTED
 AS
     CALL CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N('{{ db }}.{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS', 5);
+
+-- ============================================================
+-- FILE FORMATS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.EMPI_RAW_FF_EMPLOYEE_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    PARSE_HEADER = TRUE
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
+    COMMENT = 'CSV format for employee master data with EMEA localization - PARSE_HEADER handles header row';
+
+DEFINE FILE FORMAT {{ db }}.{{ crm_raw }}.EMPI_RAW_FF_ASSIGNMENT_CSV
+    TYPE = 'CSV'
+    FIELD_DELIMITER = ','
+    RECORD_DELIMITER = '\n'
+    PARSE_HEADER = TRUE
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    TRIM_SPACE = TRUE
+    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+    REPLACE_INVALID_CHARACTERS = TRUE
+    DATE_FORMAT = 'YYYY-MM-DD'
+    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
+    COMMENT = 'CSV format for client-advisor assignments with SCD Type 2 support - PARSE_HEADER handles header row';
+
+-- ============================================================
+-- STREAMS (moved from post_deploy.sql)
+-- ============================================================
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.EMPI_RAW_SM_EMPLOYEE_FILES
+    ON STAGE {{ db }}.{{ crm_raw }}.EMPI_RAW_ST_EMPLOYEES
+    COMMENT = 'Monitors EMPI_RAW_ST_EMPLOYEES stage for new employee data files';
+
+DEFINE STREAM {{ db }}.{{ crm_raw }}.EMPI_RAW_SM_ASSIGNMENT_FILES
+    ON STAGE {{ db }}.{{ crm_raw }}.EMPI_RAW_ST_CLIENT_ASSIGNMENTS
+    COMMENT = 'Monitors EMPI_RAW_ST_CLIENT_ASSIGNMENTS stage for new assignment files';

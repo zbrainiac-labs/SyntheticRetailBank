@@ -1,639 +1,15 @@
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_raw }};
-
 -- ============================================================
--- FILE FORMATS
--- ============================================================
-
-CREATE OR REPLACE FILE FORMAT CRMI_RAW_FF_CUSTOMER_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for customer master data with EMEA localization support';
-
-CREATE OR REPLACE FILE FORMAT CRMI_RAW_FF_ADDRESS_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'
-    COMMENT = 'CSV format for customer address data with SCD Type 2 support via INSERT_TIMESTAMP_UTC';
-
-CREATE OR REPLACE FILE FORMAT CRMI_RAW_FF_EXPOSED_PERSON_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for PEP (Politically Exposed Persons) compliance data';
-
-CREATE OR REPLACE FILE FORMAT CRMI_RAW_FF_CUSTOMER_EVENT_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'
-    COMMENT = 'CSV format for customer lifecycle event files with JSON event details (using single quotes in JSON for CSV compatibility)';
-
-CREATE OR REPLACE FILE FORMAT CRMI_RAW_FF_CUSTOMER_STATUS_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'
-    COMMENT = 'CSV format for customer status history files (SCD Type 2)';
-
-CREATE OR REPLACE FILE FORMAT ACCI_RAW_FF_ACCOUNT_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for account master data files with multi-currency support. Expected columns: account_id, account_type, base_currency, customer_id, status';
-
-CREATE OR REPLACE FILE FORMAT EMPI_RAW_FF_EMPLOYEE_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    PARSE_HEADER = TRUE
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for employee master data with EMEA localization - PARSE_HEADER handles header row';
-
-CREATE OR REPLACE FILE FORMAT EMPI_RAW_FF_ASSIGNMENT_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    PARSE_HEADER = TRUE
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for client-advisor assignments with SCD Type 2 support - PARSE_HEADER handles header row';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ ref_raw }};
-
-CREATE OR REPLACE FILE FORMAT REFI_RAW_FF_FX_RATES_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for FX rates data with bid/ask spreads and currency conversion support';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ pay_raw }};
-
-CREATE OR REPLACE FILE FORMAT PAYI_RAW_FF_TRANSACTION_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for payment transaction data with multi-currency support and anomaly detection';
-
-CREATE OR REPLACE FILE FORMAT ICGI_RAW_FF_XML
-    TYPE = XML
-    STRIP_OUTER_ELEMENT = TRUE
-    COMMENT = 'Optimized XML file format for SWIFT ISO20022 message processing. Strips outer XML envelope for efficient VARIANT parsing of PACS.008 credit transfers and PACS.002 status reports. Supports multi-message files and preserves all ISO20022 schema elements for compliance and downstream analytics.';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ eqt_raw }};
-
-CREATE OR REPLACE FILE FORMAT EQTI_RAW_FF_TRADES_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for equity trade data with FIX protocol compliance and currency conversion support';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ fii_raw }};
-
-CREATE OR REPLACE FILE FORMAT FIII_RAW_FF_TRADES_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for fixed income trade data with FRTB risk metrics and currency conversion support';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ cmd_raw }};
-
-CREATE OR REPLACE FILE FORMAT CMDI_RAW_FF_TRADES_CSV
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    REPLACE_INVALID_CHARACTERS = TRUE
-    DATE_FORMAT = 'YYYY-MM-DD'
-    TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF"Z"'
-    COMMENT = 'CSV format for commodity trade data with FRTB risk metrics and currency conversion support';
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_raw }};
-
--- ============================================================
--- STREAMS
+-- post_deploy.sql - runs after `snow dcm deploy` (see deploy.sh)
+-- Holds only what DCM Projects cannot manage (yet). Everything else -
+-- schemas, tables, DTs, tasks (STARTED), streams, file formats, procedures,
+-- views, semantic views, masking policies, tags, DMF attachments, grants - is in sources/definitions.
+--
+--   1. Seed data        MERGE / INSERT reference rows (DCM has no DML)
+--   2. Cortex Agents    CREATE AGENT + Snowflake Intelligence registration
+--                       (ADD AGENT wrapped so the script is re-runnable)
+--   3. Shares/listings  owned by ACCOUNTADMIN, account-wide names, agent grants
 -- ============================================================
 
-CREATE OR REPLACE STREAM CRMI_RAW_SM_CUSTOMER_FILES
-    ON STAGE CRMI_RAW_ST_CUSTOMERS
-    COMMENT = 'Monitors CRMI_RAW_ST_CUSTOMERS stage for new customer CSV files. Triggers CRMI_RAW_TK_LOAD_CUSTOMERS when files matching *customers*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM CRMI_RAW_SM_ADDRESS_FILES
-    ON STAGE CRMI_RAW_ST_ADDRESSES
-    COMMENT = 'Monitors CRMI_RAW_ST_ADDRESSES stage for new address CSV files. Triggers CRMI_RAW_TK_LOAD_ADDRESSES for SCD Type 2 processing when files matching *customer_addresses*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM CRMI_RAW_SM_EXPOSED_PERSON_FILES
-    ON STAGE CRMI_RAW_ST_EXPOSED_PERSON
-    COMMENT = 'Monitors CRMI_RAW_ST_EXPOSED_PERSON stage for new PEP compliance CSV files. Triggers CRMI_RAW_TK_LOAD_EXPOSED_PERSON when files matching *pep*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM CRMI_RAW_SM_CUSTOMER_EVENT_FILES 
-    ON STAGE CRMI_RAW_ST_CUSTOMER_EVENTS
-    COMMENT = 'Monitors CRMI_RAW_ST_CUSTOMER_EVENTS stage for new lifecycle event CSV files. Triggers CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS when files matching *customer_events*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM CRMI_RAW_SM_CUSTOMER_STATUS_FILES 
-    ON STAGE CRMI_RAW_ST_CUSTOMER_EVENTS
-    COMMENT = 'Monitors CRMI_RAW_ST_CUSTOMER_EVENTS stage for new status history CSV files. Triggers CRMI_RAW_TK_LOAD_CUSTOMER_STATUS when files matching *customer_status*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM ACCI_RAW_SM_ACCOUNT_FILES
-    ON STAGE ACCI_RAW_ST_ACCOUNTS
-    COMMENT = 'Monitors ACCI_RAW_ST_ACCOUNTS stage for new account CSV files. Triggers ACCI_RAW_TK_LOAD_ACCOUNTS when files matching *accounts*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM EMPI_RAW_SM_EMPLOYEE_FILES
-    ON STAGE EMPI_RAW_ST_EMPLOYEES
-    COMMENT = 'Monitors EMPI_RAW_ST_EMPLOYEES stage for new employee data files';
-
-CREATE OR REPLACE STREAM EMPI_RAW_SM_ASSIGNMENT_FILES
-    ON STAGE EMPI_RAW_ST_CLIENT_ASSIGNMENTS
-    COMMENT = 'Monitors EMPI_RAW_ST_CLIENT_ASSIGNMENTS stage for new assignment files';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ ref_raw }};
-
-CREATE OR REPLACE STREAM REFI_RAW_SM_FX_RATE_FILES
-    ON STAGE REFI_RAW_ST_FX_RATES
-    COMMENT = 'Monitors REFI_RAW_ST_FX_RATES stage for new FX rates CSV files. Triggers REFI_RAW_TK_LOAD_FX_RATES when files matching *fx_rates*.csv pattern are detected';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ pay_raw }};
-
-CREATE OR REPLACE STREAM PAYI_RAW_SM_TRANSACTION_FILES
-    ON STAGE PAYI_RAW_ST_TRANSACTIONS
-    COMMENT = 'Monitors PAYI_RAW_ST_TRANSACTIONS stage for new payment transaction CSV files. Triggers PAYI_RAW_TK_LOAD_TRANSACTIONS when files matching *pay_transactions*.csv pattern are detected';
-
-CREATE OR REPLACE STREAM ICGI_RAW_SM_SWIFT_FILES
-    ON STAGE ICGI_RAW_ST_SWIFT_INBOUND
-    COMMENT = 'Monitors ICGI_RAW_ST_SWIFT_INBOUND stage for new SWIFT ISO20022 XML files. Triggers ICGI_RAW_TK_LOAD_SWIFT_MESSAGES when files matching *.xml pattern are detected';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ eqt_raw }};
-
-CREATE OR REPLACE STREAM EQTI_RAW_SM_TRADES_FILES
-    ON STAGE EQTI_RAW_ST_TRADES
-    COMMENT = 'Monitors EQTI_RAW_ST_TRADES stage for new equity trade CSV files. Triggers EQTI_RAW_TK_LOAD_TRADES when files matching *trades*.csv pattern are detected';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ fii_raw }};
-
-CREATE OR REPLACE STREAM FIII_RAW_SM_TRADES_FILES
-    ON STAGE FIII_RAW_ST_TRADES
-    COMMENT = 'Monitors FIII_RAW_ST_TRADES stage for new fixed income trade CSV files. Triggers FIII_RAW_TK_LOAD_TRADES when files matching *fixed_income_trades*.csv pattern are detected';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ cmd_raw }};
-
-CREATE OR REPLACE STREAM CMDI_RAW_SM_TRADES_FILES
-    ON STAGE CMDI_RAW_ST_TRADES
-    COMMENT = 'Monitors CMDI_RAW_ST_TRADES stage for new commodity trade CSV files. Triggers CMDI_RAW_TK_LOAD_TRADES when files matching *commodity_trades*.csv pattern are detected';
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_raw }};
-
-CREATE OR REPLACE STREAM LIQI_RAW_SM_HQLA_FILES
-    ON STAGE LIQI_RAW_ST_HQLA_HOLDINGS;
-
-CREATE OR REPLACE STREAM LIQI_RAW_SM_DEPOSIT_FILES
-    ON STAGE LIQI_RAW_ST_DEPOSIT_BALANCES;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ loa_raw }};
-
-CREATE OR REPLACE STREAM LOAI_RAW_SM_EMAIL_FILES
-ON STAGE LOAI_RAW_ST_EMAIL_INBOUND
-COMMENT = 'Stream to detect new email files arriving on the stage. Triggers LOAI_RAW_TK_EXTRACT_MAIL_DATA when new .txt files are uploaded.';
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_raw }};
-
--- ============================================================
--- STORED PROCEDURES
--- ============================================================
-
-CREATE OR REPLACE PROCEDURE CRMI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,  
-    KEEP_N     NUMBER   
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ crm_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files. Useful for managing stage storage costs and data retention policies.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  -- Query files to delete (all except KEEP_N most recent)
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  -- Process files for deletion
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ ref_raw }};
-
-CREATE OR REPLACE PROCEDURE REFI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,
-    KEEP_N     NUMBER
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ ref_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ pay_raw }};
-
-CREATE OR REPLACE PROCEDURE PAYI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,
-    KEEP_N     NUMBER
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ pay_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ eqt_raw }};
-
-CREATE OR REPLACE PROCEDURE EQTI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,
-    KEEP_N     NUMBER
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ eqt_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ fii_raw }};
-
-CREATE OR REPLACE PROCEDURE FIII_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,
-    KEEP_N     NUMBER
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ fii_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ cmd_raw }};
-
-CREATE OR REPLACE PROCEDURE CMDI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,
-    KEEP_N     NUMBER
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ cmd_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_raw }};
-
-CREATE OR REPLACE PROCEDURE LIQI_RAW_SP_CLEANUP_STAGE_KEEP_LAST_N (
-    STAGE_NAME STRING,
-    KEEP_N     NUMBER
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Generic stage cleanup utility for {{ rep_raw }} schema. Removes oldest files from a stage, keeping only the N most recently modified files.'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-  V_DELETED NUMBER := 0;
-  V_FAILED  NUMBER := 0;
-  V_REL     STRING;
-  V_CMD     STRING;
-  V_QUERY   STRING;
-  
-  C1 CURSOR FOR
-    SELECT RELATIVE_PATH
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-    
-BEGIN
-  V_QUERY := 'SELECT RELATIVE_PATH FROM DIRECTORY(@' || STAGE_NAME || ') ' ||
-             'QUALIFY ROW_NUMBER() OVER (ORDER BY LAST_MODIFIED DESC) > ' || KEEP_N;
-  
-  EXECUTE IMMEDIATE V_QUERY;
-
-  OPEN C1;
-  FOR RECORD IN C1 DO
-    V_REL := RECORD.RELATIVE_PATH;
-    V_CMD := 'REMOVE @' || STAGE_NAME || '/' || V_REL;
-    
-    BEGIN
-      EXECUTE IMMEDIATE V_CMD;
-      V_DELETED := V_DELETED + 1;
-    EXCEPTION
-      WHEN OTHER THEN
-        V_FAILED := V_FAILED + 1;
-    END;
-  END FOR;
-  CLOSE C1;
-
-  RETURN 'Stage cleanup completed. Deleted: ' || V_DELETED || ' files, Failed: ' || V_FAILED || ' files, Kept: ' || KEEP_N || ' most recent files.';
-END;
-$$;
 USE DATABASE {{ db }};
 USE SCHEMA {{ rep_raw }};
 
@@ -641,50 +17,221 @@ USE SCHEMA {{ rep_raw }};
 -- SEED DATA
 -- ============================================================
 
-INSERT INTO LIQI_RAW_TB_HQLA_ELIGIBILITY (
-    ASSET_TYPE, ASSET_NAME, REGULATORY_LEVEL, HAIRCUT_PCT, HAIRCUT_FACTOR, 
-    SNB_COORDINATE, ELIGIBILITY_CRITERIA, MIN_CREDIT_RATING, REQUIRES_SMI_CONSTITUENT, EFFECTIVE_DATE
-) VALUES
-    ('CASH_SNB', 'Swiss National Bank Reserves', 'L1', 0.00, 1.0000, '1.1.1.1', 
-     'Overnight deposits with SNB', NULL, FALSE, '2024-01-01'),
-    ('CASH_VAULT', 'Physical Cash (Vault)', 'L1', 0.00, 1.0000, '1.1.1.2', 
-     'Banknotes and coins in vault', NULL, FALSE, '2024-01-01'),
-    ('GOVT_BOND_CHF', 'Swiss Confederation Bonds', 'L1', 0.00, 1.0000, '1.1.1.3', 
-     'Swiss federal government debt', NULL, FALSE, '2024-01-01'),
-    ('GOVT_BOND_FOREIGN', 'Foreign Government Bonds (0% RW)', 'L1', 0.00, 1.0000, '1.1.1.4', 
-     'Foreign sovereign debt with 0% risk weight', 'AA-', FALSE, '2024-01-01'),
-    ('CANTON_BOND', 'Swiss Canton Bonds', 'L2A', 15.00, 0.8500, '1.1.2.1.1', 
-     'Cantonal government debt with federal guarantee', NULL, FALSE, '2024-01-01'),
-    ('COVERED_BOND', 'Covered Bonds (Pfandbriefe)', 'L2A', 15.00, 0.8500, '1.1.2.1.2', 
-     'Swiss mortgage-backed covered bonds', 'AA-', FALSE, '2024-01-01'),
-    ('EQUITY_SMI', 'Swiss Market Index (SMI) Equities', 'L2B', 50.00, 0.5000, '1.1.2.2.1', 
-     'SMI constituent stocks only', NULL, TRUE, '2024-01-01'),
-    ('CORPORATE_BOND_AA', 'Corporate Bonds (AA- or better)', 'L2B', 50.00, 0.5000, '1.1.2.2.2', 
-     'Non-financial corporate debt, AA- minimum', 'AA-', FALSE, '2024-01-01');
+-- Idempotent MERGE seeds (re-runnable on every deploy)
 
-INSERT INTO LIQI_RAW_TB_DEPOSIT_TYPES (
-    DEPOSIT_TYPE, DEPOSIT_NAME, BASE_RUN_OFF_RATE, COUNTERPARTY_TYPE, SNB_COORDINATE, 
-    ELIGIBILITY_CRITERIA, ALLOWS_RELATIONSHIP_DISCOUNT, IS_INSURED, IS_OPERATIONAL, EFFECTIVE_DATE
-) VALUES
-    ('RETAIL_STABLE_INSURED', 'Retail Stable (Insured, 3+ Products)', 0.0300, 'RETAIL', '1.2.1.1', 
-     'Balance under 100K CHF, 3+ active products', TRUE, TRUE, FALSE, '2024-01-01'),
-    ('RETAIL_STABLE', 'Retail Stable', 0.0500, 'RETAIL', '1.2.1.2', 
-     'Balance under 100K CHF, established relationship', TRUE, TRUE, FALSE, '2024-01-01'),
-    ('RETAIL_LESS_STABLE', 'Retail Less Stable', 0.1000, 'RETAIL', '1.2.1.3', 
-     'Balance over 100K CHF or single product', FALSE, FALSE, FALSE, '2024-01-01'),
-    ('CORPORATE_OPERATIONAL', 'Corporate Operational', 0.2500, 'CORPORATE', '1.2.2.1', 
-     'Payroll, clearing, operational accounts', FALSE, FALSE, TRUE, '2024-01-01'),
-    ('CORPORATE_NON_OPERATIONAL', 'Corporate Non-Operational', 0.4000, 'CORPORATE', '1.2.2.2', 
-     'Treasury deposits, sweep accounts', FALSE, FALSE, FALSE, '2024-01-01'),
-    ('FINANCIAL_INSTITUTION', 'Financial Institution Deposits', 1.0000, 'FINANCIAL_INSTITUTION', '1.2.2.3', 
-     'Banks, insurance companies (100% outflow)', FALSE, FALSE, FALSE, '2024-01-01'),
-    ('UNSECURED_WHOLESALE', 'Unsecured Wholesale Funding', 1.0000, 'CORPORATE', '1.2.3', 
-     'Non-operational wholesale funding', FALSE, FALSE, FALSE, '2024-01-01');
+MERGE INTO LIQI_RAW_TB_HQLA_ELIGIBILITY t USING (SELECT * FROM VALUES
+    ('CASH_SNB', 'Swiss National Bank Reserves', 'L1', 0.0, 1.0, '1.1.1.1', 'Overnight sight deposits with SNB', NULL, FALSE, '2024-01-01'),
+    ('CASH_VAULT', 'Physical Cash (Vault)', 'L1', 0.0, 1.0, '1.1.1.2', 'Banknotes and coins in vault', NULL, FALSE, '2024-01-01'),
+    ('GOVT_BOND_CHF', 'Swiss Confederation Bonds', 'L1', 0.0, 1.0, '1.1.1.3', 'Swiss federal government debt', NULL, FALSE, '2024-01-01'),
+    ('GOVT_BOND_FOREIGN', 'Foreign Government Bonds (0% RW)', 'L1', 0.0, 1.0, '1.1.1.4', 'Foreign sovereign debt with 0% risk weight', 'AA-', FALSE, '2024-01-01'),
+    ('CANTON_BOND', 'Swiss Canton Bonds', 'L2A', 15.0, 0.85, '1.1.2.1.1', 'Cantonal government debt (20% risk weight)', NULL, FALSE, '2024-01-01'),
+    ('COVERED_BOND', 'Covered Bonds (Pfandbriefe)', 'L2A', 15.0, 0.85, '1.1.2.1.2', 'Swiss Pfandbriefe rated AA- or better', 'AA-', FALSE, '2024-01-01'),
+    ('CORPORATE_BOND_AA', 'Corporate Bonds (AA- or better)', 'L2A', 15.0, 0.85, '1.1.2.1.3', 'Non-financial corporate debt rated AA- or better (Level 2A per Basel III para 52)', 'AA-', FALSE, '2024-01-01'),
+    ('CORPORATE_BOND_A_BBB', 'Corporate Bonds (A+ to BBB-)', 'L2B', 50.0, 0.5, '1.1.2.2.2', 'Non-financial corporate debt rated A+ to BBB- (Level 2B per Basel III para 54)', 'BBB-', FALSE, '2024-01-01'),
+    ('EQUITY_SMI', 'Swiss Market Index (SMI) Equities', 'L2B', 50.0, 0.5, '1.1.2.2.1', 'SMI constituent non-financial equities', NULL, TRUE, '2024-01-01')
+) s (ASSET_TYPE, ASSET_NAME, REGULATORY_LEVEL, HAIRCUT_PCT, HAIRCUT_FACTOR, SNB_COORDINATE, ELIGIBILITY_CRITERIA, MIN_CREDIT_RATING, REQUIRES_SMI_CONSTITUENT, EFFECTIVE_DATE)
+ON t.ASSET_TYPE = s.ASSET_TYPE
+WHEN MATCHED THEN UPDATE SET t.ASSET_NAME = s.ASSET_NAME, t.REGULATORY_LEVEL = s.REGULATORY_LEVEL, t.HAIRCUT_PCT = s.HAIRCUT_PCT, t.HAIRCUT_FACTOR = s.HAIRCUT_FACTOR, t.SNB_COORDINATE = s.SNB_COORDINATE, t.ELIGIBILITY_CRITERIA = s.ELIGIBILITY_CRITERIA, t.MIN_CREDIT_RATING = s.MIN_CREDIT_RATING, t.REQUIRES_SMI_CONSTITUENT = s.REQUIRES_SMI_CONSTITUENT, t.EFFECTIVE_DATE = s.EFFECTIVE_DATE
+WHEN NOT MATCHED THEN INSERT (ASSET_TYPE, ASSET_NAME, REGULATORY_LEVEL, HAIRCUT_PCT, HAIRCUT_FACTOR, SNB_COORDINATE, ELIGIBILITY_CRITERIA, MIN_CREDIT_RATING, REQUIRES_SMI_CONSTITUENT, EFFECTIVE_DATE) VALUES (s.ASSET_TYPE, s.ASSET_NAME, s.REGULATORY_LEVEL, s.HAIRCUT_PCT, s.HAIRCUT_FACTOR, s.SNB_COORDINATE, s.ELIGIBILITY_CRITERIA, s.MIN_CREDIT_RATING, s.REQUIRES_SMI_CONSTITUENT, s.EFFECTIVE_DATE);
+
+MERGE INTO LIQI_RAW_TB_DEPOSIT_TYPES t USING (SELECT * FROM VALUES
+    ('RETAIL_STABLE_INSURED', 'Retail Stable (Insured, 3+ Products)', 0.03, 'RETAIL', '1.2.1.1', 'Insured balance under 100K CHF, established relationship', TRUE, TRUE, FALSE, '2024-01-01'),
+    ('RETAIL_STABLE', 'Retail Stable', 0.05, 'RETAIL', '1.2.1.2', 'Insured balance under 100K CHF', TRUE, TRUE, FALSE, '2024-01-01'),
+    ('RETAIL_LESS_STABLE', 'Retail Less Stable', 0.1, 'RETAIL', '1.2.1.3', 'Balance over 100K CHF or single product', FALSE, FALSE, FALSE, '2024-01-01'),
+    ('CORPORATE_OPERATIONAL', 'Corporate Operational', 0.25, 'CORPORATE', '1.2.2.1', 'Payroll, clearing, cash management accounts', FALSE, FALSE, TRUE, '2024-01-01'),
+    ('CORPORATE_NON_OPERATIONAL', 'Corporate Non-Operational', 0.4, 'CORPORATE', '1.2.2.2', 'Treasury deposits, sweep accounts', FALSE, FALSE, FALSE, '2024-01-01'),
+    ('FINANCIAL_INSTITUTION', 'Financial Institution Deposits', 1.0, 'FINANCIAL_INSTITUTION', '1.2.2.3', 'Banks, insurers, other financials (100% outflow)', FALSE, FALSE, FALSE, '2024-01-01'),
+    ('UNSECURED_WHOLESALE', 'Unsecured Wholesale Funding', 1.0, 'CORPORATE', '1.2.3', 'Non-operational wholesale funding', FALSE, FALSE, FALSE, '2024-01-01')
+) s (DEPOSIT_TYPE, DEPOSIT_NAME, BASE_RUN_OFF_RATE, COUNTERPARTY_TYPE, SNB_COORDINATE, ELIGIBILITY_CRITERIA, ALLOWS_RELATIONSHIP_DISCOUNT, IS_INSURED, IS_OPERATIONAL, EFFECTIVE_DATE)
+ON t.DEPOSIT_TYPE = s.DEPOSIT_TYPE
+WHEN MATCHED THEN UPDATE SET t.DEPOSIT_NAME = s.DEPOSIT_NAME, t.BASE_RUN_OFF_RATE = s.BASE_RUN_OFF_RATE, t.COUNTERPARTY_TYPE = s.COUNTERPARTY_TYPE, t.SNB_COORDINATE = s.SNB_COORDINATE, t.ELIGIBILITY_CRITERIA = s.ELIGIBILITY_CRITERIA, t.ALLOWS_RELATIONSHIP_DISCOUNT = s.ALLOWS_RELATIONSHIP_DISCOUNT, t.IS_INSURED = s.IS_INSURED, t.IS_OPERATIONAL = s.IS_OPERATIONAL, t.EFFECTIVE_DATE = s.EFFECTIVE_DATE
+WHEN NOT MATCHED THEN INSERT (DEPOSIT_TYPE, DEPOSIT_NAME, BASE_RUN_OFF_RATE, COUNTERPARTY_TYPE, SNB_COORDINATE, ELIGIBILITY_CRITERIA, ALLOWS_RELATIONSHIP_DISCOUNT, IS_INSURED, IS_OPERATIONAL, EFFECTIVE_DATE) VALUES (s.DEPOSIT_TYPE, s.DEPOSIT_NAME, s.BASE_RUN_OFF_RATE, s.COUNTERPARTY_TYPE, s.SNB_COORDINATE, s.ELIGIBILITY_CRITERIA, s.ALLOWS_RELATIONSHIP_DISCOUNT, s.IS_INSURED, s.IS_OPERATIONAL, s.EFFECTIVE_DATE);
+
+MERGE INTO LIQI_RAW_TB_PRODUCT_MAPPING t USING (SELECT * FROM VALUES
+    ('CASH_SNB', 'HOLDINGS', 'HQLA_L1_CASH', 'SNB reserves', 'HQLA', 'L1', 'CASH_SNB from holdings mapped to HQLA_L1_CASH / SNB reserves (HQLA treatment, FINMA LiqV)', TRUE),
+    ('CASH_VAULT', 'HOLDINGS', 'HQLA_L1_CASH', 'Vault cash', 'HQLA', 'L1', 'CASH_VAULT from holdings mapped to HQLA_L1_CASH / Vault cash (HQLA treatment, FINMA LiqV)', TRUE),
+    ('GOVT_BOND_CHF', 'HOLDINGS', 'HQLA_L1_SOVEREIGN', 'Government bonds', 'HQLA', 'L1', 'GOVT_BOND_CHF from holdings mapped to HQLA_L1_SOVEREIGN / Government bonds (HQLA treatment, FINMA LiqV)', TRUE),
+    ('GOVT_BOND_FOREIGN', 'HOLDINGS', 'HQLA_L1_SOVEREIGN', 'Government bonds', 'HQLA', 'L1', 'GOVT_BOND_FOREIGN from holdings mapped to HQLA_L1_SOVEREIGN / Government bonds (HQLA treatment, FINMA LiqV)', TRUE),
+    ('CANTON_BOND', 'HOLDINGS', 'HQLA_L2A', 'Public sector bonds', 'HQLA', 'L2A', 'CANTON_BOND from holdings mapped to HQLA_L2A / Public sector bonds (HQLA treatment, FINMA LiqV)', TRUE),
+    ('COVERED_BOND', 'HOLDINGS', 'HQLA_L2A', 'Covered bonds', 'HQLA', 'L2A', 'COVERED_BOND from holdings mapped to HQLA_L2A / Covered bonds (HQLA treatment, FINMA LiqV)', TRUE),
+    ('CORPORATE_BOND_AA', 'HOLDINGS', 'HQLA_L2A', 'Corporate bonds', 'HQLA', 'L2A', 'CORPORATE_BOND_AA from holdings mapped to HQLA_L2A / Corporate bonds (HQLA treatment, FINMA LiqV)', TRUE),
+    ('CORPORATE_BOND_A_BBB', 'HOLDINGS', 'HQLA_L2B', 'Corporate bonds', 'HQLA', 'L2B', 'CORPORATE_BOND_A_BBB from holdings mapped to HQLA_L2B / Corporate bonds (HQLA treatment, FINMA LiqV)', TRUE),
+    ('EQUITY_SMI', 'HOLDINGS', 'HQLA_L2B', 'Equities', 'HQLA', 'L2B', 'EQUITY_SMI from holdings mapped to HQLA_L2B / Equities (HQLA treatment, FINMA LiqV)', TRUE),
+    ('RETAIL_STABLE_INSURED', 'DEPOSITS', 'RETAIL_DEPOSITS', 'Retail stable deposits', 'OUTFLOW', NULL, 'RETAIL_STABLE_INSURED from deposits mapped to RETAIL_DEPOSITS / Retail stable deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('RETAIL_STABLE', 'DEPOSITS', 'RETAIL_DEPOSITS', 'Retail stable deposits', 'OUTFLOW', NULL, 'RETAIL_STABLE from deposits mapped to RETAIL_DEPOSITS / Retail stable deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('RETAIL_LESS_STABLE', 'DEPOSITS', 'RETAIL_DEPOSITS', 'Retail less stable deposits', 'OUTFLOW', NULL, 'RETAIL_LESS_STABLE from deposits mapped to RETAIL_DEPOSITS / Retail less stable deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('CORPORATE_OPERATIONAL', 'DEPOSITS', 'WHOLESALE_DEPOSITS', 'Operational deposits', 'OUTFLOW', NULL, 'CORPORATE_OPERATIONAL from deposits mapped to WHOLESALE_DEPOSITS / Operational deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('CORPORATE_NON_OPERATIONAL', 'DEPOSITS', 'WHOLESALE_DEPOSITS', 'Non-operational deposits', 'OUTFLOW', NULL, 'CORPORATE_NON_OPERATIONAL from deposits mapped to WHOLESALE_DEPOSITS / Non-operational deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('UNSECURED_WHOLESALE', 'DEPOSITS', 'WHOLESALE_DEPOSITS', 'Non-operational deposits', 'OUTFLOW', NULL, 'UNSECURED_WHOLESALE from deposits mapped to WHOLESALE_DEPOSITS / Non-operational deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('FINANCIAL_INSTITUTION', 'DEPOSITS', 'INTERBANK_FUNDING', 'Financial institution deposits', 'OUTFLOW', NULL, 'FINANCIAL_INSTITUTION from deposits mapped to INTERBANK_FUNDING / Financial institution deposits (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('INTERBANK_BORROWING', 'CONTRACTS', 'INTERBANK_FUNDING', 'Interbank borrowing', 'OUTFLOW', NULL, 'INTERBANK_BORROWING from contracts mapped to INTERBANK_FUNDING / Interbank borrowing (OUTFLOW treatment, FINMA LiqV)', TRUE),
+    ('LOAN_RETAIL', 'CONTRACTS', 'LOANS', 'Retail loans', 'INFLOW', NULL, 'LOAN_RETAIL from contracts mapped to LOANS / Retail loans (INFLOW treatment, FINMA LiqV)', TRUE),
+    ('LOAN_CORP', 'CONTRACTS', 'LOANS', 'Corporate loans', 'INFLOW', NULL, 'LOAN_CORP from contracts mapped to LOANS / Corporate loans (INFLOW treatment, FINMA LiqV)', TRUE),
+    ('INTERBANK_LOAN', 'CONTRACTS', 'INTERBANK_PLACEMENTS', 'Interbank placements', 'INFLOW', NULL, 'INTERBANK_LOAN from contracts mapped to INTERBANK_PLACEMENTS / Interbank placements (INFLOW treatment, FINMA LiqV)', TRUE),
+    ('CREDIT_FACILITY', 'CONTRACTS', 'COMMITTED_FACILITIES', 'Credit facilities', 'FACILITY', NULL, 'CREDIT_FACILITY from contracts mapped to COMMITTED_FACILITIES / Credit facilities (FACILITY treatment, FINMA LiqV)', TRUE),
+    ('LIQUIDITY_FACILITY', 'CONTRACTS', 'COMMITTED_FACILITIES', 'Liquidity facilities', 'FACILITY', NULL, 'LIQUIDITY_FACILITY from contracts mapped to COMMITTED_FACILITIES / Liquidity facilities (FACILITY treatment, FINMA LiqV)', TRUE)
+) s (PRODUCT_TYPE, SOURCE_SYSTEM, ASSET_CLASS, PRODUCT_GROUP, LCR_TREATMENT, HQLA_LEVEL, DESCRIPTION, IS_ACTIVE)
+ON t.PRODUCT_TYPE = s.PRODUCT_TYPE AND t.SOURCE_SYSTEM = s.SOURCE_SYSTEM
+WHEN MATCHED THEN UPDATE SET t.ASSET_CLASS = s.ASSET_CLASS, t.PRODUCT_GROUP = s.PRODUCT_GROUP, t.LCR_TREATMENT = s.LCR_TREATMENT, t.HQLA_LEVEL = s.HQLA_LEVEL, t.DESCRIPTION = s.DESCRIPTION, t.IS_ACTIVE = s.IS_ACTIVE
+WHEN NOT MATCHED THEN INSERT (PRODUCT_TYPE, SOURCE_SYSTEM, ASSET_CLASS, PRODUCT_GROUP, LCR_TREATMENT, HQLA_LEVEL, DESCRIPTION, IS_ACTIVE) VALUES (s.PRODUCT_TYPE, s.SOURCE_SYSTEM, s.ASSET_CLASS, s.PRODUCT_GROUP, s.LCR_TREATMENT, s.HQLA_LEVEL, s.DESCRIPTION, s.IS_ACTIVE);
+
+MERGE INTO LIQI_RAW_TB_BEHAVIORAL_RULES t USING (SELECT * FROM VALUES
+    ('RETAIL_STABLE_INSURED', 'RETAIL', 'BASE', 0.03, NULL, NULL, 0.0, 365, 'LINEAR', 'RETAIL_STABLE', 'BASE: RETAIL_STABLE_INSURED run-off 3% before account adjustments; linear decay over 365 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE', 'RETAIL', 'BASE', 0.05, NULL, NULL, 0.0, 365, 'LINEAR', 'RETAIL_STABLE', 'BASE: RETAIL_STABLE run-off 5% before account adjustments; linear decay over 365 days', TRUE, '2024-01-01'),
+    ('RETAIL_LESS_STABLE', 'RETAIL', 'BASE', 0.1, NULL, NULL, 0.0, 180, 'LINEAR', 'RETAIL_LESS_STABLE', 'BASE: RETAIL_LESS_STABLE run-off 10% before account adjustments; linear decay over 180 days', TRUE, '2024-01-01'),
+    ('CORPORATE_OPERATIONAL', 'CORPORATE', 'BASE', 0.25, NULL, NULL, 0.0, 90, 'LINEAR', 'CORP_OPERATIONAL', 'BASE: CORPORATE_OPERATIONAL run-off 25% before account adjustments; linear decay over 90 days', TRUE, '2024-01-01'),
+    ('CORPORATE_NON_OPERATIONAL', 'CORPORATE', 'BASE', 0.4, NULL, NULL, 0.0, 30, 'LINEAR', 'CORP_NON_OPERATIONAL', 'BASE: CORPORATE_NON_OPERATIONAL run-off 40% before account adjustments; linear decay over 30 days', TRUE, '2024-01-01'),
+    ('FINANCIAL_INSTITUTION', 'FINANCIAL_INSTITUTION', 'BASE', 1.0, NULL, NULL, 0.0, 7, 'LINEAR', 'FI_FUNDING', 'BASE: FINANCIAL_INSTITUTION run-off 100% before account adjustments; linear decay over 7 days', TRUE, '2024-01-01'),
+    ('UNSECURED_WHOLESALE', 'CORPORATE', 'BASE', 1.0, NULL, NULL, 0.0, 30, 'LINEAR', 'CORP_NON_OPERATIONAL', 'BASE: UNSECURED_WHOLESALE run-off 100% before account adjustments; linear decay over 30 days', TRUE, '2024-01-01'),
+    ('CASH_SNB', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'BASE: CASH_SNB regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CASH_VAULT', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'BASE: CASH_VAULT regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_CHF', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_BOND', 'BASE: GOVT_BOND_CHF regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_FOREIGN', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_BOND', 'BASE: GOVT_BOND_FOREIGN regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CANTON_BOND', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2A', 'BASE: CANTON_BOND regulatory haircut 15% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('COVERED_BOND', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2A', 'BASE: COVERED_BOND regulatory haircut 15% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_AA', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2A', 'BASE: CORPORATE_BOND_AA regulatory haircut 15% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_A_BBB', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2B_BOND', 'BASE: CORPORATE_BOND_A_BBB regulatory haircut 50% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('EQUITY_SMI', 'ALL', 'BASE', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2B_EQUITY', 'BASE: EQUITY_SMI regulatory haircut 50% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('LOAN_RETAIL', 'RETAIL', 'BASE', NULL, 0.5, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'BASE: LOAN_RETAIL / RETAIL inflow rate 50% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'CORPORATE', 'BASE', NULL, 0.5, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'BASE: LOAN_CORP / CORPORATE inflow rate 50% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'SME', 'BASE', NULL, 0.5, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'BASE: LOAN_CORP / SME inflow rate 50% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('INTERBANK_LOAN', 'FINANCIAL', 'BASE', NULL, 1.0, NULL, 0.0, NULL, 'NONE', 'INFLOW_FI', 'BASE: INTERBANK_LOAN / FINANCIAL inflow rate 100% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'RETAIL', 'BASE', NULL, NULL, 0.05, 0.0, NULL, 'NONE', 'FACILITIES', 'BASE: CREDIT_FACILITY / RETAIL drawdown 5% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'CORPORATE', 'BASE', NULL, NULL, 0.1, 0.0, NULL, 'NONE', 'FACILITIES', 'BASE: CREDIT_FACILITY / CORPORATE drawdown 10% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'SME', 'BASE', NULL, NULL, 0.1, 0.0, NULL, 'NONE', 'FACILITIES', 'BASE: CREDIT_FACILITY / SME drawdown 10% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'CORPORATE', 'BASE', NULL, NULL, 0.3, 0.0, NULL, 'NONE', 'FACILITIES', 'BASE: LIQUIDITY_FACILITY / CORPORATE drawdown 30% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'FINANCIAL', 'BASE', NULL, NULL, 0.4, 0.0, NULL, 'NONE', 'FACILITIES', 'BASE: LIQUIDITY_FACILITY / FINANCIAL drawdown 40% of undrawn commitment', TRUE, '2024-01-01'),
+    ('INTERBANK_BORROWING', 'FINANCIAL', 'BASE', 1.0, NULL, NULL, 0.0, NULL, 'NONE', 'FI_FUNDING', 'BASE: INTERBANK_BORROWING / FINANCIAL 100% of contractual repayments within 30 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE_INSURED', 'RETAIL', 'BANK_STRESS', 0.045, NULL, NULL, 0.0, 182, 'LINEAR', 'RETAIL_STABLE', 'BANK_STRESS: RETAIL_STABLE_INSURED run-off 4% before account adjustments; linear decay over 182 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE', 'RETAIL', 'BANK_STRESS', 0.075, NULL, NULL, 0.0, 182, 'LINEAR', 'RETAIL_STABLE', 'BANK_STRESS: RETAIL_STABLE run-off 8% before account adjustments; linear decay over 182 days', TRUE, '2024-01-01'),
+    ('RETAIL_LESS_STABLE', 'RETAIL', 'BANK_STRESS', 0.15, NULL, NULL, 0.0, 90, 'LINEAR', 'RETAIL_LESS_STABLE', 'BANK_STRESS: RETAIL_LESS_STABLE run-off 15% before account adjustments; linear decay over 90 days', TRUE, '2024-01-01'),
+    ('CORPORATE_OPERATIONAL', 'CORPORATE', 'BANK_STRESS', 0.35, NULL, NULL, 0.0, 45, 'LINEAR', 'CORP_OPERATIONAL', 'BANK_STRESS: CORPORATE_OPERATIONAL run-off 35% before account adjustments; linear decay over 45 days', TRUE, '2024-01-01'),
+    ('CORPORATE_NON_OPERATIONAL', 'CORPORATE', 'BANK_STRESS', 0.55, NULL, NULL, 0.0, 15, 'LINEAR', 'CORP_NON_OPERATIONAL', 'BANK_STRESS: CORPORATE_NON_OPERATIONAL run-off 55% before account adjustments; linear decay over 15 days', TRUE, '2024-01-01'),
+    ('FINANCIAL_INSTITUTION', 'FINANCIAL_INSTITUTION', 'BANK_STRESS', 1.0, NULL, NULL, 0.0, 3, 'LINEAR', 'FI_FUNDING', 'BANK_STRESS: FINANCIAL_INSTITUTION run-off 100% before account adjustments; linear decay over 3 days', TRUE, '2024-01-01'),
+    ('UNSECURED_WHOLESALE', 'CORPORATE', 'BANK_STRESS', 1.0, NULL, NULL, 0.0, 15, 'LINEAR', 'CORP_NON_OPERATIONAL', 'BANK_STRESS: UNSECURED_WHOLESALE run-off 100% before account adjustments; linear decay over 15 days', TRUE, '2024-01-01'),
+    ('CASH_SNB', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'BANK_STRESS: CASH_SNB regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CASH_VAULT', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'BANK_STRESS: CASH_VAULT regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_CHF', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_BOND', 'BANK_STRESS: GOVT_BOND_CHF regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_FOREIGN', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_BOND', 'BANK_STRESS: GOVT_BOND_FOREIGN regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CANTON_BOND', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2A', 'BANK_STRESS: CANTON_BOND regulatory haircut 15% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('COVERED_BOND', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2A', 'BANK_STRESS: COVERED_BOND regulatory haircut 15% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_AA', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2A', 'BANK_STRESS: CORPORATE_BOND_AA regulatory haircut 15% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_A_BBB', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2B_BOND', 'BANK_STRESS: CORPORATE_BOND_A_BBB regulatory haircut 50% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('EQUITY_SMI', 'ALL', 'BANK_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L2B_EQUITY', 'BANK_STRESS: EQUITY_SMI regulatory haircut 50% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('LOAN_RETAIL', 'RETAIL', 'BANK_STRESS', NULL, 0.4, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'BANK_STRESS: LOAN_RETAIL / RETAIL inflow rate 40% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'CORPORATE', 'BANK_STRESS', NULL, 0.4, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'BANK_STRESS: LOAN_CORP / CORPORATE inflow rate 40% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'SME', 'BANK_STRESS', NULL, 0.4, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'BANK_STRESS: LOAN_CORP / SME inflow rate 40% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('INTERBANK_LOAN', 'FINANCIAL', 'BANK_STRESS', NULL, 0.8, NULL, 0.0, NULL, 'NONE', 'INFLOW_FI', 'BANK_STRESS: INTERBANK_LOAN / FINANCIAL inflow rate 80% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'RETAIL', 'BANK_STRESS', NULL, NULL, 0.075, 0.0, NULL, 'NONE', 'FACILITIES', 'BANK_STRESS: CREDIT_FACILITY / RETAIL drawdown 8% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'CORPORATE', 'BANK_STRESS', NULL, NULL, 0.15, 0.0, NULL, 'NONE', 'FACILITIES', 'BANK_STRESS: CREDIT_FACILITY / CORPORATE drawdown 15% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'SME', 'BANK_STRESS', NULL, NULL, 0.15, 0.0, NULL, 'NONE', 'FACILITIES', 'BANK_STRESS: CREDIT_FACILITY / SME drawdown 15% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'CORPORATE', 'BANK_STRESS', NULL, NULL, 0.45, 0.0, NULL, 'NONE', 'FACILITIES', 'BANK_STRESS: LIQUIDITY_FACILITY / CORPORATE drawdown 45% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'FINANCIAL', 'BANK_STRESS', NULL, NULL, 0.6, 0.0, NULL, 'NONE', 'FACILITIES', 'BANK_STRESS: LIQUIDITY_FACILITY / FINANCIAL drawdown 60% of undrawn commitment', TRUE, '2024-01-01'),
+    ('INTERBANK_BORROWING', 'FINANCIAL', 'BANK_STRESS', 1.0, NULL, NULL, 0.0, NULL, 'NONE', 'FI_FUNDING', 'BANK_STRESS: INTERBANK_BORROWING / FINANCIAL 100% of contractual repayments within 30 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE_INSURED', 'RETAIL', 'MARKET_STRESS', 0.033, NULL, NULL, 0.0, 182, 'LINEAR', 'RETAIL_STABLE', 'MARKET_STRESS: RETAIL_STABLE_INSURED run-off 3% before account adjustments; linear decay over 182 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE', 'RETAIL', 'MARKET_STRESS', 0.055, NULL, NULL, 0.0, 182, 'LINEAR', 'RETAIL_STABLE', 'MARKET_STRESS: RETAIL_STABLE run-off 6% before account adjustments; linear decay over 182 days', TRUE, '2024-01-01'),
+    ('RETAIL_LESS_STABLE', 'RETAIL', 'MARKET_STRESS', 0.11, NULL, NULL, 0.0, 90, 'LINEAR', 'RETAIL_LESS_STABLE', 'MARKET_STRESS: RETAIL_LESS_STABLE run-off 11% before account adjustments; linear decay over 90 days', TRUE, '2024-01-01'),
+    ('CORPORATE_OPERATIONAL', 'CORPORATE', 'MARKET_STRESS', 0.3, NULL, NULL, 0.0, 45, 'LINEAR', 'CORP_OPERATIONAL', 'MARKET_STRESS: CORPORATE_OPERATIONAL run-off 30% before account adjustments; linear decay over 45 days', TRUE, '2024-01-01'),
+    ('CORPORATE_NON_OPERATIONAL', 'CORPORATE', 'MARKET_STRESS', 0.45, NULL, NULL, 0.0, 15, 'LINEAR', 'CORP_NON_OPERATIONAL', 'MARKET_STRESS: CORPORATE_NON_OPERATIONAL run-off 45% before account adjustments; linear decay over 15 days', TRUE, '2024-01-01'),
+    ('FINANCIAL_INSTITUTION', 'FINANCIAL_INSTITUTION', 'MARKET_STRESS', 1.0, NULL, NULL, 0.0, 3, 'LINEAR', 'FI_FUNDING', 'MARKET_STRESS: FINANCIAL_INSTITUTION run-off 100% before account adjustments; linear decay over 3 days', TRUE, '2024-01-01'),
+    ('UNSECURED_WHOLESALE', 'CORPORATE', 'MARKET_STRESS', 1.0, NULL, NULL, 0.0, 15, 'LINEAR', 'CORP_NON_OPERATIONAL', 'MARKET_STRESS: UNSECURED_WHOLESALE run-off 100% before account adjustments; linear decay over 15 days', TRUE, '2024-01-01'),
+    ('CASH_SNB', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'MARKET_STRESS: CASH_SNB regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CASH_VAULT', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'MARKET_STRESS: CASH_VAULT regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_CHF', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 1.0, NULL, 'NONE', 'L1_BOND', 'MARKET_STRESS: GOVT_BOND_CHF regulatory haircut 0% plus 1pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_FOREIGN', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 2.0, NULL, 'NONE', 'L1_BOND', 'MARKET_STRESS: GOVT_BOND_FOREIGN regulatory haircut 0% plus 2pp stress add-on', TRUE, '2024-01-01'),
+    ('CANTON_BOND', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 5.0, NULL, 'NONE', 'L2A', 'MARKET_STRESS: CANTON_BOND regulatory haircut 15% plus 5pp stress add-on', TRUE, '2024-01-01'),
+    ('COVERED_BOND', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 5.0, NULL, 'NONE', 'L2A', 'MARKET_STRESS: COVERED_BOND regulatory haircut 15% plus 5pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_AA', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 7.0, NULL, 'NONE', 'L2A', 'MARKET_STRESS: CORPORATE_BOND_AA regulatory haircut 15% plus 7pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_A_BBB', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 15.0, NULL, 'NONE', 'L2B_BOND', 'MARKET_STRESS: CORPORATE_BOND_A_BBB regulatory haircut 50% plus 15pp stress add-on', TRUE, '2024-01-01'),
+    ('EQUITY_SMI', 'ALL', 'MARKET_STRESS', NULL, NULL, NULL, 15.0, NULL, 'NONE', 'L2B_EQUITY', 'MARKET_STRESS: EQUITY_SMI regulatory haircut 50% plus 15pp stress add-on', TRUE, '2024-01-01'),
+    ('LOAN_RETAIL', 'RETAIL', 'MARKET_STRESS', NULL, 0.45, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'MARKET_STRESS: LOAN_RETAIL / RETAIL inflow rate 45% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'CORPORATE', 'MARKET_STRESS', NULL, 0.45, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'MARKET_STRESS: LOAN_CORP / CORPORATE inflow rate 45% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'SME', 'MARKET_STRESS', NULL, 0.45, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'MARKET_STRESS: LOAN_CORP / SME inflow rate 45% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('INTERBANK_LOAN', 'FINANCIAL', 'MARKET_STRESS', NULL, 0.9, NULL, 0.0, NULL, 'NONE', 'INFLOW_FI', 'MARKET_STRESS: INTERBANK_LOAN / FINANCIAL inflow rate 90% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'RETAIL', 'MARKET_STRESS', NULL, NULL, 0.065, 0.0, NULL, 'NONE', 'FACILITIES', 'MARKET_STRESS: CREDIT_FACILITY / RETAIL drawdown 6% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'CORPORATE', 'MARKET_STRESS', NULL, NULL, 0.13, 0.0, NULL, 'NONE', 'FACILITIES', 'MARKET_STRESS: CREDIT_FACILITY / CORPORATE drawdown 13% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'SME', 'MARKET_STRESS', NULL, NULL, 0.13, 0.0, NULL, 'NONE', 'FACILITIES', 'MARKET_STRESS: CREDIT_FACILITY / SME drawdown 13% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'CORPORATE', 'MARKET_STRESS', NULL, NULL, 0.39, 0.0, NULL, 'NONE', 'FACILITIES', 'MARKET_STRESS: LIQUIDITY_FACILITY / CORPORATE drawdown 39% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'FINANCIAL', 'MARKET_STRESS', NULL, NULL, 0.52, 0.0, NULL, 'NONE', 'FACILITIES', 'MARKET_STRESS: LIQUIDITY_FACILITY / FINANCIAL drawdown 52% of undrawn commitment', TRUE, '2024-01-01'),
+    ('INTERBANK_BORROWING', 'FINANCIAL', 'MARKET_STRESS', 1.0, NULL, NULL, 0.0, NULL, 'NONE', 'FI_FUNDING', 'MARKET_STRESS: INTERBANK_BORROWING / FINANCIAL 100% of contractual repayments within 30 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE_INSURED', 'RETAIL', 'COMBINED', 0.048, NULL, NULL, 0.0, 182, 'LINEAR', 'RETAIL_STABLE', 'COMBINED: RETAIL_STABLE_INSURED run-off 5% before account adjustments; linear decay over 182 days', TRUE, '2024-01-01'),
+    ('RETAIL_STABLE', 'RETAIL', 'COMBINED', 0.08, NULL, NULL, 0.0, 182, 'LINEAR', 'RETAIL_STABLE', 'COMBINED: RETAIL_STABLE run-off 8% before account adjustments; linear decay over 182 days', TRUE, '2024-01-01'),
+    ('RETAIL_LESS_STABLE', 'RETAIL', 'COMBINED', 0.16, NULL, NULL, 0.0, 90, 'LINEAR', 'RETAIL_LESS_STABLE', 'COMBINED: RETAIL_LESS_STABLE run-off 16% before account adjustments; linear decay over 90 days', TRUE, '2024-01-01'),
+    ('CORPORATE_OPERATIONAL', 'CORPORATE', 'COMBINED', 0.4, NULL, NULL, 0.0, 45, 'LINEAR', 'CORP_OPERATIONAL', 'COMBINED: CORPORATE_OPERATIONAL run-off 40% before account adjustments; linear decay over 45 days', TRUE, '2024-01-01'),
+    ('CORPORATE_NON_OPERATIONAL', 'CORPORATE', 'COMBINED', 0.6, NULL, NULL, 0.0, 15, 'LINEAR', 'CORP_NON_OPERATIONAL', 'COMBINED: CORPORATE_NON_OPERATIONAL run-off 60% before account adjustments; linear decay over 15 days', TRUE, '2024-01-01'),
+    ('FINANCIAL_INSTITUTION', 'FINANCIAL_INSTITUTION', 'COMBINED', 1.0, NULL, NULL, 0.0, 3, 'LINEAR', 'FI_FUNDING', 'COMBINED: FINANCIAL_INSTITUTION run-off 100% before account adjustments; linear decay over 3 days', TRUE, '2024-01-01'),
+    ('UNSECURED_WHOLESALE', 'CORPORATE', 'COMBINED', 1.0, NULL, NULL, 0.0, 15, 'LINEAR', 'CORP_NON_OPERATIONAL', 'COMBINED: UNSECURED_WHOLESALE run-off 100% before account adjustments; linear decay over 15 days', TRUE, '2024-01-01'),
+    ('CASH_SNB', 'ALL', 'COMBINED', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'COMBINED: CASH_SNB regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('CASH_VAULT', 'ALL', 'COMBINED', NULL, NULL, NULL, 0.0, NULL, 'NONE', 'L1_CASH', 'COMBINED: CASH_VAULT regulatory haircut 0% plus 0pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_CHF', 'ALL', 'COMBINED', NULL, NULL, NULL, 1.0, NULL, 'NONE', 'L1_BOND', 'COMBINED: GOVT_BOND_CHF regulatory haircut 0% plus 1pp stress add-on', TRUE, '2024-01-01'),
+    ('GOVT_BOND_FOREIGN', 'ALL', 'COMBINED', NULL, NULL, NULL, 2.0, NULL, 'NONE', 'L1_BOND', 'COMBINED: GOVT_BOND_FOREIGN regulatory haircut 0% plus 2pp stress add-on', TRUE, '2024-01-01'),
+    ('CANTON_BOND', 'ALL', 'COMBINED', NULL, NULL, NULL, 5.0, NULL, 'NONE', 'L2A', 'COMBINED: CANTON_BOND regulatory haircut 15% plus 5pp stress add-on', TRUE, '2024-01-01'),
+    ('COVERED_BOND', 'ALL', 'COMBINED', NULL, NULL, NULL, 5.0, NULL, 'NONE', 'L2A', 'COMBINED: COVERED_BOND regulatory haircut 15% plus 5pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_AA', 'ALL', 'COMBINED', NULL, NULL, NULL, 7.0, NULL, 'NONE', 'L2A', 'COMBINED: CORPORATE_BOND_AA regulatory haircut 15% plus 7pp stress add-on', TRUE, '2024-01-01'),
+    ('CORPORATE_BOND_A_BBB', 'ALL', 'COMBINED', NULL, NULL, NULL, 15.0, NULL, 'NONE', 'L2B_BOND', 'COMBINED: CORPORATE_BOND_A_BBB regulatory haircut 50% plus 15pp stress add-on', TRUE, '2024-01-01'),
+    ('EQUITY_SMI', 'ALL', 'COMBINED', NULL, NULL, NULL, 15.0, NULL, 'NONE', 'L2B_EQUITY', 'COMBINED: EQUITY_SMI regulatory haircut 50% plus 15pp stress add-on', TRUE, '2024-01-01'),
+    ('LOAN_RETAIL', 'RETAIL', 'COMBINED', NULL, 0.35, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'COMBINED: LOAN_RETAIL / RETAIL inflow rate 35% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'CORPORATE', 'COMBINED', NULL, 0.35, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'COMBINED: LOAN_CORP / CORPORATE inflow rate 35% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('LOAN_CORP', 'SME', 'COMBINED', NULL, 0.35, NULL, 0.0, NULL, 'NONE', 'INFLOW_NONFIN', 'COMBINED: LOAN_CORP / SME inflow rate 35% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('INTERBANK_LOAN', 'FINANCIAL', 'COMBINED', NULL, 0.7, NULL, 0.0, NULL, 'NONE', 'INFLOW_FI', 'COMBINED: INTERBANK_LOAN / FINANCIAL inflow rate 70% on 30-day performing contractual inflows', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'RETAIL', 'COMBINED', NULL, NULL, 0.09, 0.0, NULL, 'NONE', 'FACILITIES', 'COMBINED: CREDIT_FACILITY / RETAIL drawdown 9% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'CORPORATE', 'COMBINED', NULL, NULL, 0.18, 0.0, NULL, 'NONE', 'FACILITIES', 'COMBINED: CREDIT_FACILITY / CORPORATE drawdown 18% of undrawn commitment', TRUE, '2024-01-01'),
+    ('CREDIT_FACILITY', 'SME', 'COMBINED', NULL, NULL, 0.18, 0.0, NULL, 'NONE', 'FACILITIES', 'COMBINED: CREDIT_FACILITY / SME drawdown 18% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'CORPORATE', 'COMBINED', NULL, NULL, 0.54, 0.0, NULL, 'NONE', 'FACILITIES', 'COMBINED: LIQUIDITY_FACILITY / CORPORATE drawdown 54% of undrawn commitment', TRUE, '2024-01-01'),
+    ('LIQUIDITY_FACILITY', 'FINANCIAL', 'COMBINED', NULL, NULL, 0.72, 0.0, NULL, 'NONE', 'FACILITIES', 'COMBINED: LIQUIDITY_FACILITY / FINANCIAL drawdown 72% of undrawn commitment', TRUE, '2024-01-01'),
+    ('INTERBANK_BORROWING', 'FINANCIAL', 'COMBINED', 1.0, NULL, NULL, 0.0, NULL, 'NONE', 'FI_FUNDING', 'COMBINED: INTERBANK_BORROWING / FINANCIAL 100% of contractual repayments within 30 days', TRUE, '2024-01-01')
+) s (PRODUCT_TYPE, COUNTERPARTY_SECTOR, STRESS_SCENARIO, RUNOFF_RATE, INFLOW_RATE, DRAWDOWN_RATE, HAIRCUT_ADDON_PCT, DECAY_PROFILE_DAYS, DECAY_METHOD, SIM_CATEGORY, RULE_DESCRIPTION, IS_ACTIVE, EFFECTIVE_DATE)
+ON t.PRODUCT_TYPE = s.PRODUCT_TYPE AND t.COUNTERPARTY_SECTOR = s.COUNTERPARTY_SECTOR AND t.STRESS_SCENARIO = s.STRESS_SCENARIO
+WHEN MATCHED THEN UPDATE SET t.RUNOFF_RATE = s.RUNOFF_RATE, t.INFLOW_RATE = s.INFLOW_RATE, t.DRAWDOWN_RATE = s.DRAWDOWN_RATE, t.HAIRCUT_ADDON_PCT = s.HAIRCUT_ADDON_PCT, t.DECAY_PROFILE_DAYS = s.DECAY_PROFILE_DAYS, t.DECAY_METHOD = s.DECAY_METHOD, t.SIM_CATEGORY = s.SIM_CATEGORY, t.RULE_DESCRIPTION = s.RULE_DESCRIPTION, t.IS_ACTIVE = s.IS_ACTIVE, t.EFFECTIVE_DATE = s.EFFECTIVE_DATE
+WHEN NOT MATCHED THEN INSERT (PRODUCT_TYPE, COUNTERPARTY_SECTOR, STRESS_SCENARIO, RUNOFF_RATE, INFLOW_RATE, DRAWDOWN_RATE, HAIRCUT_ADDON_PCT, DECAY_PROFILE_DAYS, DECAY_METHOD, SIM_CATEGORY, RULE_DESCRIPTION, IS_ACTIVE, EFFECTIVE_DATE) VALUES (s.PRODUCT_TYPE, s.COUNTERPARTY_SECTOR, s.STRESS_SCENARIO, s.RUNOFF_RATE, s.INFLOW_RATE, s.DRAWDOWN_RATE, s.HAIRCUT_ADDON_PCT, s.DECAY_PROFILE_DAYS, s.DECAY_METHOD, s.SIM_CATEGORY, s.RULE_DESCRIPTION, s.IS_ACTIVE, s.EFFECTIVE_DATE);
+
+MERGE INTO LIQI_RAW_TB_MATURITY_BUCKETS t USING (SELECT * FROM VALUES
+    ('ON', 'Overnight', 0, 1, 1, TRUE),
+    ('D2_7', '2-7 days', 2, 7, 2, TRUE),
+    ('D8_30', '8-30 days', 8, 30, 3, TRUE),
+    ('M1_3', '1-3 months', 31, 90, 4, FALSE),
+    ('M3_6', '3-6 months', 91, 180, 5, FALSE),
+    ('M6_12', '6-12 months', 181, 365, 6, FALSE),
+    ('Y1P', '> 1 year', 366, 36500, 7, FALSE)
+) s (BUCKET_CODE, BUCKET_NAME, FROM_DAY, TO_DAY, SORT_ORDER, IN_LCR_HORIZON)
+ON t.BUCKET_CODE = s.BUCKET_CODE
+WHEN MATCHED THEN UPDATE SET t.BUCKET_NAME = s.BUCKET_NAME, t.FROM_DAY = s.FROM_DAY, t.TO_DAY = s.TO_DAY, t.SORT_ORDER = s.SORT_ORDER, t.IN_LCR_HORIZON = s.IN_LCR_HORIZON
+WHEN NOT MATCHED THEN INSERT (BUCKET_CODE, BUCKET_NAME, FROM_DAY, TO_DAY, SORT_ORDER, IN_LCR_HORIZON) VALUES (s.BUCKET_CODE, s.BUCKET_NAME, s.FROM_DAY, s.TO_DAY, s.SORT_ORDER, s.IN_LCR_HORIZON);
+
+MERGE INTO LIQI_RAW_TB_SCENARIOS t USING (SELECT * FROM VALUES
+    ('BASE', 'Regulatory LCR (FINMA)', 'Regulatory FINMA LiqV / Basel III LCR assumptions', TRUE, 1),
+    ('BANK_STRESS', 'Idiosyncratic bank stress', 'Bank-specific stress: higher retail/corporate run-off, more facility drawdowns, lower inflows', FALSE, 2),
+    ('MARKET_STRESS', 'Market-wide stress', 'Systemic stress: additional HQLA haircuts, moderate run-off increase, lower inflows', FALSE, 3),
+    ('COMBINED', 'Combined stress', 'Combination of idiosyncratic and market-wide stress', FALSE, 4)
+) s (SCENARIO_CODE, SCENARIO_NAME, DESCRIPTION, IS_REGULATORY, SORT_ORDER)
+ON t.SCENARIO_CODE = s.SCENARIO_CODE
+WHEN MATCHED THEN UPDATE SET t.SCENARIO_NAME = s.SCENARIO_NAME, t.DESCRIPTION = s.DESCRIPTION, t.IS_REGULATORY = s.IS_REGULATORY, t.SORT_ORDER = s.SORT_ORDER
+WHEN NOT MATCHED THEN INSERT (SCENARIO_CODE, SCENARIO_NAME, DESCRIPTION, IS_REGULATORY, SORT_ORDER) VALUES (s.SCENARIO_CODE, s.SCENARIO_NAME, s.DESCRIPTION, s.IS_REGULATORY, s.SORT_ORDER);
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ loa_raw }};
 
-INSERT INTO LOAI_REF_TB_PRODUCT_CATALOGUE (
+-- AI_EXTRACT schema for the mortgage email task (LOAI_RAW_TK_EXTRACT_MAIL_DATA); without it every field is NULL
+INSERT OVERWRITE INTO LOAI_RAW_TB_EMAIL_INBOUND_LOAN_SCHEMA_CONFIG (schema_json)
+SELECT PARSE_JSON('{
+    "document_type": "string: classify this email as one of: MORTGAGE_APPLICATION, CUSTOMER_INQUIRY, INTERNAL_REVIEW, LOAN_OFFICER_NOTES, PRE_APPROVAL, OFFER_LETTER, GENERAL_CORRESPONDENCE. Required field.",
+    "customer_name": "string: full name of the mortgage applicant or borrower. Return null if not mentioned.",
+    "property_address": "string: complete property address including street, city, postal code. Return null if not mentioned.",
+    "property_type": "string: type of property such as Single Family Home, Multi-family, Apartment, Condo, Townhouse, Detached House. Return null if not mentioned.",
+    "purchase_price": "number: property purchase price or current market valuation in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
+    "down_payment": "number: down payment amount or deposit being paid by the borrower in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
+    "loan_amount": "number: requested mortgage loan amount in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
+    "loan_term_years": "number: loan term duration in years (e.g., 15, 20, 25, 30). Return null if not mentioned.",
+    "rate_type": "string: interest rate type, either Fixed or Variable (also known as Adjustable or Tracker). Return null if not mentioned.",
+    "monthly_income": "number: applicant total monthly gross income before taxes in the local currency. Return only the numeric value without currency symbols. Return null if not mentioned.",
+    "employment": "string: job title, occupation, or employment type (e.g., Software Engineer, Self-Employed, Government Employee, Teacher). Return null if not mentioned.",
+    "employment_tenure_years": "number: number of years the applicant has been in their current employment or job. Return null if not mentioned.",
+    "credit_score": "number: applicant credit score or credit rating (typically 300-850 range). Return null if not mentioned.",
+    "existing_debts_monthly": "number: total monthly debt obligations including credit cards, car loans, other mortgages, in the local currency. Return only the numeric value without currency symbols. Return 0 if explicitly stated as none, return null if not mentioned.",
+    "country": "string: country where the property is located (e.g., Switzerland, UK, Germany, Portugal, France). Return null if not mentioned."
+}');
+
+INSERT OVERWRITE INTO LOAI_REF_TB_PRODUCT_CATALOGUE (
     PRODUCT_ID, PRODUCT_NAME, PRODUCT_TYPE, COUNTRY, IS_SECURED, 
     MIN_LOAN_AMOUNT, MAX_LOAN_AMOUNT, MIN_TERM_MONTHS, MAX_TERM_MONTHS, 
     DEFAULT_INTEREST_RATE, RATE_TYPE, MAX_LTV_PCT, REGULATORY_CLASSIFICATION, 
@@ -699,7 +246,7 @@ INSERT INTO LOAI_REF_TB_PRODUCT_CATALOGUE (
     ('DE_FIXED_MORTGAGE_20Y', 'German Fixed Rate Mortgage (20Y)', 'MORTGAGE', 'DEU', TRUE, 120000, 1800000, 60, 240, 0.0350, 'FIXED', 80.00, 'RESIDENTIAL_MORTGAGE', TRUE, '2023-01-01'),
     ('DE_KFW_GREEN_MORTGAGE', 'German KfW Energy Efficient Mortgage', 'MORTGAGE', 'DEU', TRUE, 100000, 1500000, 60, 300, 0.0200, 'FIXED', 80.00, 'RESIDENTIAL_MORTGAGE', TRUE, '2023-06-01');
 
-INSERT INTO LOAI_REF_TB_COUNTRY_REGIME_CONFIG (
+INSERT OVERWRITE INTO LOAI_REF_TB_COUNTRY_REGIME_CONFIG (
     COUNTRY_CODE, COUNTRY_NAME, CURRENCY_CODE, 
     MAX_LTV_OWNER_OCCUPIED, MAX_LTV_BUY_TO_LET, MIN_HARD_EQUITY_PCT,
     AFFORDABILITY_IMPUTED_RATE, AFFORDABILITY_DTI_THRESHOLD, AFFORDABILITY_DSTI_THRESHOLD, ANCILLARY_COSTS_PCT,
@@ -711,7 +258,7 @@ INSERT INTO LOAI_REF_TB_COUNTRY_REGIME_CONFIG (
     ('GBR', 'United Kingdom', 'GBP', 90.00, 80.00, 0.00, 0.0700, 45.00, 45.00, 0.0000, 0, NULL, NULL, TRUE, FALSE, 'FCA, PRA', TRUE),
     ('DEU', 'Germany', 'EUR', 80.00, 70.00, 0.00, 0.0450, 40.00, 40.00, 0.0000, 14, NULL, NULL, TRUE, FALSE, 'BaFin', FALSE);
 
-INSERT INTO LOAI_REF_TB_APPLICATION_STATUS (STATUS_CODE, STATUS_NAME, STATUS_CATEGORY, DESCRIPTION, IS_FINAL, REQUIRES_ACTION, DISPLAY_ORDER) VALUES
+INSERT OVERWRITE INTO LOAI_REF_TB_APPLICATION_STATUS (STATUS_CODE, STATUS_NAME, STATUS_CATEGORY, DESCRIPTION, IS_FINAL, REQUIRES_ACTION, DISPLAY_ORDER) VALUES
     ('DRAFT', 'Draft', 'PENDING', 'Application started but not yet submitted', FALSE, TRUE, 1),
     ('SUBMITTED', 'Submitted', 'PENDING', 'Application submitted and awaiting review', FALSE, FALSE, 2),
     ('KYC_PENDING', 'KYC Pending', 'PENDING', 'Pending KYC verification', FALSE, TRUE, 3),
@@ -980,88 +527,6 @@ WHERE e.EXTRACTION_SUCCESS = TRUE
       SELECT 1 FROM LOAA_AGG_TB_LOAN_COLLATERAL_LINK lnk
       WHERE lnk.LINK_ID = 'LINK_' || REPLACE(e.FILE_NAME, '_internal.txt', '')
   );
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_raw }};
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN FIRST_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN FAMILY_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN EMAIL 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN PHONE 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN DATE_OF_BIRTH 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN EMPLOYER 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN HAS_ANOMALY 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN RISK_CLASSIFICATION 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN CREDIT_SCORE_BAND 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER MODIFY COLUMN CUSTOMER_ID 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'top_secret';
-
-ALTER TABLE CRMI_RAW_TB_ADDRESSES MODIFY COLUMN CITY 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_ADDRESSES MODIFY COLUMN ZIPCODE 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_ADDRESSES MODIFY COLUMN STREET_ADDRESS 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'top_secret';
-
-ALTER TABLE CRMI_RAW_TB_EXPOSED_PERSON MODIFY COLUMN FULL_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'top_secret';
-
-ALTER TABLE CRMI_RAW_TB_EXPOSED_PERSON MODIFY COLUMN FIRST_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'top_secret';
-
-ALTER TABLE CRMI_RAW_TB_EXPOSED_PERSON MODIFY COLUMN LAST_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'top_secret';
-
-ALTER TABLE CRMI_RAW_TB_EXPOSED_PERSON MODIFY COLUMN DATE_OF_BIRTH 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_EXPOSED_PERSON MODIFY COLUMN EXPOSED_PERSON_CATEGORY 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_EXPOSED_PERSON MODIFY COLUMN RISK_LEVEL 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_RAW_TB_CUSTOMER_EVENT MODIFY COLUMN NOTES 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_RAW_TB_EMPLOYEE MODIFY COLUMN FIRST_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_RAW_TB_EMPLOYEE MODIFY COLUMN FAMILY_NAME 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_RAW_TB_EMPLOYEE MODIFY COLUMN EMAIL 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_RAW_TB_EMPLOYEE MODIFY COLUMN PHONE 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_RAW_TB_EMPLOYEE MODIFY COLUMN DATE_OF_BIRTH 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_RAW_TB_EMPLOYEE MODIFY COLUMN OFFICE_LOCATION 
-    SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'top_secret';
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_raw }};
 
 -- ============================================================
 -- MASKING POLICIES (Late Enrichment Pattern)
@@ -1069,122 +534,16 @@ USE SCHEMA {{ crm_raw }};
 -- COMPLIANCE and ACCOUNTADMIN see full values, others see masked.
 -- Idempotent: unset existing policies before recreate, then re-apply.
 -- ============================================================
-USE SCHEMA {{ crm_agg }};
 
 -- Unset existing masking policies (ignore errors if not yet applied)
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FIRST_NAME UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FAMILY_NAME UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FULL_NAME UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN EMAIL UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN PHONE UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN DATE_OF_BIRTH UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN EMPLOYER UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN POSITION UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN STREET_ADDRESS UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN CITY UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN ZIPCODE UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FIRST_NAME UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FAMILY_NAME UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FULL_NAME UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN EMAIL UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN PHONE UNSET MASKING POLICY;
-ALTER TABLE IF EXISTS EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN DATE_OF_BIRTH UNSET MASKING POLICY;
-
-CREATE OR REPLACE MASKING POLICY CRMI_AGG_MP_NAME_MASK AS (val STRING) RETURNS STRING ->
-    CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
-        WHEN val IS NULL THEN NULL
-        ELSE REGEXP_REPLACE(val, '(.)(.+)', '\\1***')
-    END;
-
-CREATE OR REPLACE MASKING POLICY CRMI_AGG_MP_EMAIL_MASK AS (val STRING) RETURNS STRING ->
-    CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
-        WHEN val IS NULL THEN NULL
-        ELSE '****@****.com'
-    END;
-
-CREATE OR REPLACE MASKING POLICY CRMI_AGG_MP_PHONE_MASK AS (val STRING) RETURNS STRING ->
-    CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
-        WHEN val IS NULL THEN NULL
-        ELSE '****'
-    END;
-
-CREATE OR REPLACE MASKING POLICY CRMI_AGG_MP_DOB_MASK AS (val DATE) RETURNS DATE ->
-    CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
-        WHEN val IS NULL THEN NULL
-        ELSE DATE_FROM_PARTS(1900, 1, 1)
-    END;
 
 -- Apply masking to customer PII vault
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FIRST_NAME SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FAMILY_NAME SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FULL_NAME SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN EMAIL SET MASKING POLICY CRMI_AGG_MP_EMAIL_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN PHONE SET MASKING POLICY CRMI_AGG_MP_PHONE_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN DATE_OF_BIRTH SET MASKING POLICY CRMI_AGG_MP_DOB_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN EMPLOYER SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN POSITION SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
 
 -- Apply masking to address PII vault
-ALTER TABLE CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN STREET_ADDRESS SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN CITY SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN ZIPCODE SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
 
 -- Apply masking to employee PII vault
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FIRST_NAME SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FAMILY_NAME SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FULL_NAME SET MASKING POLICY CRMI_AGG_MP_NAME_MASK;
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN EMAIL SET MASKING POLICY CRMI_AGG_MP_EMAIL_MASK;
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN PHONE SET MASKING POLICY CRMI_AGG_MP_PHONE_MASK;
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN DATE_OF_BIRTH SET MASKING POLICY CRMI_AGG_MP_DOB_MASK;
 
 -- Tag PII vault columns
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FIRST_NAME SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FAMILY_NAME SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN FULL_NAME SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN DATE_OF_BIRTH SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN EMAIL SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN PHONE SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_CUSTOMER_PII MODIFY COLUMN EMPLOYER SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN STREET_ADDRESS SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN CITY SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE CRMI_AGG_DT_ADDRESS_PII MODIFY COLUMN ZIPCODE SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FIRST_NAME SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FAMILY_NAME SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN FULL_NAME SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN EMAIL SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-ALTER TABLE EMPI_AGG_DT_EMPLOYEE_PII MODIFY COLUMN PHONE SET TAG {{ db }}.AAA_DCM.SENSITIVITY_LEVEL = 'restricted';
-
--- ============================================================
--- GDPR RIGHT-TO-ERASURE PROCEDURE
--- ============================================================
-CREATE OR REPLACE PROCEDURE {{ crm_agg }}.CRMI_AGG_SP_ERASE_CUSTOMER_PII(P_CUSTOMER_ID VARCHAR)
-RETURNS VARCHAR
-LANGUAGE SQL
-AS
-$$
-BEGIN
-    UPDATE {{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII
-    SET FIRST_NAME = NULL, FAMILY_NAME = NULL, FULL_NAME = NULL,
-        DATE_OF_BIRTH = NULL, EMAIL = NULL, PHONE = NULL,
-        EMPLOYER = NULL, POSITION = NULL, EMPLOYMENT_TYPE = NULL,
-        PREFERRED_CONTACT_METHOD = NULL
-    WHERE CUSTOMER_ID = :P_CUSTOMER_ID;
-
-    UPDATE {{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII
-    SET STREET_ADDRESS = NULL, CITY = NULL, STATE = NULL, ZIPCODE = NULL
-    WHERE CUSTOMER_ID = :P_CUSTOMER_ID;
-
-    RETURN 'PII erased for customer ' || :P_CUSTOMER_ID;
-END;
-$$;
-
-USE SCHEMA {{ crm_raw }};
 
 -- ============================================================
 -- ALTER TASK RESUME
@@ -1193,171 +552,8 @@ USE SCHEMA {{ crm_raw }};
 -- ============================================================
 
 -- Suspend all root tasks first
-ALTER TASK CRMI_RAW_TK_LOAD_CUSTOMERS SUSPEND;
-ALTER TASK CRMI_RAW_TK_LOAD_ADDRESSES SUSPEND;
-ALTER TASK CRMI_RAW_TK_LOAD_EXPOSED_PERSON SUSPEND;
-ALTER TASK CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS SUSPEND;
-ALTER TASK ACCI_RAW_TK_LOAD_ACCOUNTS SUSPEND;
-ALTER TASK EMPI_RAW_TK_LOAD_EMPLOYEES SUSPEND;
-ALTER TASK EMPI_RAW_TK_LOAD_ASSIGNMENTS SUSPEND;
 
 -- Resume children, then roots
-ALTER TASK CRMI_RAW_TK_CLEANUP_AFTER_LOAD_CUSTOMERS RESUME;
-ALTER TASK CRMI_RAW_TK_LOAD_CUSTOMER_STATUS RESUME;
-ALTER TASK CRMI_RAW_TK_LOAD_CUSTOMERS RESUME;
-
-ALTER TASK CRMI_RAW_TK_CLEANUP_AFTER_LOAD_ADDRESSES RESUME;
-ALTER TASK CRMI_RAW_TK_LOAD_ADDRESSES RESUME;
-
-ALTER TASK CRMI_RAW_TK_CLEANUP_AFTER_LOAD_EXPOSED_PERSON RESUME;
-ALTER TASK CRMI_RAW_TK_LOAD_EXPOSED_PERSON RESUME;
-
-ALTER TASK CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS RESUME;
-
-ALTER TASK ACCI_RAW_TK_CLEANUP_AFTER_LOAD_ACCOUNTS RESUME;
-ALTER TASK ACCI_RAW_TK_LOAD_ACCOUNTS RESUME;
-
-ALTER TASK EMPI_RAW_TK_CLEANUP_AFTER_LOAD_EMPLOYEES RESUME;
-ALTER TASK EMPI_RAW_TK_LOAD_EMPLOYEES RESUME;
-
-ALTER TASK EMPI_RAW_TK_CLEANUP_AFTER_LOAD_ASSIGNMENTS RESUME;
-ALTER TASK EMPI_RAW_TK_LOAD_ASSIGNMENTS RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ ref_raw }};
-
-ALTER TASK REFI_RAW_TK_LOAD_FX_RATES SUSPEND;
-ALTER TASK REFI_RAW_TK_CLEANUP_AFTER_LOAD_FX_RATES RESUME;
-ALTER TASK REFI_RAW_TK_LOAD_FX_RATES RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ pay_raw }};
-
-ALTER TASK PAYI_RAW_TK_LOAD_TRANSACTIONS SUSPEND;
-ALTER TASK ICGI_RAW_TK_LOAD_SWIFT_MESSAGES SUSPEND;
-ALTER TASK PAYI_RAW_TK_CLEANUP_AFTER_LOAD_TRANSACTIONS RESUME;
-ALTER TASK PAYI_RAW_TK_LOAD_TRANSACTIONS RESUME;
-
-ALTER TASK ICGI_RAW_TK_CLEANUP_AFTER_LOAD_SWIFT_MESSAGES RESUME;
-ALTER TASK ICGI_RAW_TK_LOAD_SWIFT_MESSAGES RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ eqt_raw }};
-
-ALTER TASK EQTI_RAW_TK_LOAD_TRADES SUSPEND;
-ALTER TASK EQTI_RAW_TK_CLEANUP_AFTER_LOAD_TRADES RESUME;
-ALTER TASK EQTI_RAW_TK_LOAD_TRADES RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ fii_raw }};
-
-ALTER TASK FIII_RAW_TK_LOAD_TRADES SUSPEND;
-ALTER TASK FIII_RAW_TK_CLEANUP_AFTER_LOAD_TRADES RESUME;
-ALTER TASK FIII_RAW_TK_LOAD_TRADES RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ cmd_raw }};
-
-ALTER TASK CMDI_RAW_TK_LOAD_TRADES SUSPEND;
-ALTER TASK CMDI_RAW_TK_CLEANUP_AFTER_LOAD_TRADES RESUME;
-ALTER TASK CMDI_RAW_TK_LOAD_TRADES RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_raw }};
-
-ALTER TASK LIQI_RAW_TK_LOAD_HQLA_HOLDINGS SUSPEND;
-ALTER TASK LIQI_RAW_TK_LOAD_DEPOSIT_BALANCES SUSPEND;
-ALTER TASK LIQI_RAW_TK_CLEANUP_AFTER_LOAD_HQLA_HOLDINGS RESUME;
-ALTER TASK LIQI_RAW_TK_LOAD_HQLA_HOLDINGS RESUME;
-
-ALTER TASK LIQI_RAW_TK_CLEANUP_AFTER_LOAD_DEPOSIT_BALANCES RESUME;
-ALTER TASK LIQI_RAW_TK_LOAD_DEPOSIT_BALANCES RESUME;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ loa_raw }};
-
-ALTER TASK LOAI_RAW_TK_EXTRACT_MAIL_DATA SUSPEND;
-ALTER TASK LOAI_RAW_TK_FLAT_MAIL_DATA RESUME;
-ALTER TASK LOAI_RAW_TK_EXTRACT_MAIL_DATA RESUME;
-USE DATABASE {{ db }};
-USE SCHEMA AAA_DCM;
-
--- ============================================================
--- GRANTS
--- ============================================================
-
-GRANT USAGE ON DATABASE {{ db }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ cmd_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ eqt_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ fii_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ loa_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ pay_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ ref_agg }} TO ROLE PUBLIC;
-
-GRANT USAGE ON SCHEMA {{ db }}.{{ rep_agg }} TO ROLE PUBLIC;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_agg }};
-
-GRANT SELECT ON TABLE CRMA_AGG_DT_CUSTOMER_360 TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE CRMA_AGG_DT_CUSTOMER_360 TO ROLE PUBLIC;
-
-GRANT SELECT ON VIEW CRMA_AGG_VW_CUSTOMER_360_ENRICHED TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON VIEW CRMA_AGG_VW_CUSTOMER_360_ENRICHED TO ROLE PUBLIC;
-GRANT SELECT ON TABLE CRMI_AGG_DT_CUSTOMER_PII TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE CRMI_AGG_DT_ADDRESS_PII TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE EMPI_AGG_DT_EMPLOYEE_PII TO ROLE ACCOUNTADMIN;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ pay_agg }};
-
-GRANT SELECT ON TABLE PAYA_AGG_DT_TRANSACTION_ANOMALIES TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE PAYA_AGG_DT_TRANSACTION_ANOMALIES TO ROLE PUBLIC;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_agg }};
-
-GRANT SELECT ON TABLE REPP_AGG_DT_PORTFOLIO_PERFORMANCE TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_PORTFOLIO_PERFORMANCE TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_RISK_AGGREGATION TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_RISK_AGGREGATION TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_REGULATORY_REPORTING TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_REGULATORY_REPORTING TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_DATA_QUALITY TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_DATA_QUALITY TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_ANOMALY_ANALYSIS TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_ANOMALY_ANALYSIS TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_HIGH_RISK_PATTERNS TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_HIGH_RISK_PATTERNS TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_CURRENCY_EXPOSURE_CURRENT TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_CURRENCY_EXPOSURE_CURRENT TO ROLE PUBLIC;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_FRTB_CAPITAL_CHARGES TO ROLE ACCOUNTADMIN;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_FRTB_CAPITAL_CHARGES TO ROLE PUBLIC;
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ crm_agg }};
@@ -1379,70 +575,6 @@ GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO R
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
-USE DATABASE {{ db }};
-USE SCHEMA AAA_DCM;
-
-CREATE DATABASE IF NOT EXISTS {{ db }}
-    COMMENT = 'Bank Development Database';
-
-CREATE SCHEMA IF NOT EXISTS {{ cmd_raw }}
-    COMMENT = 'Commodity raw data schema for energy, metals, and agricultural trades';
-
-CREATE SCHEMA IF NOT EXISTS {{ crm_raw }}
-    COMMENT = 'CRM raw data schema for customer/party information and accounts';
-
-CREATE SCHEMA IF NOT EXISTS {{ eqt_raw }}
-    COMMENT = 'Equity trading raw data schema for FIX protocol trades';
-
-CREATE SCHEMA IF NOT EXISTS {{ fii_raw }}
-    COMMENT = 'Fixed Income raw data schema for bonds and interest rate swaps';
-
-CREATE SCHEMA IF NOT EXISTS {{ loa_raw }}
-    COMMENT = 'Loan raw data schema for loan information';
-
-CREATE SCHEMA IF NOT EXISTS {{ pay_raw }}
-    COMMENT = 'Payment raw data schema for transaction information and SWIFT ISO20022 message storage';
-
-CREATE SCHEMA IF NOT EXISTS {{ ref_raw }}
-    COMMENT = 'Reference data schema for FX rates and other lookup tables';
-
-CREATE SCHEMA IF NOT EXISTS {{ rep_raw }}
-    COMMENT = 'Reporting raw data schema for regulatory submissions (FINMA LCR, BCBS239, HQLA holdings, deposit balances)';
-
-CREATE SCHEMA IF NOT EXISTS {{ cmd_agg }}
-    COMMENT = 'Commodity aggregation schema for delta risk and volatility analytics';
-
-CREATE SCHEMA IF NOT EXISTS {{ crm_agg }}
-    COMMENT = 'CRM aggregation data schema for customer/party information';
-
-CREATE SCHEMA IF NOT EXISTS {{ eqt_agg }}
-    COMMENT = 'Equity trading aggregation schema for trade analytics and portfolio positions';
-
-CREATE SCHEMA IF NOT EXISTS {{ fii_agg }}
-    COMMENT = 'Fixed Income aggregation schema for duration, DV01, and credit risk analytics';
-
-CREATE SCHEMA IF NOT EXISTS {{ loa_agg }}
-    COMMENT = 'Loan aggregation schema for loan analytics and reporting';
-
-CREATE SCHEMA IF NOT EXISTS {{ pay_agg }}
-    COMMENT = 'Payment aggregation schema for transaction analytics, anomaly detection, and SWIFT message processing';
-
-CREATE SCHEMA IF NOT EXISTS {{ ref_agg }}
-    COMMENT = 'Reference data aggregation schema for enhanced FX rates and analytics';
-
-CREATE SCHEMA IF NOT EXISTS {{ rep_agg }}
-    COMMENT = 'Reporting schema for raw data, aggregations, and analytics (FINMA LCR, BCBS239, FRTB)';
-
-CREATE WAREHOUSE IF NOT EXISTS MD_TEST_WH
-    WAREHOUSE_SIZE = 'X-SMALL'
-    WAREHOUSE_TYPE = 'STANDARD'
-    RESOURCE_CONSTRAINT = 'STANDARD_GEN_2'
-    AUTO_SUSPEND = 5
-    AUTO_RESUME = true
-    COMMENT = 'Development and testing warehouse - X-SMALL size with auto-suspend for cost optimization';
-
-CREATE TAG IF NOT EXISTS SENSITIVITY_LEVEL
-    COMMENT = 'Data sensitivity classification for privacy and compliance controls. Valid values: "restricted" (highly sensitive financial/PII data requiring strict access controls) | "top_secret" (maximum protection for personal identifiers and addresses). Used for automated masking policies and role-based access control.';
 
 -- ============================================================
 -- DYNAMIC SQL
@@ -1451,36 +583,6 @@ CREATE TAG IF NOT EXISTS SENSITIVITY_LEVEL
 -- ============================================================
 
 USE DATABASE {{ db }};
-USE SCHEMA {{ rep_agg }};
-
-CREATE OR REPLACE VIEW REPA_SV_WEALTH_MANAGEMENT_DETAILED
-COMMENT = 'Detailed wealth management view with customer context (for complex queries requiring joins)'
-AS
-SELECT 
-  p.*,
-  pii.FULL_NAME AS CUSTOMER_NAME,
-  c.COUNTRY AS CUSTOMER_COUNTRY,
-  c.ACCOUNT_TIER AS CUSTOMER_TIER,
-  c.OVERALL_RISK_RATING AS CUSTOMER_RISK_RATING
-FROM REPP_AGG_DT_PORTFOLIO_PERFORMANCE p
-LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
-    ON p.CUSTOMER_ID = c.CUSTOMER_ID
-LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii
-    ON p.CUSTOMER_ID = pii.CUSTOMER_ID;
-
-CREATE OR REPLACE VIEW REPA_SV_PORTFOLIO_PERFORMANCE
-COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (portfolio subset)'
-AS SELECT * FROM REPA_SV_WEALTH_MANAGEMENT_DETAILED;
-
-CREATE OR REPLACE VIEW REPA_SV_CREDIT_RISK_IRB
-COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (credit risk subset)'
-AS SELECT * FROM REPA_SV_WEALTH_MANAGEMENT_DETAILED;
-
-CREATE OR REPLACE VIEW REPA_SV_EQUITY_TRADING
-COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (equity subset)'
-AS SELECT * FROM REPA_SV_WEALTH_MANAGEMENT_DETAILED;
-
-USE DATABASE {{ db }};
 USE SCHEMA {{ crm_agg }};
 
 CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
@@ -1490,1584 +592,25 @@ USE SCHEMA {{ pay_agg }};
 
 CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
 
-SHOW SNOWFLAKE INTELLIGENCES;
-
 USE DATABASE {{ db }};
 USE SCHEMA {{ rep_agg }};
 
 CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
 
-SHOW SNOWFLAKE INTELLIGENCES;
+CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
 
 CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
 
-SHOW SNOWFLAKE INTELLIGENCES;
-
 CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
-
-SHOW SNOWFLAKE INTELLIGENCES;
-
-CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT;
-
-SHOW SNOWFLAKE INTELLIGENCES;
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_agg }};
-
--- ============================================================
--- SEMANTIC VIEWS
--- ============================================================
-
-CREATE OR REPLACE SEMANTIC VIEW CRMA_SV_CUSTOMER_360
-tables (
-  customers AS CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-    PRIMARY KEY (CUSTOMER_ID)
-    COMMENT = 'Customer 360 enriched view with PII from vault (masking policy controlled)',
-  advisors AS EMPA_AGG_VW_ADVISORS
-    PRIMARY KEY (EMPLOYEE_ID)
-    COMMENT = 'Advisor performance and client portfolio metrics'
-)
-
-relationships (
-  customer_to_advisor AS
-    customers (CURRENT_ADVISOR_EMPLOYEE_ID) REFERENCES advisors
-)
-
-facts (
-  customers.CUSTOMER_ID as CUSTOMER_ID comment='Customer identifier | client ID | CIF | customer number | account holder ID | customer code | customer reference',
-  customers.FIRST_NAME as FIRST_NAME comment='First name | given name | forename | personal name | Christian name',
-  customers.FAMILY_NAME as FAMILY_NAME comment='Family name | last name | surname | family surname | last surname',
-  customers.FULL_NAME as FULL_NAME comment='Full name | complete name | customer name | client name | full customer name | PRIMARY identifier for displaying clients in reports and rankings | use for showing "top clients" or "client lists" | human-readable client identifier',
-  customers.DATE_OF_BIRTH as DATE_OF_BIRTH comment='Date of birth | DOB | birth date | birthday | birthdate',
-  customers.ONBOARDING_DATE as ONBOARDING_DATE comment='Onboarding date | customer since | join date | account opening date | relationship start | joined on',
-  customers.REPORTING_CURRENCY as REPORTING_CURRENCY comment='Reporting currency | base currency | home currency | preferred currency | default currency',
-  
-  customers.HAS_ANOMALY as HAS_ANOMALY comment='Anomaly flag | suspicious activity | fraud indicator | unusual pattern | red flag | suspicious flag',
-  
-  customers.EMPLOYER as EMPLOYER comment='Employer | company | organization | workplace | employer name | company name',
-  customers.POSITION as POSITION comment='Job position | job title | role | occupation | professional title | job role',
-  
-  customers.EMAIL as EMAIL comment='Email address | email | contact email | email ID | electronic mail | e-mail',
-  customers.PHONE as PHONE comment='Phone number | telephone | mobile | contact number | phone | cell phone | mobile number',
-  customers.PREFERRED_CONTACT_METHOD as PREFERRED_CONTACT_METHOD comment='Preferred contact method | contact preference | communication preference | contact channel | preferred channel',
-  
-  customers.STREET_ADDRESS as STREET_ADDRESS comment='Street address | residential address | mailing address | physical address | home address | address line',
-  customers.ZIPCODE as ZIPCODE comment='Postal code | ZIP code | postcode | area code | zip | post code',
-  customers.ADDRESS_EFFECTIVE_DATE as ADDRESS_EFFECTIVE_DATE comment='Address effective date | address since | moved on | relocation date | address start date',
-  
-  customers.STATUS_EFFECTIVE_DATE as STATUS_EFFECTIVE_DATE comment='Status effective date | status since | status change date | status start date',
-  
-  customers.TOTAL_ACCOUNTS as TOTAL_ACCOUNTS 
-    WITH SYNONYMS = ('count', 'number', 'total', 'quantity', 'how many', 'number of accounts')
-    comment='Count of accounts. Use for aggregation and "how many accounts" queries',
-  customers.ACCOUNT_TYPES as ACCOUNT_TYPES comment='Account types | product types | account categories | product mix | account products',
-  customers.CURRENCIES as CURRENCIES comment='Currencies used | currency portfolio | multi-currency | currency mix | currencies held',
-  customers.CHECKING_ACCOUNTS as CHECKING_ACCOUNTS comment='Checking accounts | current accounts | transaction accounts | checking products | transactional accounts',
-  customers.SAVINGS_ACCOUNTS as SAVINGS_ACCOUNTS comment='Savings accounts | deposit accounts | savings products | term deposits | savings plans',
-  customers.BUSINESS_ACCOUNTS as BUSINESS_ACCOUNTS comment='Business accounts | commercial accounts | corporate accounts | business banking | SME accounts',
-  customers.INVESTMENT_ACCOUNTS as INVESTMENT_ACCOUNTS comment='Investment accounts | brokerage accounts | trading accounts | securities accounts | investment products',
-  
-  customers.TOTAL_BALANCE as TOTAL_BALANCE 
-    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value', 'balance', 'wealth', 'client balance')
-    comment='Per-customer total balance. Use for individual client AUM or portfolio value lookups',
-  customers.CHECKING_BALANCE as CHECKING_BALANCE comment='Checking balance | current account balance | transaction account balance | liquid funds',
-  customers.SAVINGS_BALANCE as SAVINGS_BALANCE comment='Savings balance | deposit balance | savings account balance | deposit funds',
-  customers.BUSINESS_BALANCE as BUSINESS_BALANCE comment='Business balance | commercial balance | corporate balance | SME balance',
-  customers.INVESTMENT_BALANCE as INVESTMENT_BALANCE comment='Investment balance | brokerage balance | securities balance | portfolio balance | invested assets',
-  customers.MAX_ACCOUNT_BALANCE as MAX_ACCOUNT_BALANCE comment='Maximum balance | highest balance | peak balance | max portfolio value',
-  customers.MIN_ACCOUNT_BALANCE as MIN_ACCOUNT_BALANCE comment='Minimum balance | lowest balance | min portfolio value',
-  customers.AVG_ACCOUNT_BALANCE as AVG_ACCOUNT_BALANCE comment='Average balance | mean balance | typical balance',
-  customers.BALANCE_AS_OF_DATE as BALANCE_AS_OF_DATE comment='Balance as of date | balance date | valuation date | snapshot date',
-  
-  customers.TOTAL_TRANSACTIONS as TOTAL_TRANSACTIONS comment='Total transactions | transaction count | number of transactions | transaction volume | use for ranking by activity level or transaction frequency | use when specifically asked about most active clients or transaction volume | NOT the default for "top clients" (use TOTAL_BALANCE instead)',
-  customers.TOTAL_TRANSACTIONS_ALL_TIME as TOTAL_TRANSACTIONS_ALL_TIME comment='Total transactions all time | lifetime transactions | historical transaction count',
-  customers.LAST_TRANSACTION_DATE as LAST_TRANSACTION_DATE comment='Last transaction date | most recent transaction | latest transaction | last activity date',
-  customers.DAYS_SINCE_LAST_TRANSACTION as DAYS_SINCE_LAST_TRANSACTION comment='Days since last transaction | days inactive | inactivity days | dormancy days',
-  customers.DEBIT_TRANSACTIONS as DEBIT_TRANSACTIONS comment='Debit transactions | withdrawals | outgoing transactions | debit count',
-  customers.CREDIT_TRANSACTIONS as CREDIT_TRANSACTIONS comment='Credit transactions | deposits | incoming transactions | credit count',
-  customers.AVG_MONTHLY_TRANSACTIONS as AVG_MONTHLY_TRANSACTIONS comment='Average monthly transactions | typical monthly activity | avg monthly volume',
-  customers.IS_DORMANT_TRANSACTIONALLY as IS_DORMANT_TRANSACTIONALLY comment='Dormant flag | inactive customer | dormant account | no activity | inactive flag',
-  customers.IS_HIGHLY_ACTIVE as IS_HIGHLY_ACTIVE comment='Highly active flag | active customer | frequent user | high activity',
-  
-  customers.EXPOSED_PERSON_MATCH_TYPE as EXPOSED_PERSON_MATCH_TYPE comment='PEP match type | politically exposed person match | PEP screening result | PEP status | exposed person status',
-  customers.EXPOSED_PERSON_MATCH_ACCURACY_PERCENT as EXPOSED_PERSON_MATCH_ACCURACY_PERCENT comment='PEP match accuracy | match confidence | screening accuracy | match percentage | PEP match score',
-  customers.EXPOSED_PERSON_EXACT_MATCH_NAME as EXPOSED_PERSON_EXACT_MATCH_NAME comment='PEP exact match name | PEP name match | exact PEP hit',
-  customers.EXPOSED_PERSON_FUZZY_MATCH_NAME as EXPOSED_PERSON_FUZZY_MATCH_NAME comment='PEP fuzzy match name | similar PEP name | probable PEP match',
-  customers.EXPOSED_PERSON_EXACT_CATEGORY as EXPOSED_PERSON_EXACT_CATEGORY comment='PEP category | PEP type | exposed person category | PEP classification',
-  customers.EXPOSED_PERSON_EXACT_RISK_LEVEL as EXPOSED_PERSON_EXACT_RISK_LEVEL comment='PEP risk level | exposed person risk | PEP risk category',
-  
-  customers.SANCTIONS_MATCH_TYPE as SANCTIONS_MATCH_TYPE comment='Sanctions match type | watchlist match | sanctions screening result | sanctions status | watchlist status',
-  customers.SANCTIONS_MATCH_ACCURACY_PERCENT as SANCTIONS_MATCH_ACCURACY_PERCENT comment='Sanctions match accuracy | match confidence | screening accuracy | match percentage | sanctions match score',
-  customers.SANCTIONS_EXACT_MATCH_NAME as SANCTIONS_EXACT_MATCH_NAME comment='Sanctions exact match name | watchlist name match | exact sanctions hit',
-  customers.SANCTIONS_FUZZY_MATCH_NAME as SANCTIONS_FUZZY_MATCH_NAME comment='Sanctions fuzzy match name | similar sanctions name | probable sanctions match',
-  customers.SANCTIONS_EXACT_MATCH_COUNTRY as SANCTIONS_EXACT_MATCH_COUNTRY comment='Sanctions country | sanctioned country | watchlist country',
-  
-  customers.OVERALL_EXPOSED_PERSON_RISK as OVERALL_EXPOSED_PERSON_RISK comment='Overall PEP risk | politically exposed person risk | PEP risk level | PEP risk rating | exposed person risk score',
-  customers.OVERALL_SANCTIONS_RISK as OVERALL_SANCTIONS_RISK comment='Overall sanctions risk | watchlist risk | sanctions risk level | sanctions risk rating | sanctions risk score',
-  customers.OVERALL_RISK_RATING as OVERALL_RISK_RATING comment='Overall risk rating | comprehensive risk | total risk | risk assessment | combined risk | aggregate risk',
-  customers.OVERALL_RISK_SCORE as OVERALL_RISK_SCORE comment='Overall risk score | risk number | numerical risk | risk points | risk value | total risk score',
-  customers.REQUIRES_EXPOSED_PERSON_REVIEW as REQUIRES_EXPOSED_PERSON_REVIEW comment='Requires PEP review | needs PEP check | PEP review flag | exposed person review required | PEP review needed',
-  customers.REQUIRES_SANCTIONS_REVIEW as REQUIRES_SANCTIONS_REVIEW comment='Requires sanctions review | needs sanctions check | sanctions review flag | watchlist review required | sanctions review needed',
-  customers.HIGH_RISK_CUSTOMER as HIGH_RISK_CUSTOMER comment='High risk customer | high risk flag | risky customer | elevated risk | risk alert | high-risk indicator',
-  
-  customers.CURRENT_ADVISOR_EMPLOYEE_ID as CURRENT_ADVISOR_EMPLOYEE_ID comment='Current advisor | assigned advisor | relationship manager | advisor ID | employee ID | advisor assignment',
-  customers.ADVISOR_ASSIGNMENT_START_DATE as ADVISOR_ASSIGNMENT_START_DATE comment='Advisor assignment date | assignment start | relationship start | advisor since | assigned since',
-  
-  customers.LAST_UPDATED as LAST_UPDATED comment='Last updated timestamp | refresh timestamp | data freshness | update time | last refresh'
-)
-
-dimensions (
-  customers.COUNTRY AS COUNTRY 
-    WITH SYNONYMS = ('country', 'nation', 'geography', 'location', 'region')
-    COMMENT = 'Country code or name. Primary dimension for geographic grouping. Use with "by country" or "per country" queries'
-    SAMPLE_VALUES ('CHE', 'GBR', 'DEU')
-    IS_ENUM,
-  customers.ACCOUNT_TIER AS ACCOUNT_TIER 
-    WITH SYNONYMS = ('tier', 'service level', 'customer segment', 'membership level')
-    COMMENT = 'Account tier (PLATINUM, GOLD, SILVER, BRONZE). Primary dimension for customer segmentation'
-    SAMPLE_VALUES ('STANDARD', 'SILVER', 'GOLD', 'PLATINUM', 'PREMIUM')
-    IS_ENUM,
-  customers.CURRENT_STATUS AS CURRENT_STATUS 
-    WITH SYNONYMS = ('status', 'active', 'inactive', 'customer status')
-    COMMENT = 'Customer status (ACTIVE, INACTIVE, CLOSED). Use for filtering active customers'
-    SAMPLE_VALUES ('ACTIVE', 'INACTIVE', 'CLOSED')
-    IS_ENUM,
-  customers.RISK_CLASSIFICATION AS RISK_CLASSIFICATION 
-    WITH SYNONYMS = ('risk level', 'risk category', 'risk rating')
-    COMMENT = 'Risk classification (LOW_RISK, MEDIUM_RISK, HIGH_RISK). Use for risk-based grouping'
-    SAMPLE_VALUES ('LOW_RISK', 'MEDIUM_RISK', 'HIGH_RISK')
-    IS_ENUM,
-  
-  customers.CITY AS CITY COMMENT = 'City for geographic analysis',
-  customers.STATE AS STATE COMMENT = 'State/province for regional grouping',
-  customers.EMPLOYMENT_TYPE AS EMPLOYMENT_TYPE COMMENT = 'Employment type for demographic analysis',
-  customers.INCOME_RANGE AS INCOME_RANGE COMMENT = 'Income range for customer segmentation',
-  customers.CREDIT_SCORE_BAND AS CREDIT_SCORE_BAND COMMENT = 'Credit score band for risk grouping',
-  customers.ACTIVE_CUSTOMERS LABELS = (FILTER) AS customers.CURRENT_STATUS = 'ACTIVE'
-    COMMENT = 'Filter to active customers only',
-  customers.HIGH_RISK_ONLY LABELS = (FILTER) AS customers.OVERALL_RISK_RATING IN ('HIGH', 'CRITICAL')
-    COMMENT = 'Filter to HIGH and CRITICAL risk customers',
-  customers.REQUIRES_REVIEW LABELS = (FILTER) AS (customers.REQUIRES_SANCTIONS_REVIEW = TRUE OR customers.REQUIRES_EXPOSED_PERSON_REVIEW = TRUE)
-    COMMENT = 'Filter to customers requiring compliance review'
-)
-
-metrics (
-  customers.CUSTOMER_COUNT AS COUNT(customers.CUSTOMER_ID)
-    WITH SYNONYMS = ('number of customers', 'customer count', 'how many customers', 'total customers')
-    COMMENT = 'Count of customers. DEFAULT metric for counting.
-               EXAMPLES: "How many customers per country?" → COUNT(CUSTOMER_ID) GROUP BY COUNTRY
-                        "Top 10 countries by customer count" → COUNT(CUSTOMER_ID) GROUP BY COUNTRY LIMIT 10
-                        "How many PLATINUM customers?" → COUNT WHERE ACCOUNT_TIER = PLATINUM',
-  customers.TOTAL_BALANCE_SUM AS SUM(customers.TOTAL_BALANCE)
-    WITH SYNONYMS = ('total AUM', 'total assets', 'total wealth', 'aggregate balance', 'sum of balances')
-    COMMENT = 'Sum of all customer balances. Use for wealth/AUM aggregation.
-               EXAMPLES: "Top 10 clients by total AUM" → ORDER BY TOTAL_BALANCE DESC LIMIT 10
-                        "Total AUM by country" → SUM(TOTAL_BALANCE) GROUP BY COUNTRY
-                        "Which tier has highest total assets?" → SUM(TOTAL_BALANCE) GROUP BY ACCOUNT_TIER',
-  customers.AVG_BALANCE AS AVG(customers.TOTAL_BALANCE)
-    WITH SYNONYMS = ('average balance', 'mean balance', 'average AUM')
-    COMMENT = 'Average customer balance. Use for typical customer value.
-               EXAMPLES: "Average balance by country" → AVG(TOTAL_BALANCE) GROUP BY COUNTRY
-                        "Which country has highest average wealth?" → AVG(TOTAL_BALANCE) GROUP BY COUNTRY'
-)
-
-COMMENT = 'Customer 360 intelligence - profiles, risk, compliance (PEP/sanctions), accounts, lifecycle, and advisor assignments.'
-
-AI_SQL_GENERATION 'When ranking customers (top clients, highest value), use TOTAL_BALANCE unless the user explicitly asks about transactions. Always include CUSTOMER_ID in SELECT. For dormancy queries, use IS_DORMANT_TRANSACTIONALLY = TRUE. For high-risk queries, use OVERALL_RISK_RATING IN (''HIGH'', ''CRITICAL'') unless a specific field is named.'
-
-AI_QUESTION_CATEGORIZATION 'Reject questions about individual transaction details (amounts, dates, counterparties) -- those belong to the Compliance Monitoring semantic view. If the user asks about a specific customer by name and the result is masked, explain that PII is protected by masking policies.'
-
-AI_VERIFIED_QUERIES (
-  top_customers_by_aum AS (
-    QUESTION 'Show me top 10 customers by AUM'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.TOTAL_BALANCE, customers.COUNTRY, customers.ACCOUNT_TIER FROM __customers AS customers ORDER BY customers.TOTAL_BALANCE DESC NULLS LAST LIMIT 10'
-  ),
-  customer_count_by_country AS (
-    QUESTION 'How many customers per country?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.COUNTRY, COUNT(customers.CUSTOMER_ID) AS CUSTOMER_COUNT FROM __customers AS customers GROUP BY customers.COUNTRY ORDER BY CUSTOMER_COUNT DESC'
-  ),
-  platinum_customers_switzerland AS (
-    QUESTION 'Show me all PLATINUM customers in Switzerland'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.TOTAL_BALANCE, customers.OVERALL_RISK_RATING FROM __customers AS customers WHERE customers.ACCOUNT_TIER = ''PLATINUM'' AND customers.COUNTRY = ''CHE'' ORDER BY customers.TOTAL_BALANCE DESC NULLS LAST'
-  ),
-  high_risk_customers AS (
-    QUESTION 'Which customers have CRITICAL or HIGH risk rating?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.OVERALL_RISK_RATING, customers.OVERALL_RISK_SCORE, customers.REQUIRES_SANCTIONS_REVIEW, customers.REQUIRES_EXPOSED_PERSON_REVIEW FROM __customers AS customers WHERE customers.OVERALL_RISK_RATING IN (''CRITICAL'', ''HIGH'') ORDER BY customers.OVERALL_RISK_SCORE DESC NULLS LAST'
-  ),
-  pep_review_required AS (
-    QUESTION 'Which customers require PEP review?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.EXPOSED_PERSON_MATCH_TYPE, customers.EXPOSED_PERSON_EXACT_CATEGORY, customers.EXPOSED_PERSON_EXACT_RISK_LEVEL FROM __customers AS customers WHERE customers.REQUIRES_EXPOSED_PERSON_REVIEW = TRUE ORDER BY customers.EXPOSED_PERSON_EXACT_RISK_LEVEL DESC NULLS LAST'
-  ),
-  dormant_customers AS (
-    QUESTION 'Show me dormant customers with no recent transactions'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.DAYS_SINCE_LAST_TRANSACTION, customers.LAST_TRANSACTION_DATE, customers.ACCOUNT_TIER, customers.TOTAL_BALANCE FROM __customers AS customers WHERE customers.IS_DORMANT_TRANSACTIONALLY = TRUE ORDER BY customers.DAYS_SINCE_LAST_TRANSACTION DESC NULLS LAST'
-  ),
-  customer_count_by_tier AS (
-    QUESTION 'How many customers per account tier?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.ACCOUNT_TIER, COUNT(customers.CUSTOMER_ID) AS CUSTOMER_COUNT, SUM(customers.TOTAL_BALANCE) AS TOTAL_AUM FROM __customers AS customers GROUP BY customers.ACCOUNT_TIER ORDER BY TOTAL_AUM DESC NULLS LAST'
-  ),
-  sanctions_review_required AS (
-    QUESTION 'Which customers require sanctions review?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT customers.CUSTOMER_ID, customers.FULL_NAME, customers.SANCTIONS_MATCH_TYPE, customers.SANCTIONS_EXACT_MATCH_NAME, customers.SANCTIONS_EXACT_MATCH_COUNTRY, customers.OVERALL_SANCTIONS_RISK FROM __customers AS customers WHERE customers.REQUIRES_SANCTIONS_REVIEW = TRUE ORDER BY customers.OVERALL_SANCTIONS_RISK DESC NULLS LAST'
-  )
-);
-
-GRANT SELECT ON TABLE CRMA_AGG_DT_CUSTOMER_360 TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE CRMA_AGG_DT_CUSTOMER_360 TO ROLE PUBLIC;
-
-SELECT 'CRMA_SV_CUSTOMER_360 created successfully! Consolidated 4 CRM views into 1 unified customer 360° view.' AS STATUS;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ crm_agg }};
-
-CREATE OR REPLACE SEMANTIC VIEW EMPA_SV_EMPLOYEE_ADVISOR
-tables (
-  advisors AS EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED
-    PRIMARY KEY (EMPLOYEE_ID)
-    COMMENT = 'Advisor performance with PII from employee vault (masking policy controlled)',
-  customers AS CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-    PRIMARY KEY (CUSTOMER_ID)
-    COMMENT = 'Customer 360 enriched with PII from vault'
-)
-
-relationships (
-  advisor_to_customers AS
-    customers (CURRENT_ADVISOR_EMPLOYEE_ID) REFERENCES advisors
-)
-
-facts (
-  advisors.EMPLOYEE_ID as EMPLOYEE_ID comment='Employee ID | advisor ID | employee number | staff ID | advisor code | employee identifier',
-  advisors.ADVISOR_NAME as ADVISOR_NAME comment='Advisor full name | advisor name | employee name | complete name',
-  advisors.TEAM_LEADER_NAME as TEAM_LEADER_NAME comment='Team leader name | manager name | supervisor name',
-  advisors.HIRE_DATE as HIRE_DATE comment='Hire date | start date | employment start | join date | onboarding date | employment date',
-  advisors.TENURE_DAYS as TENURE_DAYS comment='Tenure in days | days employed | employment duration | service length',
-  advisors.TEAM_LEADER_ID as TEAM_LEADER_ID comment='Team leader ID | manager ID | supervisor ID | reports to ID',
-  advisors.LANGUAGES_SPOKEN as LANGUAGES_SPOKEN comment='Languages spoken | language skills | multilingual | languages | language proficiency',
-  advisors.TOTAL_CLIENTS as TOTAL_CLIENTS comment='Total clients | number of clients | client count | assigned clients | customer portfolio',
-  advisors.TOTAL_PORTFOLIO_VALUE as TOTAL_PORTFOLIO_VALUE
-    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value', 'total AUM')
-    comment='Total portfolio value managed by advisor. Primary metric for advisor performance ranking',
-  advisors.AVG_CLIENT_BALANCE as AVG_CLIENT_BALANCE comment='Average client balance | mean client balance | typical client value | avg portfolio size',
-  advisors.MAX_CLIENT_BALANCE as MAX_CLIENT_BALANCE comment='Maximum client balance | highest client balance | largest client value',
-  advisors.HIGH_RISK_CLIENTS as HIGH_RISK_CLIENTS comment='High risk clients | risky customers | high risk portfolio | elevated risk clients',
-  advisors.HIGH_RISK_PERCENTAGE as HIGH_RISK_PERCENTAGE comment='High risk percentage | risk ratio | high risk proportion',
-  advisors.TOTAL_CLIENT_ACCOUNTS as TOTAL_CLIENT_ACCOUNTS comment='Total client accounts | account count | managed accounts | accounts under management',
-  advisors.AVG_ACCOUNTS_PER_CLIENT as AVG_ACCOUNTS_PER_CLIENT comment='Average accounts per client | accounts per customer | avg account count',
-  advisors.TOTAL_TRANSACTIONS as TOTAL_TRANSACTIONS comment='Total transactions | transaction count | all transactions | transaction volume',
-  advisors.AVG_TRANSACTIONS_PER_CLIENT as AVG_TRANSACTIONS_PER_CLIENT comment='Average transactions per client | txn per customer | activity rate',
-  advisors.CRITICAL_RISK_CLIENTS as CRITICAL_RISK_CLIENTS comment='Critical risk clients | highest risk clients | critical risk count',
-  advisors.CAPACITY_UTILIZATION_PCT as CAPACITY_UTILIZATION_PCT comment='Capacity utilization | workload percentage | capacity used | utilization rate'
-)
-
-dimensions (
-  advisors.COUNTRY AS COUNTRY 
-    WITH SYNONYMS = ('country', 'nation', 'location', 'geography')
-    COMMENT = 'Country where advisor is located. Use for geographic analysis and regional grouping',
-  advisors.REGION AS REGION 
-    WITH SYNONYMS = ('region', 'territory', 'area', 'geographic region')
-    COMMENT = 'Geographic region for regional performance analysis',
-  advisors.EMPLOYMENT_STATUS AS EMPLOYMENT_STATUS 
-    WITH SYNONYMS = ('status', 'active', 'employment status', 'work status')
-    COMMENT = 'Employment status (ACTIVE, INACTIVE). Use for filtering active advisors',
-  advisors.PERFORMANCE_RATING AS PERFORMANCE_RATING 
-    WITH SYNONYMS = ('rating', 'performance', 'performance rating', 'advisor rating')
-    COMMENT = 'Performance rating. Use for identifying top performers',
-  advisors.WORKLOAD_STATUS AS WORKLOAD_STATUS 
-    WITH SYNONYMS = ('workload', 'capacity status', 'load status')
-    COMMENT = 'Workload status (e.g. OVERLOADED, BALANCED). Use for capacity planning',
-  advisors.HIGH_RISK_CLIENTS_CLASSIFICATION AS HIGH_RISK_CLIENTS_CLASSIFICATION 
-    COMMENT = 'Risk classification bucket for risk-based advisor analysis'
-)
-
-metrics (
-  advisors.ADVISOR_COUNT AS COUNT(advisors.EMPLOYEE_ID)
-    WITH SYNONYMS = ('number of advisors', 'advisor count', 'how many advisors', 'total advisors', 'headcount')
-    COMMENT = 'Count of advisors.
-               EXAMPLES: "How many advisors by region?" → COUNT(EMPLOYEE_ID) GROUP BY REGION',
-  advisors.TOTAL_PORTFOLIO_SUM AS SUM(advisors.TOTAL_PORTFOLIO_VALUE)
-    WITH SYNONYMS = ('total advisor AUM', 'total managed assets', 'sum of advisor AUM', 'aggregate advisor portfolio')
-    COMMENT = 'Sum of all portfolio value managed by advisors. DEFAULT for advisor rankings.
-               EXAMPLES: "Show me top 10 advisors by AUM" → ORDER BY TOTAL_PORTFOLIO_VALUE DESC LIMIT 10',
-  advisors.AVG_PORTFOLIO AS AVG(advisors.TOTAL_PORTFOLIO_VALUE)
-    WITH SYNONYMS = ('average AUM', 'mean AUM', 'typical AUM', 'avg assets per advisor')
-    COMMENT = 'Average portfolio value per advisor. Use for productivity benchmarking.',
-  advisors.TOTAL_CLIENTS_SUM AS SUM(advisors.TOTAL_CLIENTS)
-    WITH SYNONYMS = ('total clients', 'sum of clients', 'all clients', 'total customer count')
-    COMMENT = 'Total number of clients managed by all advisors.',
-  advisors.AVG_CAPACITY AS AVG(advisors.CAPACITY_UTILIZATION_PCT)
-    WITH SYNONYMS = ('average utilization', 'mean capacity', 'typical utilization')
-    COMMENT = 'Average capacity utilization. Use for workforce planning.'
-);
-
-SELECT 'EMPA_SV_EMPLOYEE_ADVISOR created successfully! Advisor relationship management view ready.' AS STATUS;
 
 -- ============================================================
 -- HR EMPLOYEE SEMANTIC VIEW (raw-table based, always has data)
 -- ============================================================
 
-CREATE OR REPLACE SEMANTIC VIEW EMPA_SV_HR_EMPLOYEE
+-- ------------------------------------------------------------
+-- LCR scenarios, variance drivers and events (REQ-ENG-05, REQ-ANL-03, REQ-UI-03)
+-- ------------------------------------------------------------
 
-TABLES (
-  EMPLOYEES AS (
-    SELECT
-      e.EMPLOYEE_ID,
-      pii.FULL_NAME,
-      pii.FIRST_NAME,
-      pii.FAMILY_NAME,
-      pii.EMAIL,
-      pii.PHONE,
-      pii.DATE_OF_BIRTH,
-      e.HIRE_DATE,
-      DATEDIFF(DAY, e.HIRE_DATE, CURRENT_DATE()) AS TENURE_DAYS,
-      ROUND(DATEDIFF(DAY, e.HIRE_DATE, CURRENT_DATE()) / 365.25, 1) AS TENURE_YEARS,
-      e.EMPLOYMENT_STATUS,
-      e.COUNTRY,
-      e.OFFICE_LOCATION,
-      e.REGION,
-      e.POSITION_LEVEL,
-      e.MANAGER_EMPLOYEE_ID,
-      e.PERFORMANCE_RATING,
-      e.LANGUAGES_SPOKEN,
-      e.CERTIFICATIONS
-    FROM {{ db }}.{{ crm_raw }}.EMPI_RAW_TB_EMPLOYEE e
-    LEFT JOIN {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII pii
-      ON e.EMPLOYEE_ID = pii.EMPLOYEE_ID
-  )
-  PRIMARY KEY (EMPLOYEE_ID)
-  COMMENT = 'HR Employee master data with PII from vault. Covers all staff: advisors, team leaders, super team leaders.'
-)
-
-FACTS (
-  EMPLOYEES.EMPLOYEE_ID AS EMPLOYEE_ID
-    COMMENT = 'Employee identifier | staff ID | employee number | advisor ID | personnel number',
-  EMPLOYEES.FULL_NAME AS FULL_NAME
-    COMMENT = 'Full name | employee name | staff name | complete name',
-  EMPLOYEES.FIRST_NAME AS FIRST_NAME
-    COMMENT = 'First name | given name | forename',
-  EMPLOYEES.FAMILY_NAME AS FAMILY_NAME
-    COMMENT = 'Family name | last name | surname',
-  EMPLOYEES.EMAIL AS EMAIL
-    COMMENT = 'Email address | work email | contact email',
-  EMPLOYEES.PHONE AS PHONE
-    COMMENT = 'Phone number | telephone | mobile | contact number',
-  EMPLOYEES.DATE_OF_BIRTH AS DATE_OF_BIRTH
-    COMMENT = 'Date of birth | DOB | birthday',
-  EMPLOYEES.HIRE_DATE AS HIRE_DATE
-    COMMENT = 'Hire date | start date | employment start | join date | onboarding date',
-  EMPLOYEES.TENURE_DAYS AS TENURE_DAYS
-    COMMENT = 'Tenure in days | days employed | service length | employment duration',
-  EMPLOYEES.TENURE_YEARS AS TENURE_YEARS
-    COMMENT = 'Tenure in years | years employed | years of service',
-  EMPLOYEES.MANAGER_EMPLOYEE_ID AS MANAGER_EMPLOYEE_ID
-    COMMENT = 'Manager ID | reports to | supervisor ID | team leader ID | boss',
-  EMPLOYEES.LANGUAGES_SPOKEN AS LANGUAGES_SPOKEN
-    COMMENT = 'Languages spoken | language skills | multilingual | language proficiency',
-  EMPLOYEES.CERTIFICATIONS AS CERTIFICATIONS
-    COMMENT = 'Certifications | qualifications | credentials | professional certifications',
-  EMPLOYEES.PERFORMANCE_RATING AS PERFORMANCE_RATING
-    COMMENT = 'Performance rating value | rating score | performance score | appraisal score'
-)
-
-DIMENSIONS (
-  EMPLOYEES.POSITION_LEVEL AS POSITION_LEVEL
-    WITH SYNONYMS = ('role', 'job title', 'position', 'level', 'job level', 'rank')
-    COMMENT = 'Position level: SUPER_TEAM_LEADER, TEAM_LEADER, CLIENT_ADVISOR. Primary hierarchy dimension'
-    SAMPLE_VALUES ('SUPER_TEAM_LEADER', 'TEAM_LEADER', 'CLIENT_ADVISOR')
-    IS_ENUM,
-  EMPLOYEES.COUNTRY AS COUNTRY
-    WITH SYNONYMS = ('country', 'nation', 'location', 'geography')
-    COMMENT = 'Country where employee is based. Use for geographic headcount analysis',
-  EMPLOYEES.OFFICE_LOCATION AS OFFICE_LOCATION
-    WITH SYNONYMS = ('office', 'branch', 'site', 'workplace', 'location')
-    COMMENT = 'Office location or branch. Use for office-level headcount and capacity planning',
-  EMPLOYEES.REGION AS REGION
-    WITH SYNONYMS = ('region', 'territory', 'area', 'geographic region')
-    COMMENT = 'Geographic region for regional grouping',
-  EMPLOYEES.EMPLOYMENT_STATUS AS EMPLOYMENT_STATUS
-    WITH SYNONYMS = ('status', 'active', 'inactive', 'employment status', 'work status')
-    COMMENT = 'Employment status (ACTIVE, INACTIVE). Use for filtering active staff'
-    SAMPLE_VALUES ('ACTIVE', 'INACTIVE')
-    IS_ENUM,
-  EMPLOYEES.ACTIVE_STAFF LABELS = (FILTER) AS EMPLOYEES.EMPLOYMENT_STATUS = 'ACTIVE'
-    COMMENT = 'Filter to active employees only'
-)
-
-METRICS (
-  EMPLOYEES.EMPLOYEE_COUNT AS COUNT(EMPLOYEES.EMPLOYEE_ID)
-    WITH SYNONYMS = ('headcount', 'staff count', 'how many employees', 'workforce size', 'number of employees', 'total employees', 'team size', 'number of staff')
-    COMMENT = 'Count of employees. DEFAULT metric for headcount questions.',
-  EMPLOYEES.AVG_TENURE AS AVG(EMPLOYEES.TENURE_YEARS)
-    WITH SYNONYMS = ('average tenure', 'mean tenure', 'avg years of service', 'average experience')
-    COMMENT = 'Average tenure in years across employees'
-)
-
-COMMENT = 'HR Employee Intelligence - workforce headcount, org structure, tenure, offices, regions, performance, and certifications.'
-
-AI_SQL_GENERATION 'For headcount queries, use EMPLOYEE_COUNT metric. Filter EMPLOYMENT_STATUS = ''ACTIVE'' by default unless the user asks about all staff or inactive employees. For \"team leaders\", filter POSITION_LEVEL = ''TEAM_LEADER''. For managers, use POSITION_LEVEL IN (''TEAM_LEADER'', ''SUPER_TEAM_LEADER'').'
-
-AI_QUESTION_CATEGORIZATION 'Reject questions about client portfolios, AUM, or transactions -- those belong to other semantic views. If asked about advisor-client relationships or advisor AUM, redirect to the Employee Advisor semantic view.'
-
-AI_VERIFIED_QUERIES (
-  headcount_total AS (
-    QUESTION 'How many employees do we have?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT COUNT(EMPLOYEES.EMPLOYEE_ID) AS EMPLOYEE_COUNT FROM __EMPLOYEES AS EMPLOYEES WHERE EMPLOYEES.EMPLOYMENT_STATUS = ''ACTIVE'''
-  ),
-  headcount_by_region AS (
-    QUESTION 'Show me headcount by region'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT EMPLOYEES.REGION, COUNT(EMPLOYEES.EMPLOYEE_ID) AS EMPLOYEE_COUNT FROM __EMPLOYEES AS EMPLOYEES WHERE EMPLOYEES.EMPLOYMENT_STATUS = ''ACTIVE'' GROUP BY EMPLOYEES.REGION ORDER BY EMPLOYEE_COUNT DESC'
-  ),
-  avg_tenure_by_position AS (
-    QUESTION 'Average tenure by position level'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT EMPLOYEES.POSITION_LEVEL, COUNT(EMPLOYEES.EMPLOYEE_ID) AS EMPLOYEE_COUNT, AVG(EMPLOYEES.TENURE_YEARS) AS AVG_TENURE_YEARS FROM __EMPLOYEES AS EMPLOYEES WHERE EMPLOYEES.EMPLOYMENT_STATUS = ''ACTIVE'' GROUP BY EMPLOYEES.POSITION_LEVEL ORDER BY AVG_TENURE_YEARS DESC NULLS LAST'
-  )
-);
-
-SELECT 'EMPA_SV_HR_EMPLOYEE created successfully! HR Employee Intelligence view ready.' AS STATUS;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ pay_agg }};
-
-CREATE OR REPLACE SEMANTIC VIEW PAYA_SV_COMPLIANCE_MONITORING
-tables (
-  transactions AS PAYA_AGG_DT_TRANSACTION_ANOMALIES
-    PRIMARY KEY (TRANSACTION_ID)
-    COMMENT = 'Transaction anomaly detection and compliance monitoring',
-  customers AS {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-    PRIMARY KEY (CUSTOMER_ID)
-    COMMENT = 'Customer profile and risk data for compliance context'
-)
-
-relationships (
-  transaction_to_customer AS
-    transactions (CUSTOMER_ID) REFERENCES customers
-)
-
-facts (
-  transactions.TRANSACTION_ID as TRANSACTION_ID comment='Transaction ID | transaction number | payment ID | txn ID',
-  transactions.ACCOUNT_ID as ACCOUNT_ID comment='Account ID | account number',
-  transactions.CUSTOMER_ID as CUSTOMER_ID comment='Customer ID | client ID',
-  transactions.BOOKING_DATE as BOOKING_DATE comment='Booking date | posting date | transaction date',
-  transactions.VALUE_DATE as VALUE_DATE comment='Value date | settlement date',
-  transactions.AMOUNT as AMOUNT comment='Transaction amount | payment amount | txn amount',
-  transactions.COUNTERPARTY_ACCOUNT as COUNTERPARTY_ACCOUNT 
-    WITH SYNONYMS = ('counterparty', 'beneficiary', 'recipient', 'payee', 'beneficiary account', 'recipient account')
-    comment='Counterparty account number. Use for filtering by beneficiary or recipient',
-  transactions.DESCRIPTION as DESCRIPTION 
-    WITH SYNONYMS = ('description', 'narrative', 'details', 'payment description', 'transaction details', 'memo')
-    comment='Transaction description. Supports text search for finding transactions by description content',
-  
-  transactions.CUSTOMER_TOTAL_TRANSACTIONS as CUSTOMER_TOTAL_TRANSACTIONS comment='Customer total transactions | transaction count | total txns',
-  transactions.AVG_TRANSACTION_AMOUNT as AVG_TRANSACTION_AMOUNT comment='Average transaction amount | typical amount | mean amount',
-  transactions.MEDIAN_TRANSACTION_AMOUNT as MEDIAN_TRANSACTION_AMOUNT comment='Median transaction amount | middle amount',
-  transactions.AVG_DAILY_TRANSACTION_COUNT as AVG_DAILY_TRANSACTION_COUNT comment='Average daily transactions | daily txn count',
-  
-  transactions.AMOUNT_ANOMALY_SCORE as AMOUNT_ANOMALY_SCORE comment='Amount anomaly score | unusual amount score',
-  transactions.TIMING_ANOMALY_SCORE as TIMING_ANOMALY_SCORE comment='Timing anomaly score | unusual time score',
-  
-  transactions.IS_LARGE_TRANSACTION as IS_LARGE_TRANSACTION comment='Large transaction flag | high value | big amount',
-  transactions.IS_UNUSUAL_WEEKEND_TRANSACTION as IS_UNUSUAL_WEEKEND_TRANSACTION comment='Weekend transaction flag | Saturday Sunday | unusual timing',
-  transactions.IS_OFF_HOURS_TRANSACTION as IS_OFF_HOURS_TRANSACTION comment='Off hours transaction | late night | unusual time',
-  transactions.IS_DELAYED_SETTLEMENT as IS_DELAYED_SETTLEMENT comment='Delayed settlement flag | late settlement',
-  transactions.IS_BACKDATED_SETTLEMENT as IS_BACKDATED_SETTLEMENT comment='Backdated settlement | backdated value date',
-  
-  transactions.COMPOSITE_ANOMALY_SCORE as COMPOSITE_ANOMALY_SCORE comment='Composite anomaly score | overall risk score | total anomaly score',
-  transactions.REQUIRES_IMMEDIATE_REVIEW as REQUIRES_IMMEDIATE_REVIEW comment='Requires immediate review | urgent review | critical flag',
-  transactions.REQUIRES_ENHANCED_MONITORING as REQUIRES_ENHANCED_MONITORING comment='Requires enhanced monitoring | heightened scrutiny | watch list',
-  
-  transactions.TRANSACTIONS_LAST_24H as TRANSACTIONS_LAST_24H comment='Transactions last 24 hours | daily transactions',
-  transactions.TRANSACTIONS_LAST_7D as TRANSACTIONS_LAST_7D comment='Transactions last 7 days | weekly transactions',
-  
-  transactions.TRANSACTION_HOUR as TRANSACTION_HOUR comment='Transaction hour | hour of day | time',
-  transactions.SETTLEMENT_DAYS as SETTLEMENT_DAYS comment='Settlement days | days to settle',
-  
-  transactions.ANOMALY_ANALYSIS_TIMESTAMP as ANOMALY_ANALYSIS_TIMESTAMP comment='Analysis timestamp | analyzed at | detection time'
-)
-
-dimensions (
-  transactions.OVERALL_ANOMALY_CLASSIFICATION AS OVERALL_ANOMALY_CLASSIFICATION 
-    WITH SYNONYMS = ('risk level', 'anomaly level', 'classification', 'severity', 'risk category')
-    COMMENT = 'Overall anomaly classification (CRITICAL, HIGH, MODERATE, LOW). Primary dimension for risk-based filtering and grouping'
-    SAMPLE_VALUES ('CRITICAL', 'HIGH', 'MODERATE', 'LOW')
-    IS_ENUM,
-  transactions.CURRENCY AS CURRENCY 
-    WITH SYNONYMS = ('currency', 'currency code', 'payment currency', 'transaction currency')
-    COMMENT = 'Transaction currency. Use for currency-based analysis and reporting',
-  
-  transactions.AMOUNT_ANOMALY_LEVEL AS AMOUNT_ANOMALY_LEVEL 
-    WITH SYNONYMS = ('amount risk', 'amount anomaly', 'unusual amount')
-    COMMENT = 'Amount anomaly level. Use for filtering transactions with unusual amounts'
-    SAMPLE_VALUES ('CRITICAL', 'HIGH', 'MODERATE', 'LOW')
-    IS_ENUM,
-  transactions.TIMING_ANOMALY_LEVEL AS TIMING_ANOMALY_LEVEL 
-    WITH SYNONYMS = ('timing risk', 'timing anomaly', 'unusual timing')
-    COMMENT = 'Timing anomaly level. Use for filtering transactions with unusual timing patterns'
-    SAMPLE_VALUES ('CRITICAL', 'HIGH', 'MODERATE', 'LOW')
-    IS_ENUM,
-  transactions.VELOCITY_ANOMALY_LEVEL AS VELOCITY_ANOMALY_LEVEL 
-    WITH SYNONYMS = ('velocity risk', 'frequency anomaly', 'velocity anomaly')
-    COMMENT = 'Velocity anomaly level. Use for filtering transactions with unusual frequency patterns',
-  transactions.TRANSACTION_DAYOFWEEK AS TRANSACTION_DAYOFWEEK 
-    COMMENT = 'Day of week for temporal analysis',
-  transactions.CRITICAL_AND_HIGH LABELS = (FILTER) AS transactions.OVERALL_ANOMALY_CLASSIFICATION IN ('CRITICAL', 'HIGH')
-    COMMENT = 'Filter to CRITICAL and HIGH anomaly transactions',
-  transactions.REQUIRES_IMMEDIATE LABELS = (FILTER) AS transactions.REQUIRES_IMMEDIATE_REVIEW = TRUE
-    COMMENT = 'Filter to transactions requiring immediate compliance review'
-)
-
-metrics (
-  transactions.TRANSACTION_COUNT AS COUNT(transactions.TRANSACTION_ID)
-    WITH SYNONYMS = ('number of transactions', 'transaction count', 'how many transactions', 'total transactions', 'txn count')
-    COMMENT = 'Count of transactions. Use for "how many transactions" queries',
-  transactions.TOTAL_AMOUNT AS SUM(transactions.AMOUNT)
-    WITH SYNONYMS = ('total amount', 'sum of amounts', 'total value', 'aggregate amount')
-    COMMENT = 'Sum of all transaction amounts. Use for total transaction value calculations',
-  transactions.AVG_AMOUNT AS AVG(transactions.AMOUNT)
-    WITH SYNONYMS = ('average amount', 'mean amount', 'typical amount', 'avg transaction size')
-    COMMENT = 'Average transaction amount. Use for typical transaction size analysis',
-  transactions.HIGH_RISK_COUNT AS COUNT(CASE WHEN transactions.OVERALL_ANOMALY_CLASSIFICATION IN ('HIGH', 'CRITICAL') THEN 1 END)
-    WITH SYNONYMS = ('high risk transactions', 'critical transactions', 'number of high risk', 'high risk count')
-    COMMENT = 'Count of HIGH and CRITICAL anomaly transactions. Use for risk concentration analysis'
-)
-
-COMMENT = 'AML transaction monitoring - anomaly detection (amount, timing, velocity), compliance flags, and investigation prioritization.'
-
-AI_SQL_GENERATION 'For date-based queries, filter on BOOKING_DATE. For "recent" or "last N days" queries, use BOOKING_DATE >= DATEADD(DAY, -N, CURRENT_DATE()). When counting anomalies, use OVERALL_ANOMALY_CLASSIFICATION as the grouping dimension. For "high risk" transactions, filter OVERALL_ANOMALY_CLASSIFICATION IN (''CRITICAL'', ''HIGH'').'
-
-AI_QUESTION_CATEGORIZATION 'Reject questions about customer demographics, addresses, or account tier -- those belong to the Customer 360 semantic view. If asked about sanctions list matches or PEP status, explain that customer-level screening is in Customer 360; this view covers transaction-level anomalies.'
-
-AI_VERIFIED_QUERIES (
-  critical_anomalies_30d AS (
-    QUESTION 'Show me CRITICAL and HIGH anomaly transactions in the last 30 days'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT transactions.TRANSACTION_ID, transactions.CUSTOMER_ID, transactions.BOOKING_DATE, transactions.AMOUNT, transactions.CURRENCY, transactions.OVERALL_ANOMALY_CLASSIFICATION, transactions.COMPOSITE_ANOMALY_SCORE FROM __transactions AS transactions WHERE transactions.OVERALL_ANOMALY_CLASSIFICATION IN (''CRITICAL'', ''HIGH'') AND transactions.BOOKING_DATE >= DATEADD(DAY, -30, CURRENT_DATE()) ORDER BY transactions.COMPOSITE_ANOMALY_SCORE DESC NULLS LAST'
-  ),
-  customers_multiple_anomalies AS (
-    QUESTION 'Which customers have multiple HIGH or CRITICAL anomaly transactions?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT transactions.CUSTOMER_ID, COUNT(transactions.TRANSACTION_ID) AS ANOMALY_COUNT, SUM(transactions.AMOUNT) AS TOTAL_ANOMALOUS_AMOUNT FROM __transactions AS transactions WHERE transactions.OVERALL_ANOMALY_CLASSIFICATION IN (''CRITICAL'', ''HIGH'') GROUP BY transactions.CUSTOMER_ID HAVING COUNT(transactions.TRANSACTION_ID) > 1 ORDER BY ANOMALY_COUNT DESC'
-  ),
-  large_offhours AS (
-    QUESTION 'Show me large transactions with off-hours timing'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT transactions.TRANSACTION_ID, transactions.CUSTOMER_ID, transactions.BOOKING_DATE, transactions.AMOUNT, transactions.CURRENCY, transactions.TRANSACTION_HOUR, transactions.COMPOSITE_ANOMALY_SCORE FROM __transactions AS transactions WHERE transactions.IS_LARGE_TRANSACTION = TRUE AND transactions.IS_OFF_HOURS_TRANSACTION = TRUE ORDER BY transactions.AMOUNT DESC NULLS LAST'
-  ),
-  anomaly_count_by_classification AS (
-    QUESTION 'How many transactions per anomaly classification?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT transactions.OVERALL_ANOMALY_CLASSIFICATION, COUNT(transactions.TRANSACTION_ID) AS TRANSACTION_COUNT, SUM(transactions.AMOUNT) AS TOTAL_AMOUNT FROM __transactions AS transactions GROUP BY transactions.OVERALL_ANOMALY_CLASSIFICATION ORDER BY TRANSACTION_COUNT DESC'
-  ),
-  top_anomaly_customers AS (
-    QUESTION 'Top 10 customers by composite anomaly score'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT transactions.CUSTOMER_ID, MAX(transactions.COMPOSITE_ANOMALY_SCORE) AS MAX_ANOMALY_SCORE, COUNT(transactions.TRANSACTION_ID) AS TRANSACTION_COUNT FROM __transactions AS transactions GROUP BY transactions.CUSTOMER_ID ORDER BY MAX_ANOMALY_SCORE DESC NULLS LAST LIMIT 10'
-  )
-);
-
-GRANT SELECT ON TABLE PAYA_AGG_DT_TRANSACTION_ANOMALIES TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE PAYA_AGG_DT_TRANSACTION_ANOMALIES TO ROLE PUBLIC;
-
-SELECT 'PAYA_SV_COMPLIANCE_MONITORING semantic view created successfully! AML transaction monitoring ready. (Sanctions/SWIFT to be added when schemas available)' AS STATUS;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_agg }};
-
-CREATE OR REPLACE SEMANTIC VIEW REPA_SV_WEALTH_MANAGEMENT
-tables (
-  portfolio AS REPP_AGG_DT_PORTFOLIO_PERFORMANCE
-    PRIMARY KEY (ACCOUNT_ID)
-    COMMENT = 'Portfolio performance metrics and asset allocation',
-  customers AS {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-    PRIMARY KEY (CUSTOMER_ID)
-    COMMENT = 'Customer profile and demographic data'
-)
-
-relationships (
-  portfolio_to_customer AS
-    portfolio (CUSTOMER_ID) REFERENCES customers
-)
-
-facts (
-  portfolio.ACCOUNT_ID as ACCOUNT_ID comment='Account ID | portfolio account | account number',
-  portfolio.CUSTOMER_ID as CUSTOMER_ID comment='Customer ID | client ID | customer identifier',
-  
-  portfolio.MEASUREMENT_PERIOD_START as MEASUREMENT_PERIOD_START comment='Period start | measurement start | reporting period start',
-  portfolio.MEASUREMENT_PERIOD_END as MEASUREMENT_PERIOD_END comment='Period end | measurement end | reporting period end',
-  portfolio.DAYS_IN_PERIOD as DAYS_IN_PERIOD comment='Days in period | period length | measurement days',
-  
-  portfolio.CASH_STARTING_BALANCE as CASH_STARTING_BALANCE comment='Cash starting balance | opening cash | initial cash',
-  portfolio.CASH_ENDING_BALANCE as CASH_ENDING_BALANCE comment='Cash ending balance | closing cash | final cash',
-  portfolio.CASH_DEPOSITS as CASH_DEPOSITS comment='Cash deposits | cash inflows | deposits',
-  portfolio.CASH_WITHDRAWALS as CASH_WITHDRAWALS comment='Cash withdrawals | cash outflows | withdrawals',
-  portfolio.CASH_NET_FLOW as CASH_NET_FLOW comment='Net cash flow | cash flow | deposits minus withdrawals',
-  portfolio.CASH_TWR_PERCENTAGE as CASH_TWR_PERCENTAGE comment='Cash time weighted return | cash TWR | cash return',
-  portfolio.CURRENT_CASH_VALUE_CHF as CURRENT_CASH_VALUE_CHF comment='Current cash value | cash position | liquid assets',
-  
-  portfolio.EQUITY_TRADES_COUNT as EQUITY_TRADES_COUNT comment='Equity trades | stock trades | equity transactions',
-  portfolio.EQUITY_BUY_TRADES as EQUITY_BUY_TRADES comment='Equity buy trades | stock purchases',
-  portfolio.EQUITY_SELL_TRADES as EQUITY_SELL_TRADES comment='Equity sell trades | stock sales',
-  portfolio.EQUITY_TOTAL_INVESTED_CHF as EQUITY_TOTAL_INVESTED_CHF comment='Equity invested | equity capital | stock investment',
-  portfolio.EQUITY_REALIZED_PL_CHF as EQUITY_REALIZED_PL_CHF comment='Equity realized PL | equity profit loss | stock gains',
-  portfolio.EQUITY_COMMISSION_CHF as EQUITY_COMMISSION_CHF comment='Equity commission | trading fees | transaction costs',
-  portfolio.EQUITY_NET_RETURN_CHF as EQUITY_NET_RETURN_CHF comment='Equity net return | equity gain | net equity profit',
-  portfolio.EQUITY_RETURN_PERCENTAGE as EQUITY_RETURN_PERCENTAGE comment='Equity return percentage | stock return | equity performance',
-  portfolio.CURRENT_EQUITY_POSITIONS as CURRENT_EQUITY_POSITIONS comment='Current equity positions | number of stocks | equity holdings',
-  portfolio.CURRENT_EQUITY_VALUE_CHF as CURRENT_EQUITY_VALUE_CHF comment='Current equity value | stock value | equity market value',
-  
-  portfolio.FI_TRADES_COUNT as FI_TRADES_COUNT comment='Fixed income trades | bond trades | FI transactions',
-  portfolio.FI_BUY_TRADES as FI_BUY_TRADES comment='Fixed income buy trades | bond purchases',
-  portfolio.FI_SELL_TRADES as FI_SELL_TRADES comment='Fixed income sell trades | bond sales',
-  portfolio.FI_TOTAL_INVESTED_CHF as FI_TOTAL_INVESTED_CHF comment='Fixed income invested | bond capital | FI investment',
-  portfolio.FI_NET_PL_CHF as FI_NET_PL_CHF comment='Fixed income PL | bond profit loss | FI gains',
-  portfolio.FI_COMMISSION_CHF as FI_COMMISSION_CHF comment='Fixed income commission | bond fees',
-  portfolio.FI_RETURN_PERCENTAGE as FI_RETURN_PERCENTAGE comment='Fixed income return | bond return | FI performance',
-  portfolio.CURRENT_FI_POSITIONS as CURRENT_FI_POSITIONS comment='Current FI positions | number of bonds | bond holdings',
-  portfolio.CURRENT_FI_VALUE_CHF as CURRENT_FI_VALUE_CHF comment='Current FI value | bond value | fixed income market value',
-  
-  portfolio.CMD_TRADES_COUNT as CMD_TRADES_COUNT comment='Commodity trades | CMD trades | commodity transactions',
-  portfolio.CMD_BUY_TRADES as CMD_BUY_TRADES comment='Commodity buy trades | commodity purchases',
-  portfolio.CMD_SELL_TRADES as CMD_SELL_TRADES comment='Commodity sell trades | commodity sales',
-  portfolio.CMD_TOTAL_INVESTED_CHF as CMD_TOTAL_INVESTED_CHF comment='Commodity invested | commodity capital',
-  portfolio.CMD_NET_PL_CHF as CMD_NET_PL_CHF comment='Commodity PL | commodity profit loss | CMD gains',
-  portfolio.CMD_COMMISSION_CHF as CMD_COMMISSION_CHF comment='Commodity commission | commodity fees',
-  portfolio.CMD_RETURN_PERCENTAGE as CMD_RETURN_PERCENTAGE comment='Commodity return | commodity performance',
-  portfolio.CURRENT_CMD_POSITIONS as CURRENT_CMD_POSITIONS comment='Current commodity positions | commodity holdings',
-  portfolio.CURRENT_CMD_VALUE_CHF as CURRENT_CMD_VALUE_CHF comment='Current commodity value | commodity market value',
-  
-  portfolio.TOTAL_PORTFOLIO_VALUE_CHF as TOTAL_PORTFOLIO_VALUE_CHF 
-    WITH SYNONYMS = ('AUM', 'assets under management', 'managed assets', 'portfolio value', 'portfolio worth', 'client portfolio')
-    comment='Per-portfolio total value in CHF. Use for individual portfolio lookups and rankings',
-  portfolio.TOTAL_RETURN_CHF as TOTAL_RETURN_CHF comment='Total return | absolute return | portfolio gain | profit',
-  portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE as TOTAL_PORTFOLIO_TWR_PERCENTAGE comment='Total TWR | time weighted return | portfolio TWR | portfolio return',
-  portfolio.ANNUALIZED_PORTFOLIO_TWR as ANNUALIZED_PORTFOLIO_TWR comment='Annualized return | annual return | CAGR | compound growth',
-  
-  portfolio.CASH_ALLOCATION_PERCENTAGE as CASH_ALLOCATION_PERCENTAGE comment='Cash allocation | cash weight | cash percentage | liquidity',
-  portfolio.EQUITY_ALLOCATION_PERCENTAGE as EQUITY_ALLOCATION_PERCENTAGE comment='Equity allocation | stock weight | equity percentage',
-  portfolio.FI_ALLOCATION_PERCENTAGE as FI_ALLOCATION_PERCENTAGE comment='Fixed income allocation | bond weight | FI percentage',
-  portfolio.CMD_ALLOCATION_PERCENTAGE as CMD_ALLOCATION_PERCENTAGE comment='Commodity allocation | commodity weight | CMD percentage',
-  
-  portfolio.PORTFOLIO_VOLATILITY as PORTFOLIO_VOLATILITY comment='Portfolio volatility | risk | standard deviation | price volatility',
-  portfolio.SHARPE_RATIO as SHARPE_RATIO comment='Sharpe ratio | risk adjusted return | Sharpe index',
-  portfolio.RISK_FREE_RATE_ANNUAL_PCT as RISK_FREE_RATE_ANNUAL_PCT comment='Risk free rate | RFR | benchmark rate',
-  portfolio.MAX_DRAWDOWN_PERCENTAGE as MAX_DRAWDOWN_PERCENTAGE comment='Max drawdown | maximum drawdown | peak to trough | largest loss',
-  
-  portfolio.TOTAL_TRANSACTIONS as TOTAL_TRANSACTIONS comment='Total transactions | total trades | transaction count',
-  portfolio.TRANSACTION_FREQUENCY as TRANSACTION_FREQUENCY comment='Transaction frequency | trading frequency | trades per period',
-  portfolio.TRADING_DAYS as TRADING_DAYS comment='Trading days | active days | days traded',
-  
-  portfolio.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP comment='Calculation timestamp | measurement time | analysis time'
-)
-
-dimensions (
-  portfolio.ACCOUNT_TYPE AS ACCOUNT_TYPE 
-    WITH SYNONYMS = ('account type', 'portfolio type', 'investment type', 'account category')
-    COMMENT = 'Account type (CHECKING, SAVINGS, INVESTMENT, BUSINESS). Primary dimension for account segmentation'
-    SAMPLE_VALUES ('CHECKING', 'SAVINGS', 'INVESTMENT', 'BUSINESS')
-    IS_ENUM,
-  portfolio.PERFORMANCE_CATEGORY AS PERFORMANCE_CATEGORY 
-    WITH SYNONYMS = ('performance', 'performance rating', 'return category', 'performance level', 'excellent', 'good', 'neutral', 'poor', 'negative')
-    COMMENT = 'Performance category. Use for filtering high/low performers'
-    SAMPLE_VALUES ('EXCELLENT_PERFORMANCE', 'GOOD_PERFORMANCE', 'NEUTRAL_PERFORMANCE', 'POOR_PERFORMANCE', 'NEGATIVE_PERFORMANCE')
-    IS_ENUM,
-  portfolio.RISK_CATEGORY AS RISK_CATEGORY 
-    WITH SYNONYMS = ('risk level', 'risk rating', 'risk classification', 'high risk', 'moderate risk', 'low risk')
-    COMMENT = 'Risk category (HIGH, MODERATE, LOW). Use for risk-based grouping and analysis'
-    SAMPLE_VALUES ('HIGH', 'MODERATE', 'LOW')
-    IS_ENUM,
-  
-  portfolio.BASE_CURRENCY AS BASE_CURRENCY 
-    WITH SYNONYMS = ('currency', 'reporting currency', 'portfolio currency')
-    COMMENT = 'Base currency (CHF, USD, EUR, GBP). Use for currency-based analysis',
-  portfolio.PORTFOLIO_TYPE AS PORTFOLIO_TYPE 
-    COMMENT = 'Portfolio type or investment style classification',
-  portfolio.IS_HIGH_PERFORMER LABELS = (FILTER) AS portfolio.PERFORMANCE_CATEGORY IN ('EXCELLENT_PERFORMANCE', 'GOOD_PERFORMANCE')
-    COMMENT = 'Filter to EXCELLENT and GOOD performance portfolios',
-  portfolio.IS_HIGH_RISK_PORTFOLIO LABELS = (FILTER) AS portfolio.RISK_CATEGORY = 'HIGH'
-    COMMENT = 'Filter to HIGH risk portfolios'
-)
-
-metrics (
-  portfolio.PORTFOLIO_COUNT AS COUNT(portfolio.ACCOUNT_ID)
-    WITH SYNONYMS = ('number of portfolios', 'portfolio count', 'how many portfolios', 'total portfolios', 'account count')
-    COMMENT = 'Count of portfolios. Use for "how many portfolios" queries',
-  portfolio.TOTAL_AUM AS SUM(portfolio.TOTAL_PORTFOLIO_VALUE_CHF)
-    WITH SYNONYMS = ('total AUM', 'total assets', 'sum of portfolio values', 'aggregate wealth', 'combined AUM')
-    COMMENT = 'Sum of all portfolio values. Use for total AUM calculations and wealth aggregation',
-  portfolio.AVG_PORTFOLIO_VALUE AS AVG(portfolio.TOTAL_PORTFOLIO_VALUE_CHF)
-    WITH SYNONYMS = ('average AUM', 'mean portfolio value', 'typical portfolio size', 'avg wealth')
-    COMMENT = 'Average portfolio value. Use for typical client wealth analysis',
-  portfolio.AVG_RETURN AS AVG(portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE)
-    WITH SYNONYMS = ('average return', 'mean return', 'typical return', 'avg performance')
-    COMMENT = 'Average time-weighted return. Use for average performance analysis',
-  portfolio.AVG_SHARPE AS AVG(portfolio.SHARPE_RATIO)
-    WITH SYNONYMS = ('average Sharpe', 'mean Sharpe ratio', 'typical risk-adjusted return')
-    COMMENT = 'Average Sharpe ratio. Use for risk-adjusted performance comparison',
-  portfolio.HIGH_PERFORMERS AS COUNT(CASE WHEN portfolio.PERFORMANCE_CATEGORY IN ('EXCELLENT_PERFORMANCE', 'GOOD_PERFORMANCE') THEN 1 END)
-    WITH SYNONYMS = ('excellent performers', 'good performers', 'top performers', 'high performance count')
-    COMMENT = 'Count of portfolios with EXCELLENT or GOOD performance. Use for success rate analysis'
-)
-
-COMMENT = 'Wealth management - multi-asset portfolio performance (TWR, Sharpe, drawdown), asset allocation, and risk classification.'
-
-AI_SQL_GENERATION 'For AUM queries, use TOTAL_PORTFOLIO_VALUE_CHF. All monetary values are in CHF. For return calculations, use TOTAL_PORTFOLIO_TWR_PERCENTAGE (not ANNUALIZED unless the user asks for annualized). When asked about "top clients", join to customer context via CUSTOMER_ID and order by TOTAL_PORTFOLIO_VALUE_CHF DESC.'
-
-AI_QUESTION_CATEGORIZATION 'Reject questions about individual trade executions or order book details. If asked about customer names or contact info, explain that PII is in the Customer 360 view accessed via the customer context tool.'
-
-AI_VERIFIED_QUERIES (
-  top_portfolios_by_value AS (
-    QUESTION 'Show me top 10 portfolios by total value'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT portfolio.ACCOUNT_ID, portfolio.CUSTOMER_ID, portfolio.TOTAL_PORTFOLIO_VALUE_CHF, portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE, portfolio.SHARPE_RATIO, portfolio.PERFORMANCE_CATEGORY, portfolio.RISK_CATEGORY FROM __portfolio AS portfolio ORDER BY portfolio.TOTAL_PORTFOLIO_VALUE_CHF DESC NULLS LAST LIMIT 10'
-  ),
-  portfolios_by_performance AS (
-    QUESTION 'How many portfolios per performance category?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT portfolio.PERFORMANCE_CATEGORY, COUNT(portfolio.ACCOUNT_ID) AS PORTFOLIO_COUNT, AVG(portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE) AS AVG_RETURN FROM __portfolio AS portfolio GROUP BY portfolio.PERFORMANCE_CATEGORY ORDER BY PORTFOLIO_COUNT DESC'
-  ),
-  high_risk_poor_performance AS (
-    QUESTION 'Find portfolios with HIGH risk and POOR or NEGATIVE performance'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT portfolio.ACCOUNT_ID, portfolio.CUSTOMER_ID, portfolio.TOTAL_PORTFOLIO_VALUE_CHF, portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE, portfolio.MAX_DRAWDOWN_PERCENTAGE, portfolio.RISK_CATEGORY, portfolio.PERFORMANCE_CATEGORY FROM __portfolio AS portfolio WHERE portfolio.RISK_CATEGORY = ''HIGH'' AND portfolio.PERFORMANCE_CATEGORY IN (''POOR_PERFORMANCE'', ''NEGATIVE_PERFORMANCE'') ORDER BY portfolio.TOTAL_PORTFOLIO_VALUE_CHF DESC NULLS LAST'
-  ),
-  avg_return_by_account_type AS (
-    QUESTION 'Average return by account type'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT portfolio.ACCOUNT_TYPE, COUNT(portfolio.ACCOUNT_ID) AS PORTFOLIO_COUNT, AVG(portfolio.TOTAL_PORTFOLIO_TWR_PERCENTAGE) AS AVG_RETURN, AVG(portfolio.SHARPE_RATIO) AS AVG_SHARPE FROM __portfolio AS portfolio GROUP BY portfolio.ACCOUNT_TYPE ORDER BY AVG_RETURN DESC NULLS LAST'
-  ),
-  total_aum AS (
-    QUESTION 'What is our total AUM across all portfolios?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT SUM(portfolio.TOTAL_PORTFOLIO_VALUE_CHF) AS TOTAL_AUM, COUNT(portfolio.ACCOUNT_ID) AS PORTFOLIO_COUNT, AVG(portfolio.TOTAL_PORTFOLIO_VALUE_CHF) AS AVG_PORTFOLIO_VALUE FROM __portfolio AS portfolio'
-  )
-);
-
-CREATE OR REPLACE VIEW REPA_SV_WEALTH_MANAGEMENT_DETAILED
-COMMENT = 'Detailed wealth management view with customer context (for complex queries requiring joins)'
-AS
-SELECT 
-  p.*,
-  pii.FULL_NAME AS CUSTOMER_NAME,
-  c.COUNTRY AS CUSTOMER_COUNTRY,
-  c.ACCOUNT_TIER AS CUSTOMER_TIER,
-  c.OVERALL_RISK_RATING AS CUSTOMER_RISK_RATING
-FROM REPP_AGG_DT_PORTFOLIO_PERFORMANCE p
-LEFT JOIN {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 c
-  ON p.CUSTOMER_ID = c.CUSTOMER_ID
-LEFT JOIN {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII pii
-  ON p.CUSTOMER_ID = pii.CUSTOMER_ID;
-
-CREATE OR REPLACE VIEW REPA_SV_PORTFOLIO_PERFORMANCE
-COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (portfolio subset)'
-AS SELECT * FROM REPA_SV_WEALTH_MANAGEMENT_DETAILED;
-
-CREATE OR REPLACE VIEW REPA_SV_CREDIT_RISK_IRB
-COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (credit risk subset)'
-AS SELECT * FROM REPA_SV_WEALTH_MANAGEMENT_DETAILED;
-
-CREATE OR REPLACE VIEW REPA_SV_EQUITY_TRADING
-COMMENT = 'Backward compatibility alias for REPA_SV_WEALTH_MANAGEMENT_DETAILED (equity subset)'
-AS SELECT * FROM REPA_SV_WEALTH_MANAGEMENT_DETAILED;
-
-GRANT SELECT ON TABLE REPP_AGG_DT_PORTFOLIO_PERFORMANCE TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_PORTFOLIO_PERFORMANCE TO ROLE PUBLIC;
-
-GRANT SELECT ON VIEW REPA_SV_WEALTH_MANAGEMENT_DETAILED TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON VIEW REPA_SV_WEALTH_MANAGEMENT_DETAILED TO ROLE PUBLIC;
-
-GRANT SELECT ON VIEW REPA_SV_PORTFOLIO_PERFORMANCE TO ROLE PUBLIC;
-GRANT SELECT ON VIEW REPA_SV_CREDIT_RISK_IRB TO ROLE PUBLIC;
-GRANT SELECT ON VIEW REPA_SV_EQUITY_TRADING TO ROLE PUBLIC;
-
-SELECT 'REPA_SV_WEALTH_MANAGEMENT semantic view created successfully! Portfolio performance (61 attributes) + detailed view with credit/equity/advisor context ready.' AS STATUS;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_agg }};
-
-CREATE OR REPLACE SEMANTIC VIEW REPA_SV_RISK_REPORTING
-tables (
-  risk AS REPP_AGG_DT_BCBS239_RISK_AGGREGATION
-    PRIMARY KEY (CUSTOMER_ID, REPORTING_DATE, RISK_TYPE, GEOGRAPHY)
-    COMMENT = 'BCBS 239 risk aggregation and capital requirements',
-  customers AS {{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-    PRIMARY KEY (CUSTOMER_ID)
-    COMMENT = 'Customer profile for risk attribution'
-)
-
-relationships (
-  risk_to_customer AS
-    risk (CUSTOMER_ID) REFERENCES customers
-)
-
-facts (
-  risk.CUSTOMER_ID as CUSTOMER_ID comment='Customer ID | client ID | customer identifier for individual risk tracking',
-  risk.REPORTING_DATE as REPORTING_DATE comment='Reporting date | report date | as of date | business date for regulatory reporting',
-  
-  risk.TOTAL_EXPOSURE_CHF as TOTAL_EXPOSURE_CHF 
-    WITH SYNONYMS = ('exposure', 'risk exposure', 'at-risk amount', 'exposed capital', 'risk amount')
-    comment='Total risk exposure in CHF. Primary metric for risk aggregation and regulatory reporting',
-  risk.TOTAL_CAPITAL_REQUIREMENT_CHF as TOTAL_CAPITAL_REQUIREMENT_CHF 
-    WITH SYNONYMS = ('capital', 'capital amount', 'capital requirement', 'required capital')
-    comment='Capital requirement or amount. Primary metric for capital adequacy analysis and FRTB reporting',
-  risk.AVG_RISK_WEIGHT as AVG_RISK_WEIGHT comment='Average risk weight | risk weight | risk weight percentage',
-  risk.CUSTOMER_COUNT as CUSTOMER_COUNT comment='Customer count | number of customers | client count in risk segment',
-  risk.MAX_SINGLE_EXPOSURE_CHF as MAX_SINGLE_EXPOSURE_CHF comment='Maximum single exposure | largest exposure | max concentration',
-  risk.EXPOSURE_VOLATILITY_CHF as EXPOSURE_VOLATILITY_CHF comment='Exposure volatility | volatility | standard deviation of exposures',
-  risk.MAX_CONCENTRATION_PERCENT as MAX_CONCENTRATION_PERCENT comment='Maximum concentration | concentration percentage | max single customer concentration',
-  risk.CAPITAL_RATIO_PERCENT as CAPITAL_RATIO_PERCENT comment='Capital ratio | capital adequacy ratio | CAR percentage',
-  risk.AVG_EXPOSURE_PER_CUSTOMER_CHF as AVG_EXPOSURE_PER_CUSTOMER_CHF comment='Average exposure per customer | average exposure | mean customer exposure',
-  risk.AGGREGATION_TIMESTAMP as AGGREGATION_TIMESTAMP comment='Aggregation timestamp | calculation timestamp | when aggregation was performed'
-)
-
-dimensions (
-  risk.RISK_TYPE AS RISK_TYPE 
-    WITH SYNONYMS = ('risk type', 'risk category', 'type of risk', 'credit risk', 'market risk', 'operational risk', 'liquidity risk')
-    COMMENT = 'Risk type (CREDIT, MARKET, OPERATIONAL, LIQUIDITY). Primary dimension for risk category analysis',
-  risk.GEOGRAPHY AS GEOGRAPHY 
-    WITH SYNONYMS = ('geography', 'region', 'country', 'location', 'area', 'territory', 'geographic region')
-    COMMENT = 'Geographic region. Primary dimension for regional risk analysis and "by region" queries',
-  risk.CURRENCY AS CURRENCY 
-    WITH SYNONYMS = ('currency', 'currency code', 'reporting currency', 'FX', 'foreign exchange')
-    COMMENT = 'Reporting currency (CHF, USD, EUR, GBP). Use for currency-based risk analysis',
-  risk.CUSTOMER_SEGMENT AS CUSTOMER_SEGMENT 
-    WITH SYNONYMS = ('customer segment', 'client segment', 'risk segment', 'low risk', 'medium risk', 'high risk')
-    COMMENT = 'Customer risk segment (LOW_RISK, MEDIUM_RISK, HIGH_RISK). Use for risk appetite segmentation',
-  
-  risk.BUSINESS_LINE AS BUSINESS_LINE 
-    WITH SYNONYMS = ('business line', 'LOB', 'line of business', 'business unit')
-    COMMENT = 'Business line or line of business. Use for risk allocation by business unit'
-)
-
-metrics (
-  risk.CUSTOMER_RISK_COUNT AS COUNT(risk.CUSTOMER_ID)
-    WITH SYNONYMS = ('number of customers', 'customer count', 'how many customers', 'at-risk customers', 'exposed customers')
-    COMMENT = 'Count of customers with risk exposure. Use for "how many customers" queries',
-  risk.TOTAL_EXPOSURE_SUM AS SUM(risk.TOTAL_EXPOSURE_CHF)
-    WITH SYNONYMS = ('total exposure', 'aggregate exposure', 'sum of exposures', 'total risk exposure', 'RWA', 'risk-weighted assets')
-    COMMENT = 'Sum of all risk exposures. Use for total RWA and aggregate risk calculations',
-  risk.TOTAL_CAPITAL_SUM AS SUM(risk.TOTAL_CAPITAL_REQUIREMENT_CHF)
-    WITH SYNONYMS = ('total capital', 'aggregate capital', 'sum of capital requirements', 'capital requirement', 'required capital')
-    COMMENT = 'Sum of all capital requirements. Use for total capital adequacy analysis',
-  risk.AVG_EXPOSURE AS AVG(risk.TOTAL_EXPOSURE_CHF)
-    WITH SYNONYMS = ('average exposure', 'mean exposure', 'typical exposure', 'avg risk')
-    COMMENT = 'Average risk exposure. Use for typical risk level analysis',
-  risk.MAX_CONCENTRATION AS MAX(risk.MAX_SINGLE_EXPOSURE_CHF)
-    WITH SYNONYMS = ('maximum concentration', 'largest exposure', 'peak concentration', 'max exposure')
-    COMMENT = 'Maximum single exposure. Use for concentration risk analysis'
-);
-
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_RISK_AGGREGATION TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_RISK_AGGREGATION TO ROLE PUBLIC;
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_REGULATORY_REPORTING TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_REGULATORY_REPORTING TO ROLE PUBLIC;
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_DATA_QUALITY TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_BCBS239_DATA_QUALITY TO ROLE PUBLIC;
-GRANT SELECT ON TABLE REPP_AGG_DT_ANOMALY_ANALYSIS TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_ANOMALY_ANALYSIS TO ROLE PUBLIC;
-GRANT SELECT ON TABLE REPP_AGG_DT_HIGH_RISK_PATTERNS TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_HIGH_RISK_PATTERNS TO ROLE PUBLIC;
-GRANT SELECT ON TABLE REPP_AGG_DT_CURRENCY_EXPOSURE_CURRENT TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_CURRENCY_EXPOSURE_CURRENT TO ROLE PUBLIC;
-GRANT SELECT ON TABLE REPP_AGG_DT_FRTB_CAPITAL_CHARGES TO ROLE ACCOUNTADMIN;
-GRANT SELECT ON TABLE REPP_AGG_DT_FRTB_CAPITAL_CHARGES TO ROLE PUBLIC;
-
-SELECT 'REPA_SV_RISK_REPORTING semantic view created successfully! Currently includes 17 risk aggregation attributes from risk. This is a foundational deployment - comprehensive multi-table version (130+ attributes) will be available once REPP_AGG_DT_RISK_AGGREGATION_COMPLETE dynamic table is created.' AS STATUS;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_agg }};
-
-CREATE OR REPLACE SEMANTIC VIEW LCRS_SV_LCR_CURRENT
-tables (
-  lcr_data AS REPP_AGG_DT_LCR_DAILY
-    COMMENT = 'LCR daily calculation with HQLA, outflows, and compliance status'
-)
-
-facts (
-  lcr_data.AS_OF_DATE as AS_OF_DATE 
-    WITH SYNONYMS = ('reporting date', 'calculation date', 'snapshot date', 'data date')
-    comment='Date of LCR calculation | as of date | reporting date',
-  
-  lcr_data.BANK_ID as BANK_ID
-    comment='Bank identifier',
-  
-  lcr_data.LCR_RATIO as LCR_RATIO
-    WITH SYNONYMS = ('LCR', 'liquidity ratio', 'coverage ratio', 'LCR percentage', 'liquidity coverage ratio')
-    comment='Liquidity Coverage Ratio percentage. Primary liquidity metric. Must be >= 100% for FINMA compliance',
-  
-  lcr_data.HQLA_TOTAL as HQLA_TOTAL
-    WITH SYNONYMS = ('HQLA', 'liquid assets', 'high quality assets', 'total HQLA', 'numerator', 'total liquid assets')
-    comment='Total High-Quality Liquid Assets in CHF. LCR numerator. Assets available for 30-day stress scenario',
-  
-  lcr_data.L1_TOTAL as L1_TOTAL
-    WITH SYNONYMS = ('Level 1', 'Level 1 assets', 'L1 HQLA', 'highest quality assets', 'zero haircut assets')
-    comment='Level 1 HQLA (0% haircut): SNB reserves, cash, Swiss government bonds',
-  
-  lcr_data.L2A_TOTAL as L2A_TOTAL
-    WITH SYNONYMS = ('Level 2A', 'Level 2A assets', 'L2A HQLA')
-    comment='Level 2A HQLA (15% haircut): Canton bonds, covered bonds',
-  
-  lcr_data.L2B_TOTAL as L2B_TOTAL
-    WITH SYNONYMS = ('Level 2B', 'Level 2B assets', 'L2B HQLA')
-    comment='Level 2B HQLA (50% haircut): SMI equities, corporate bonds',
-  
-  lcr_data.L2_UNCAPPED as L2_UNCAPPED
-    WITH SYNONYMS = ('Level 2 before cap', 'uncapped Level 2')
-    comment='Level 2 assets before applying 40% cap',
-  
-  lcr_data.L2_CAPPED as L2_CAPPED
-    WITH SYNONYMS = ('Level 2 after cap', 'capped Level 2')
-    comment='Level 2 assets after applying 40% cap',
-  
-  lcr_data.CAP_APPLIED as CAP_APPLIED
-    WITH SYNONYMS = ('40% cap applied', 'Level 2 cap triggered', 'cap status', 'is cap active')
-    comment='Whether 40% cap on Level 2 assets is applied',
-  
-  lcr_data.DISCARDED_L2 as DISCARDED_L2
-    WITH SYNONYMS = ('discarded Level 2', 'excess Level 2', 'capped assets')
-    comment='Discarded Level 2 assets due to 40% cap',
-  
-  lcr_data.OUTFLOW_TOTAL as OUTFLOW_TOTAL
-    WITH SYNONYMS = ('total outflows', 'cash outflows', 'net outflows', 'denominator', 'stressed outflows')
-    comment='Total 30-day stressed net cash outflows in CHF. LCR denominator',
-  
-  lcr_data.OUTFLOW_RETAIL as OUTFLOW_RETAIL
-    WITH SYNONYMS = ('retail outflows', 'individual customer outflows')
-    comment='Retail customer outflows',
-  
-  lcr_data.OUTFLOW_CORP as OUTFLOW_CORP
-    WITH SYNONYMS = ('corporate outflows', 'business customer outflows')
-    comment='Corporate customer outflows',
-  
-  lcr_data.OUTFLOW_FI as OUTFLOW_FI
-    WITH SYNONYMS = ('FI outflows', 'financial institution outflows', 'bank outflows', 'wholesale outflows')
-    comment='Financial institution outflows | interbank outflows',
-  
-  lcr_data.LCR_BUFFER_CHF as LCR_BUFFER_CHF
-    WITH SYNONYMS = ('buffer', 'liquidity buffer', 'cushion', 'excess liquidity', 'safety margin')
-    comment='Liquidity buffer (HQLA minus Outflows) in CHF',
-  
-  lcr_data.LCR_BUFFER_PCT as LCR_BUFFER_PCT
-    WITH SYNONYMS = ('buffer percentage', 'buffer percent')
-    comment='Liquidity buffer as percentage of outflows',
-  
-  lcr_data.TOTAL_HOLDINGS as TOTAL_HOLDINGS
-    WITH SYNONYMS = ('securities count', 'HQLA securities', 'holdings count', 'portfolio size')
-    comment='Number of HQLA securities',
-  
-  lcr_data.TOTAL_DEPOSIT_ACCOUNTS as TOTAL_DEPOSIT_ACCOUNTS
-    WITH SYNONYMS = ('deposit accounts', 'account count')
-    comment='Number of deposit accounts',
-  
-  lcr_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
-    WITH SYNONYMS = ('calculation time', 'data timestamp', 'calculated at')
-    comment='When LCR was last calculated'
-)
-
-dimensions (
-  lcr_data.LCR_STATUS AS LCR_STATUS
-    WITH SYNONYMS = ('compliance status', 'regulatory status', 'FINMA status', 'status')
-    COMMENT = 'LCR compliance status: PASS (>=100%), WARNING (95-100%), FAIL (<95%), N/A'
-    SAMPLE_VALUES ('PASS', 'WARNING', 'FAIL', 'N/A')
-    IS_ENUM,
-  lcr_data.SEVERITY AS SEVERITY
-    WITH SYNONYMS = ('alert level', 'traffic light', 'status color')
-    COMMENT = 'Alert severity: GREEN (>=100%), YELLOW (95-100%), RED (<95%), GRAY (N/A)'
-    SAMPLE_VALUES ('GREEN', 'YELLOW', 'RED', 'GRAY')
-    IS_ENUM
-)
-
-metrics (
-  lcr_data.LATEST_LCR_RATIO AS MAX(lcr_data.LCR_RATIO)
-    WITH SYNONYMS = ('current LCR', 'LCR ratio', 'liquidity ratio')
-    COMMENT = 'Most recent LCR ratio percentage',
-  lcr_data.LATEST_HQLA AS MAX(lcr_data.HQLA_TOTAL)
-    WITH SYNONYMS = ('current HQLA', 'total liquid assets')
-    COMMENT = 'Most recent total HQLA in CHF',
-  lcr_data.LATEST_OUTFLOW AS MAX(lcr_data.OUTFLOW_TOTAL)
-    WITH SYNONYMS = ('current outflows', 'stressed outflows')
-    COMMENT = 'Most recent total stressed outflows in CHF'
-)
-
-COMMENT = 'Liquidity Coverage Ratio (LCR) per FINMA Circular 2015/2 - HQLA stock, stressed outflows, compliance status, and 40% cap monitoring.'
-
-AI_SQL_GENERATION 'This table typically has one row per date. For "current" or "today" queries, filter to the most recent AS_OF_DATE using: WHERE AS_OF_DATE = (SELECT MAX(AS_OF_DATE) FROM __lcr_data). For trend queries over multiple dates, do not apply the MAX filter. The LCR must be >= 100% for FINMA compliance. Internal target is 110%.'
-
-AI_VERIFIED_QUERIES (
-  current_lcr_ratio AS (
-    QUESTION 'What is our current LCR ratio?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.LCR_RATIO, lcr_data.LCR_STATUS, lcr_data.HQLA_TOTAL, lcr_data.OUTFLOW_TOTAL, lcr_data.LCR_BUFFER_CHF FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
-  ),
-  hqla_by_level AS (
-    QUESTION 'Show me HQLA breakdown by L1, L2A, L2B'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.L1_TOTAL, lcr_data.L2A_TOTAL, lcr_data.L2B_TOTAL, lcr_data.L2_CAPPED, lcr_data.HQLA_TOTAL, lcr_data.CAP_APPLIED FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
-  ),
-  liquidity_buffer AS (
-    QUESTION 'What is our liquidity buffer in CHF?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.LCR_BUFFER_CHF, lcr_data.LCR_BUFFER_PCT, lcr_data.HQLA_TOTAL, lcr_data.OUTFLOW_TOTAL FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
-  ),
-  is_cap_applied AS (
-    QUESTION 'Is the 40% cap on Level 2 assets applied today?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT lcr_data.AS_OF_DATE, lcr_data.CAP_APPLIED, lcr_data.L2_UNCAPPED, lcr_data.L2_CAPPED, lcr_data.DISCARDED_L2, lcr_data.L1_TOTAL FROM __lcr_data AS lcr_data WHERE lcr_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __lcr_data AS sub)'
-  )
-);
-
-SELECT 'Created LCRS_SV_LCR_CURRENT semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LCRS_SV_HQLA_BREAKDOWN
-tables (
-  hqla_data AS REPP_AGG_DT_LCR_HQLA
-    COMMENT = 'HQLA holdings by level and asset type'
-)
-
-facts (
-  hqla_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('reporting date', 'date')
-    comment='Date of HQLA snapshot',
-  
-  hqla_data.HQLA_LEVEL as HQLA_LEVEL
-    WITH SYNONYMS = ('level', 'asset level', 'regulatory level')
-    comment='HQLA regulatory level: L1, L2A, L2B',
-  
-  hqla_data.ASSET_TYPE as ASSET_TYPE
-    WITH SYNONYMS = ('asset', 'asset class', 'security type')
-    comment='Type of asset (CASH_SNB, GOVT_BOND_CHF, etc)',
-  
-  hqla_data.HOLDINGS_COUNT as HOLDINGS_COUNT
-    WITH SYNONYMS = ('count', 'number of holdings', 'securities count')
-    comment='Number of securities',
-  
-  hqla_data.MARKET_VALUE_CHF as MARKET_VALUE_CHF
-    WITH SYNONYMS = ('market value', 'value', 'gross value')
-    comment='Market value before haircuts',
-  
-  hqla_data.HAIRCUT_PCT as HAIRCUT_PCT
-    WITH SYNONYMS = ('haircut', 'haircut percentage')
-    comment='Regulatory haircut percentage',
-  
-  hqla_data.HQLA_VALUE_CHF as HQLA_VALUE_CHF
-    WITH SYNONYMS = ('HQLA value', 'value after haircut', 'net value')
-    comment='HQLA value after applying haircut',
-  
-  hqla_data.PCT_OF_TOTAL_HQLA as PCT_OF_TOTAL_HQLA
-    WITH SYNONYMS = ('percentage', 'percent of total', 'composition')
-    comment='Percentage of total HQLA'
-);
-
-SELECT 'Created LCRS_SV_HQLA_BREAKDOWN semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LCRS_SV_OUTFLOW_BREAKDOWN
-tables (
-  outflow_data AS REPP_AGG_DT_LCR_OUTFLOW
-    COMMENT = 'Deposit outflows by counterparty type'
-)
-
-facts (
-  outflow_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('reporting date', 'date')
-    comment='Date of deposit snapshot',
-  
-  outflow_data.COUNTERPARTY_TYPE as COUNTERPARTY_TYPE
-    WITH SYNONYMS = ('counterparty', 'customer type', 'deposit type')
-    comment='Type of counterparty (RETAIL, CORPORATE, FINANCIAL_INSTITUTION)',
-  
-  outflow_data.ACCOUNT_COUNT as ACCOUNT_COUNT
-    WITH SYNONYMS = ('accounts', 'number of accounts')
-    comment='Number of deposit accounts',
-  
-  outflow_data.CUSTOMER_COUNT as CUSTOMER_COUNT
-    WITH SYNONYMS = ('customers', 'number of customers')
-    comment='Number of unique customers',
-  
-  outflow_data.BALANCE_CHF as BALANCE_CHF
-    WITH SYNONYMS = ('balance', 'deposit balance', 'deposits')
-    comment='Total deposit balance in CHF',
-  
-  outflow_data.RUN_OFF_RATE as RUN_OFF_RATE
-    WITH SYNONYMS = ('run-off rate', 'runoff rate', 'withdrawal rate')
-    comment='Weighted average run-off rate',
-  
-  outflow_data.OUTFLOW_AMOUNT_CHF as OUTFLOW_AMOUNT_CHF
-    WITH SYNONYMS = ('outflow', 'stressed outflow', 'withdrawal amount')
-    comment='Expected 30-day outflow amount',
-  
-  outflow_data.PCT_OF_TOTAL_OUTFLOWS as PCT_OF_TOTAL_OUTFLOWS
-    WITH SYNONYMS = ('percentage of outflows', 'outflow percentage')
-    comment='Percentage of total outflows',
-  
-  outflow_data.PCT_OF_TOTAL_DEPOSITS as PCT_OF_TOTAL_DEPOSITS
-    WITH SYNONYMS = ('percentage of deposits', 'deposit percentage')
-    comment='Percentage of total deposits'
-);
-
-SELECT 'Created LCRS_SV_OUTFLOW_BREAKDOWN semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LCRS_SV_TREND_90DAY
-tables (
-  trend_data AS REPP_AGG_DT_LCR_DAILY
-    COMMENT = 'Daily LCR ratios for trend analysis'
-)
-
-facts (
-  trend_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('date', 'reporting date', 'day')
-    comment='Date of LCR calculation',
-  
-  trend_data.LCR_RATIO as LCR_RATIO
-    WITH SYNONYMS = ('LCR', 'ratio', 'liquidity ratio')
-    comment='Daily LCR ratio percentage',
-  
-  trend_data.LCR_STATUS as LCR_STATUS
-    WITH SYNONYMS = ('status', 'compliance status')
-    comment='Compliance status (PASS/WARNING/FAIL)',
-  
-  trend_data.SEVERITY as SEVERITY
-    WITH SYNONYMS = ('severity', 'color', 'alert level')
-    comment='Severity indicator (GREEN/YELLOW/RED)',
-  
-  trend_data.HQLA_TOTAL as HQLA_TOTAL
-    WITH SYNONYMS = ('HQLA', 'liquid assets')
-    comment='Total HQLA in CHF',
-  
-  trend_data.OUTFLOW_TOTAL as OUTFLOW_TOTAL
-    WITH SYNONYMS = ('outflows', 'cash outflows')
-    comment='Total net cash outflows',
-  
-  trend_data.LCR_BUFFER_CHF as LCR_BUFFER_CHF
-    WITH SYNONYMS = ('buffer', 'liquidity buffer', 'excess')
-    comment='Liquidity buffer in CHF',
-  
-  trend_data.CAP_APPLIED as CAP_APPLIED
-    WITH SYNONYMS = ('cap applied', '40% cap', 'cap status')
-    comment='Whether 40% cap was applied'
-);
-
-SELECT 'Created LCRS_SV_TREND_90DAY semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LCRS_SV_ALERTS_ACTIVE
-tables (
-  alerts_data AS REPP_AGG_VW_LCR_ALERTS
-    COMMENT = 'Active LCR compliance alerts'
-)
-
-facts (
-  alerts_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('date', 'alert date')
-    comment='Date of alert',
-  
-  alerts_data.LCR_RATIO as LCR_RATIO
-    WITH SYNONYMS = ('LCR', 'ratio')
-    comment='LCR ratio when alert triggered',
-  
-  alerts_data.LCR_STATUS as LCR_STATUS
-    WITH SYNONYMS = ('status', 'compliance status')
-    comment='Compliance status',
-  
-  alerts_data.SEVERITY as SEVERITY
-    WITH SYNONYMS = ('severity', 'alert severity', 'priority')
-    comment='Alert severity level',
-  
-  alerts_data.TOTAL_ALERT_COUNT as TOTAL_ALERT_COUNT
-    WITH SYNONYMS = ('alert count', 'number of alerts', 'alerts')
-    comment='Total number of active alerts',
-  
-  alerts_data.HIGHEST_SEVERITY as HIGHEST_SEVERITY
-    WITH SYNONYMS = ('highest severity', 'max severity', 'worst severity')
-    comment='Highest severity among all alerts'
-);
-
-SELECT 'Created LCRS_SV_ALERTS_ACTIVE semantic view' AS status;
-
-USE DATABASE {{ db }};
-USE SCHEMA {{ rep_agg }};
-
-CREATE OR REPLACE SEMANTIC VIEW LOAS_SV_PORTFOLIO_CURRENT
-tables (
-  portfolio_data AS LOAR_AGG_DT_PORTFOLIO_SUMMARY
-    COMMENT = 'Loan portfolio summary by product, country, and status'
-)
-
-facts (
-  portfolio_data.AS_OF_DATE as AS_OF_DATE 
-    WITH SYNONYMS = ('reporting date', 'calculation date', 'snapshot date', 'data date', 'as of date')
-    comment='Date of portfolio snapshot | reporting date',
-  
-  portfolio_data.LOAN_COUNT as LOAN_COUNT
-    WITH SYNONYMS = ('count', 'number of loans', 'loan volume', 'applications count', 'total loans')
-    comment='Number of loan applications in this category',
-  
-  portfolio_data.TOTAL_REQUESTED_AMOUNT as TOTAL_REQUESTED_AMOUNT
-    WITH SYNONYMS = ('total amount', 'total exposure', 'total loan amount', 'exposure', 'portfolio value')
-    comment='Total requested loan amount in CHF',
-  
-  portfolio_data.AVG_REQUESTED_AMOUNT as AVG_REQUESTED_AMOUNT
-    WITH SYNONYMS = ('average amount', 'average loan', 'mean amount', 'average loan size')
-    comment='Average requested loan amount in CHF',
-  
-  portfolio_data.MIN_REQUESTED_AMOUNT as MIN_REQUESTED_AMOUNT
-    WITH SYNONYMS = ('minimum amount', 'smallest loan', 'min loan')
-    comment='Minimum requested loan amount in CHF',
-  
-  portfolio_data.MAX_REQUESTED_AMOUNT as MAX_REQUESTED_AMOUNT
-    WITH SYNONYMS = ('maximum amount', 'largest loan', 'max loan', 'biggest loan')
-    comment='Maximum requested loan amount in CHF',
-  
-  portfolio_data.AVG_TERM_MONTHS as AVG_TERM_MONTHS
-    WITH SYNONYMS = ('average term', 'average loan term', 'mean term', 'term length', 'average maturity')
-    comment='Average loan term in months',
-  
-  portfolio_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
-    WITH SYNONYMS = ('calculation time', 'data timestamp', 'calculated at', 'last updated')
-    comment='When this portfolio aggregation was last calculated'
-)
-
-dimensions (
-  portfolio_data.PRODUCT_TYPE AS PRODUCT_TYPE
-    WITH SYNONYMS = ('product', 'loan type', 'loan product', 'product category')
-    COMMENT = 'Loan product type'
-    SAMPLE_VALUES ('MORTGAGE')
-    IS_ENUM,
-  portfolio_data.COUNTRY AS COUNTRY
-    WITH SYNONYMS = ('country code', 'jurisdiction', 'regime', 'market')
-    COMMENT = 'Country: CHE (Switzerland), GBR (UK), DEU (Germany), PRT (Portugal)'
-    SAMPLE_VALUES ('CHE', 'GBR', 'DEU', 'PRT')
-    IS_ENUM,
-  portfolio_data.APPLICATION_STATUS AS APPLICATION_STATUS
-    WITH SYNONYMS = ('status', 'loan status', 'application state', 'approval status')
-    COMMENT = 'Application status'
-    SAMPLE_VALUES ('APPROVED', 'DECLINED', 'UNDER_REVIEW', 'DISBURSED', 'SUBMITTED', 'DRAFT')
-    IS_ENUM
-)
-
-metrics (
-  portfolio_data.TOTAL_LOANS AS SUM(portfolio_data.LOAN_COUNT)
-    WITH SYNONYMS = ('total applications', 'total loan count', 'application volume')
-    COMMENT = 'Total number of loan applications',
-  portfolio_data.TOTAL_EXPOSURE AS SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT)
-    WITH SYNONYMS = ('total loan exposure', 'aggregate exposure', 'total lending')
-    COMMENT = 'Total requested loan amount in CHF',
-  portfolio_data.AVG_LOAN AS AVG(portfolio_data.AVG_REQUESTED_AMOUNT)
-    WITH SYNONYMS = ('average loan amount', 'mean loan size')
-    COMMENT = 'Average requested loan amount in CHF'
-)
-
-COMMENT = 'Loan portfolio summary - application volumes, exposure by product and country, approval status tracking.'
-
-AI_SQL_GENERATION 'For \"total exposure\" or \"total loan amount\", use SUM(TOTAL_REQUESTED_AMOUNT). For approval rates, calculate counts where APPLICATION_STATUS = ''APPROVED'' divided by total count. For \"current\" portfolio, use MAX(AS_OF_DATE). Country codes: CHE=Switzerland, GBR=United Kingdom, DEU=Germany, PRT=Portugal.'
-
-AI_VERIFIED_QUERIES (
-  total_loan_exposure AS (
-    QUESTION 'What is our total loan exposure?'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT) AS TOTAL_EXPOSURE, SUM(portfolio_data.LOAN_COUNT) AS TOTAL_LOANS, AVG(portfolio_data.AVG_REQUESTED_AMOUNT) AS AVG_LOAN_AMOUNT FROM __portfolio_data AS portfolio_data WHERE portfolio_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __portfolio_data AS sub)'
-  ),
-  portfolio_by_country AS (
-    QUESTION 'Show me loan portfolio breakdown by country'
-    VERIFIED_AT 1726185600
-    ONBOARDING_QUESTION TRUE
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT portfolio_data.COUNTRY, SUM(portfolio_data.LOAN_COUNT) AS TOTAL_LOANS, SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT) AS TOTAL_EXPOSURE, AVG(portfolio_data.AVG_REQUESTED_AMOUNT) AS AVG_LOAN FROM __portfolio_data AS portfolio_data WHERE portfolio_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __portfolio_data AS sub) GROUP BY portfolio_data.COUNTRY ORDER BY TOTAL_EXPOSURE DESC NULLS LAST'
-  ),
-  approved_vs_declined AS (
-    QUESTION 'How many approved vs declined applications?'
-    VERIFIED_AT 1726185600
-    VERIFIED_BY '(STEWARD = mdaeppen)'
-    SQL 'SELECT portfolio_data.APPLICATION_STATUS, SUM(portfolio_data.LOAN_COUNT) AS LOAN_COUNT, SUM(portfolio_data.TOTAL_REQUESTED_AMOUNT) AS TOTAL_AMOUNT FROM __portfolio_data AS portfolio_data WHERE portfolio_data.AS_OF_DATE = (SELECT MAX(sub.AS_OF_DATE) FROM __portfolio_data AS sub) AND portfolio_data.APPLICATION_STATUS IN (''APPROVED'', ''DECLINED'') GROUP BY portfolio_data.APPLICATION_STATUS ORDER BY LOAN_COUNT DESC'
-  )
-);
-
-SELECT 'Created LOAS_SV_PORTFOLIO_CURRENT semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LOAS_SV_LTV_DISTRIBUTION
-tables (
-  ltv_data AS LOAR_AGG_DT_LTV_DISTRIBUTION
-    COMMENT = 'LTV distribution by buckets for risk concentration analysis'
-)
-
-facts (
-  ltv_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('reporting date', 'date', 'snapshot date')
-    comment='Date of LTV distribution snapshot',
-  
-  ltv_data.LTV_BUCKET as LTV_BUCKET
-    WITH SYNONYMS = ('LTV band', 'LTV range', 'LTV category', 'risk bucket')
-    comment='LTV bucket: 0-50%, 50-60%, 60-70%, 70-80%, 80-90%, >90%',
-  
-  ltv_data.LTV_BUCKET_SORT_ORDER as LTV_BUCKET_SORT_ORDER
-    WITH SYNONYMS = ('sort order', 'bucket order')
-    comment='Sort order for LTV buckets (1-6)',
-  
-  ltv_data.LOAN_COUNT as LOAN_COUNT
-    WITH SYNONYMS = ('count', 'number of loans', 'loan volume', 'loans in bucket')
-    comment='Number of loans in this LTV bucket',
-  
-  ltv_data.TOTAL_LOAN_AMOUNT as TOTAL_LOAN_AMOUNT
-    WITH SYNONYMS = ('total amount', 'total exposure', 'loan amount', 'exposure in bucket')
-    comment='Total loan amount in this LTV bucket (CHF)',
-  
-  ltv_data.AVG_LTV_PCT as AVG_LTV_PCT
-    WITH SYNONYMS = ('average LTV', 'mean LTV', 'LTV percentage', 'average loan to value')
-    comment='Average LTV percentage in this bucket',
-  
-  ltv_data.TOTAL_COLLATERAL_VALUE as TOTAL_COLLATERAL_VALUE
-    WITH SYNONYMS = ('collateral value', 'property value', 'total collateral', 'asset value')
-    comment='Total collateral value in this bucket (CHF)',
-  
-  ltv_data.PCT_OF_TOTAL_LOANS as PCT_OF_TOTAL_LOANS
-    WITH SYNONYMS = ('percentage of loans', 'loan concentration', 'portfolio percentage', 'share of portfolio')
-    comment='Percentage of total loan count in this bucket',
-  
-  ltv_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
-    WITH SYNONYMS = ('calculation time', 'calculated at', 'last updated')
-    comment='When this LTV distribution was last calculated'
-);
-
-SELECT 'Created LOAS_SV_LTV_DISTRIBUTION semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LOAS_SV_APPLICATION_FUNNEL
-tables (
-  funnel_data AS LOAR_AGG_DT_APPLICATION_FUNNEL
-    COMMENT = 'Application volumes and conversion rates by product, country, and channel'
-)
-
-facts (
-  funnel_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('reporting date', 'date', 'snapshot date')
-    comment='Date of application funnel snapshot',
-  
-  funnel_data.PRODUCT_TYPE as PRODUCT_TYPE
-    WITH SYNONYMS = ('product', 'loan type', 'loan product')
-    comment='Product type: MORTGAGE, PERSONAL_LOAN',
-  
-  funnel_data.COUNTRY as COUNTRY
-    WITH SYNONYMS = ('country code', 'jurisdiction', 'market')
-    comment='Country code: CHE, GBR, DEU, PRT',
-  
-  funnel_data.CHANNEL as CHANNEL
-    WITH SYNONYMS = ('application channel', 'source channel', 'origination channel', 'source')
-    comment='Application channel: EMAIL, PORTAL, BRANCH, BROKER',
-  
-  funnel_data.TOTAL_APPLICATIONS as TOTAL_APPLICATIONS
-    WITH SYNONYMS = ('total apps', 'application count', 'total volume', 'applications received')
-    comment='Total number of applications received',
-  
-  funnel_data.APPROVED_COUNT as APPROVED_COUNT
-    WITH SYNONYMS = ('approved', 'approved apps', 'approvals', 'approved applications')
-    comment='Number of approved applications',
-  
-  funnel_data.DECLINED_COUNT as DECLINED_COUNT
-    WITH SYNONYMS = ('declined', 'declined apps', 'declines', 'rejected', 'declined applications')
-    comment='Number of declined applications',
-  
-  funnel_data.UNDER_REVIEW_COUNT as UNDER_REVIEW_COUNT
-    WITH SYNONYMS = ('under review', 'in review', 'pending', 'pending review', 'in progress')
-    comment='Number of applications currently under review',
-  
-  funnel_data.APPROVAL_RATE_PCT as APPROVAL_RATE_PCT
-    WITH SYNONYMS = ('approval rate', 'approval percentage', 'conversion rate', 'success rate')
-    comment='Approval rate percentage (approved / total applications)',
-  
-  funnel_data.DECLINE_RATE_PCT as DECLINE_RATE_PCT
-    WITH SYNONYMS = ('decline rate', 'decline percentage', 'rejection rate', 'failure rate')
-    comment='Decline rate percentage (declined / total applications)',
-  
-  funnel_data.AVG_REQUESTED_AMOUNT as AVG_REQUESTED_AMOUNT
-    WITH SYNONYMS = ('average amount', 'average loan', 'mean amount', 'average loan size')
-    comment='Average requested loan amount in CHF',
-  
-  funnel_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
-    WITH SYNONYMS = ('calculation time', 'calculated at', 'last updated')
-    comment='When this funnel data was last calculated'
-);
-
-SELECT 'Created LOAS_SV_APPLICATION_FUNNEL semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LOAS_SV_AFFORDABILITY_ANALYSIS
-tables (
-  affordability_data AS LOAR_AGG_DT_AFFORDABILITY_SUMMARY
-    COMMENT = 'Affordability assessment pass/fail rates by country'
-)
-
-facts (
-  affordability_data.AS_OF_DATE as AS_OF_DATE
-    WITH SYNONYMS = ('reporting date', 'date', 'snapshot date')
-    comment='Date of affordability analysis snapshot',
-  
-  affordability_data.COUNTRY as COUNTRY
-    WITH SYNONYMS = ('country code', 'jurisdiction', 'market', 'regime')
-    comment='Country code: CHE, GBR, DEU',
-  
-  affordability_data.AFFORDABILITY_RESULT as AFFORDABILITY_RESULT
-    WITH SYNONYMS = ('result', 'outcome', 'assessment result', 'pass or fail', 'affordability outcome')
-    comment='Affordability assessment result: PASS, FAIL',
-  
-  affordability_data.ASSESSMENT_COUNT as ASSESSMENT_COUNT
-    WITH SYNONYMS = ('count', 'number of assessments', 'assessments', 'volume')
-    comment='Number of affordability assessments performed',
-  
-  affordability_data.AVG_DTI_RATIO_PCT as AVG_DTI_RATIO_PCT
-    WITH SYNONYMS = ('DTI', 'debt to income', 'DTI ratio', 'average DTI', 'debt to income ratio')
-    comment='Average Debt-to-Income ratio percentage',
-  
-  affordability_data.AVG_DSTI_RATIO_PCT as AVG_DSTI_RATIO_PCT
-    WITH SYNONYMS = ('DSTI', 'debt service to income', 'DSTI ratio', 'average DSTI')
-    comment='Average Debt Service-to-Income ratio percentage',
-  
-  affordability_data.AVG_GROSS_INCOME as AVG_GROSS_INCOME
-    WITH SYNONYMS = ('average income', 'mean income', 'gross income', 'monthly income')
-    comment='Average gross monthly income in CHF',
-  
-  affordability_data.AVG_DEBT_OBLIGATIONS as AVG_DEBT_OBLIGATIONS
-    WITH SYNONYMS = ('average debt', 'monthly debt', 'debt obligations', 'existing debts')
-    comment='Average monthly debt obligations in CHF',
-  
-  affordability_data.PASS_RATE_PCT as PASS_RATE_PCT
-    WITH SYNONYMS = ('pass rate', 'pass percentage', 'success rate', 'affordability pass rate')
-    comment='Percentage of affordability assessments that passed',
-  
-  affordability_data.CALCULATION_TIMESTAMP as CALCULATION_TIMESTAMP
-    WITH SYNONYMS = ('calculation time', 'calculated at', 'last updated')
-    comment='When this affordability analysis was last calculated'
-);
-
-SELECT 'Created LOAS_SV_AFFORDABILITY_ANALYSIS semantic view' AS status;
-
-CREATE OR REPLACE SEMANTIC VIEW LOAS_SV_COMPLIANCE_SCREENING
-tables (
-  compliance_data AS LOAR_AGG_VW_COMPLIANCE_SCREENING
-    COMMENT = 'Loan applications linked to sanctions and PEP screening status'
-)
-
-facts (
-  compliance_data.APPLICATION_ID as APPLICATION_ID
-    WITH SYNONYMS = ('app id', 'application number', 'loan id', 'reference number')
-    comment='Unique application identifier',
-  
-  compliance_data.CUSTOMER_ID as CUSTOMER_ID
-    WITH SYNONYMS = ('customer number', 'client id', 'customer reference')
-    comment='Customer identifier (FK to Customer 360)',
-  
-  
-  compliance_data.COUNTRY as COUNTRY
-    WITH SYNONYMS = ('country code', 'jurisdiction', 'market')
-    comment='Country code for application',
-  
-  compliance_data.REQUESTED_AMOUNT as REQUESTED_AMOUNT
-    WITH SYNONYMS = ('loan amount', 'requested loan', 'amount', 'loan value')
-    comment='Requested loan amount in CHF',
-  
-  compliance_data.APPLICATION_STATUS as APPLICATION_STATUS
-    WITH SYNONYMS = ('status', 'application state', 'loan status')
-    comment='Application status: APPROVED, DECLINED, UNDER_REVIEW',
-  
-  compliance_data.REQUIRES_SANCTIONS_REVIEW as REQUIRES_SANCTIONS_REVIEW
-    WITH SYNONYMS = ('sanctions flag', 'sanctions review', 'sanctions hit', 'sanctions match')
-    comment='Boolean flag: TRUE if customer requires sanctions compliance review',
-  
-  compliance_data.REQUIRES_EXPOSED_PERSON_REVIEW as REQUIRES_EXPOSED_PERSON_REVIEW
-    WITH SYNONYMS = ('PEP flag', 'PEP review', 'PEP hit', 'politically exposed person', 'exposed person')
-    comment='Boolean flag: TRUE if customer requires PEP compliance review',
-  
-  compliance_data.OVERALL_RISK_RATING as OVERALL_RISK_RATING
-    WITH SYNONYMS = ('risk rating', 'risk level', 'risk classification', 'customer risk')
-    comment='Overall risk rating: CRITICAL, HIGH, MEDIUM, LOW, NO_RISK',
-  
-  compliance_data.VULNERABLE_CUSTOMER_FLAG as VULNERABLE_CUSTOMER_FLAG
-    WITH SYNONYMS = ('vulnerable flag', 'vulnerability', 'vulnerable customer', 'vulnerable')
-    comment='Boolean flag: TRUE if customer has vulnerability characteristics',
-  
-  compliance_data.SANCTIONS_MATCH_NAME as SANCTIONS_MATCH_NAME
-    WITH SYNONYMS = ('sanctions name', 'sanctioned entity', 'sanctions match')
-    comment='Name of sanctions entity matched (if any)',
-  
-  compliance_data.SANCTIONS_AUTHORITY as SANCTIONS_AUTHORITY
-    WITH SYNONYMS = ('sanctioning authority', 'sanctions issuer', 'authority')
-    comment='Sanctioning authority: OFAC, EU, UN',
-  
-  compliance_data.SANCTIONS_RISK_SCORE as SANCTIONS_RISK_SCORE
-    WITH SYNONYMS = ('sanctions score', 'risk score')
-    comment='Sanctions risk score (0-100)',
-  
-  compliance_data.EXPOSED_PERSON_EXACT_MATCH_NAME as EXPOSED_PERSON_EXACT_MATCH_NAME
-    WITH SYNONYMS = ('PEP name', 'PEP match', 'politically exposed person name')
-    comment='Name of PEP matched (if exact match)',
-  
-  compliance_data.EXPOSED_PERSON_EXACT_CATEGORY as EXPOSED_PERSON_EXACT_CATEGORY
-    WITH SYNONYMS = ('PEP category', 'PEP type', 'exposed person category')
-    comment='PEP category: DOMESTIC, FOREIGN, INTERNATIONAL',
-  
-  compliance_data.EXPOSED_PERSON_EXACT_RISK_LEVEL as EXPOSED_PERSON_EXACT_RISK_LEVEL
-    WITH SYNONYMS = ('PEP risk level', 'PEP risk', 'exposed person risk')
-    comment='PEP risk level: CRITICAL, HIGH, MEDIUM, LOW',
-  
-  compliance_data.EXPOSED_PERSON_MATCH_TYPE as EXPOSED_PERSON_MATCH_TYPE
-    WITH SYNONYMS = ('PEP match type', 'match type')
-    comment='PEP match type: EXACT_MATCH, FUZZY_MATCH, NO_MATCH',
-  
-  compliance_data.APPLICATION_DATE_TIME as APPLICATION_DATE_TIME
-    WITH SYNONYMS = ('application date', 'submitted date', 'application time', 'submission date')
-    comment='Date and time when application was submitted',
-  
-  compliance_data.COMPLIANCE_HOLD_FLAG as COMPLIANCE_HOLD_FLAG
-    WITH SYNONYMS = ('hold flag', 'compliance hold', 'blocked', 'on hold')
-    comment='Boolean flag: TRUE if application is on compliance hold',
-  
-  compliance_data.COMPLIANCE_STATUS as COMPLIANCE_STATUS
-    WITH SYNONYMS = ('compliance state', 'review status', 'compliance outcome')
-    comment='Compliance status: SANCTIONS_REVIEW, PEP_REVIEW, HIGH_RISK_REVIEW, CLEAR'
-);
-
-SELECT 'Created LOAS_SV_COMPLIANCE_SCREENING semantic view' AS status;
 USE DATABASE {{ db }};
 USE SCHEMA {{ crm_agg }};
 
@@ -3299,7 +842,17 @@ CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAUL
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ crm_agg }}.CRM_Customer_360;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ crm_agg }}.CRM_Customer_360;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ pay_agg }};
@@ -3507,10 +1060,19 @@ CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAUL
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ pay_agg }}.COMPLIANCE_MONITORING_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ pay_agg }}.COMPLIANCE_MONITORING_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SHOW AGENTS IN SCHEMA {{ db }}.{{ pay_agg }};
-SHOW SNOWFLAKE INTELLIGENCES;
 
 SELECT 'COMPLIANCE_MONITORING_AGENT created successfully! Unified AML + Sanctions monitoring agent ready.' AS STATUS;
 
@@ -3737,10 +1299,19 @@ CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAUL
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.RISK_REGULATORY_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.RISK_REGULATORY_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SHOW AGENTS IN SCHEMA {{ db }}.{{ rep_agg }};
-SHOW SNOWFLAKE INTELLIGENCES;
 
 SELECT 'RISK_REGULATORY_AGENT created successfully! Cross-domain risk aggregation  and  regulatory compliance agent ready.' AS STATUS;
 
@@ -3933,10 +1504,19 @@ CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAUL
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.WEALTH_ADVISOR_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.WEALTH_ADVISOR_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SHOW AGENTS IN SCHEMA {{ db }}.{{ rep_agg }};
-SHOW SNOWFLAKE INTELLIGENCES;
 
 SELECT 'WEALTH_ADVISOR_AGENT created successfully! Unified wealth management (portfolio + credit + equity) agent ready.' AS STATUS;
 
@@ -3969,6 +1549,11 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
       - question: "Has LCR been stable or volatile over the last 30 days?"
       - question: "Show me SNB reserves and cash holdings"
       - question: "What is our weighted average deposit run-off rate?"
+      - question: "Why did the LCR drop on 26 August? Which client caused it?"
+      - question: "How low does the LCR go under the combined stress scenario?"
+      - question: "What happens to the LCR if Alpenbau withdraws another CHF 100M?"
+      - question: "How much additional corporate withdrawal can we absorb before breaching 100%?"
+      - question: "Which liquidity events explain the September breach?"
 
   tools:
     - tool_spec:
@@ -3985,7 +1570,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           
           ### **LCR Compliance Monitoring**
           - Monitor current LCR ratio against 100% minimum (FINMA requirement)
-          - Track compliance status: PASS (≥100%), WARNING (95-100%), FAIL (<95%)
+          - Track compliance status: FAIL (<100%), WARNING (100% to <110%), PASS (≥110%)
           - Calculate liquidity buffer (HQLA - Net Outflows)
           - Monitor distance from regulatory minimum and internal target (110%)
           - Review calculation freshness and data quality
@@ -4263,7 +1848,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           
           ### **Breach Detection**
           - Highlight days with LCR < 100% (regulatory breach)
-          - Monitor warning periods (LCR 95-100%)
+          - Monitor warning periods (LCR 100-110%)
           - Detect sustained breaches (3+ consecutive days)
           - Track compliance status over time
           
@@ -4297,7 +1882,7 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           - View all active/unresolved alerts (last 30 days)
           - Review alert types:
             - **BREACH**: LCR < 100% (FINMA violation)
-            - **WARNING**: LCR 95-100% (near breach)
+            - **WARNING**: LCR 100-110% (below internal buffer target)
             - **VOLATILITY**: Daily swing > 10%
             - **CAP_TRIGGERED**: 40% L2 cap applied
           - Assess severity (RED/YELLOW/GREEN)
@@ -4325,6 +1910,53 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           
           Data refreshed **hourly** for real-time monitoring.
 
+    - tool_spec:
+        type: cortex_analyst_text_to_sql
+        name: LCR_Scenarios
+        description: |
+          Daily LCR under four scenarios: BASE (regulatory FINMA LCR), BANK_STRESS (idiosyncratic),
+          MARKET_STRESS (market-wide, extra HQLA haircuts) and COMBINED. Use for "how low would the LCR go
+          under stress", "which scenario breaches 100%", comparing stressed vs regulatory LCR, buffers and FAIL days.
+    - tool_spec:
+        type: cortex_analyst_text_to_sql
+        name: LCR_Variance_Drivers
+        description: |
+          Root cause of LCR changes. Top-10 client positions (deposits, loans, facilities, interbank contracts)
+          driving the LCR move on a date, with contract id, client name and CLIENT_IMPACT_PP (funding-adjusted impact in
+          percentage points; negative = the client move lowered the LCR, incl. the cash paid out from SNB reserves).
+          Always explain root causes with CLIENT_IMPACT_PP, not CONTRIBUTION_PP.
+          Comparison windows DOD (default), WOW, MOM; use STRESS_SCENARIO = 'BASE' for the regulatory LCR.
+          Use for "why did the LCR drop on <date>", "who caused the change", "top drivers this week".
+    - tool_spec:
+        type: cortex_analyst_text_to_sql
+        name: LCR_Events
+        description: |
+          Timeline of known liquidity events (client deposit withdrawals, market stress, recovery actions,
+          large loan maturities) with date, description, client and amount. Combine with LCR_Variance_Drivers
+          to explain LCR movements in business terms.
+    - tool_spec:
+        type: generic
+        name: LCR_What_If
+        description: |
+          What-if LCR simulator. Recalculates the regulatory LCR with the official formula (L2B 15% cap,
+          L2 40% cap, 75% inflow cap) after applying levers and returns baseline, simulated LCR, status,
+          a step-by-step waterfall and the breakeven extra corporate withdrawal that would bring the LCR to 100%.
+          p_params is a JSON string with optional keys: preset (BASE|BANK_STRESS|MARKET_STRESS|COMBINED),
+          retail_stable_mult, retail_less_stable_mult, corp_operational_mult, corp_non_operational_mult, fi_mult,
+          facilities_mult, inflow_mult (1.0 = unchanged, 1.5 = +50%), haircut_addon_l1_pp, haircut_addon_l2a_pp,
+          haircut_addon_l2b_pp (extra haircut in percentage points), price_shock_pct (market value drop in %),
+          withdrawal_chf (corporate deposit withdrawal in CHF), inflow_cap_pct (default 0.75).
+          Example: {"corp_non_operational_mult": 1.5, "withdrawal_chf": 100000000}. Use {} for "what is the breakeven".
+        input_schema:
+          type: object
+          properties:
+            p_params:
+              type: string
+              description: 'JSON object with the what-if levers, e.g. {"withdrawal_chf": 100000000}'
+            p_as_of_date:
+              type: string
+              description: 'Reporting date YYYY-MM-DD; empty string for the latest date'
+          required: [p_params, p_as_of_date]
   tool_resources:
     LCR_Current_Status:
       semantic_view: {{ db }}.{{ rep_agg }}.LCRS_SV_LCR_CURRENT
@@ -4360,6 +1992,32 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
         type: warehouse
         warehouse: MD_TEST_WH
         query_timeout: 30
+    LCR_Scenarios:
+      semantic_view: {{ db }}.{{ rep_agg }}.LCRS_SV_LCR_SCENARIOS
+      execution_environment:
+        type: warehouse
+        warehouse: MD_TEST_WH
+        query_timeout: 30
+    LCR_Variance_Drivers:
+      semantic_view: {{ db }}.{{ rep_agg }}.LCRS_SV_LCR_DRIVERS
+      execution_environment:
+        type: warehouse
+        warehouse: MD_TEST_WH
+        query_timeout: 60
+    LCR_Events:
+      semantic_view: {{ db }}.{{ rep_agg }}.LCRS_SV_LCR_EVENTS
+      execution_environment:
+        type: warehouse
+        warehouse: MD_TEST_WH
+        query_timeout: 30
+    LCR_What_If:
+      identifier: "{{ db }}.{{ rep_agg }}.REPP_AGG_SP_LCR_WHAT_IF"
+      name: "REPP_AGG_SP_LCR_WHAT_IF(VARCHAR, VARCHAR)"
+      type: "procedure"
+      execution_environment:
+        type: warehouse
+        warehouse: MD_TEST_WH
+        query_timeout: 120
   $$;
 
 GRANT USAGE ON AGENT {{ db }}.{{ rep_agg }}.LIQUIDITY_RISK_AGENT TO ROLE ACCOUNTADMIN;
@@ -4369,11 +2027,19 @@ CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAUL
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT 
-  ADD AGENT {{ db }}.{{ rep_agg }}.LIQUIDITY_RISK_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.LIQUIDITY_RISK_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SHOW AGENTS IN SCHEMA {{ db }}.{{ rep_agg }};
-SHOW SNOWFLAKE INTELLIGENCES;
 
 SELECT 'LIQUIDITY_RISK_AGENT created successfully! Treasury  and  Liquidity monitoring agent ready.' AS STATUS;
 
@@ -4777,17 +2443,21 @@ CREATE SNOWFLAKE INTELLIGENCE IF NOT EXISTS SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAUL
 
 GRANT USAGE ON SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT 
-  ADD AGENT {{ db }}.{{ rep_agg }}.LOAN_PORTFOLIO_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.LOAN_PORTFOLIO_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SHOW AGENTS IN SCHEMA {{ db }}.{{ rep_agg }};
-SHOW SNOWFLAKE INTELLIGENCES;
 
 SELECT 'LOAN_PORTFOLIO_AGENT created successfully! Retail Loans  and  Mortgages monitoring agent ready.' AS STATUS;
-
--- ============================================================
--- HR EMPLOYEE AGENT
--- ============================================================
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ crm_agg }};
@@ -4851,14 +2521,19 @@ CREATE OR REPLACE AGENT HR_EMPLOYEE_AGENT
 GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO ROLE ACCOUNTADMIN;
 GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT 
-  ADD AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SELECT 'HR_EMPLOYEE_AGENT created successfully! HR workforce intelligence agent ready.' AS STATUS;
-
--- ============================================================
--- UBER AGENT (Orchestrator across all sub-agents)
--- ============================================================
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ rep_agg }};
@@ -4972,8 +2647,17 @@ CREATE OR REPLACE AGENT UBER_AGENT
 GRANT USAGE ON AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT TO ROLE ACCOUNTADMIN;
 GRANT USAGE ON AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT TO ROLE PUBLIC;
 
-ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT 
-  ADD AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT;
+-- Re-runnable: ignore 400203 (agent already present), re-raise anything else
+EXECUTE IMMEDIATE $$
+BEGIN
+  ALTER SNOWFLAKE INTELLIGENCE SNOWFLAKE_INTELLIGENCE_OBJECT_DEFAULT ADD AGENT {{ db }}.{{ rep_agg }}.UBER_AGENT;
+EXCEPTION
+  WHEN STATEMENT_ERROR THEN
+    IF (SQLCODE <> 400203) THEN
+      RAISE;
+    END IF;
+END;
+$$;
 
 SELECT 'UBER_AGENT created successfully! Orchestrator agent with 7 sub-agents ready.' AS STATUS;
 
@@ -4981,130 +2665,104 @@ SELECT 'UBER_AGENT created successfully! Orchestrator agent with 7 sub-agents re
 -- Deploy via: ./deploy.sh DEV (or PROD)
 
 USE DATABASE {{ db }};
+
 USE SCHEMA AAA_DCM;
 
--- ============================================================
--- DATA QUALITY GATES (built-in Data Metric Functions)
--- Using SNOWFLAKE.CORE DMFs: ROW_COUNT, NULL_PERCENT, FRESHNESS
--- ============================================================
-
--- Product 1: Customer PII Vault
-ALTER TABLE {{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
-
-ALTER TABLE {{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.NULL_PERCENT ON (FULL_NAME);
-
-ALTER TABLE {{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
-
--- Product 2: Employee PII Vault
-ALTER TABLE {{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
-
-ALTER TABLE {{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.NULL_PERCENT ON (FULL_NAME);
-
--- Product 3: Customer 360 & KYC
-ALTER TABLE {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
-
-ALTER TABLE {{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.FRESHNESS ON ();
-
-ALTER TABLE {{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS
-    ADD DATA METRIC FUNCTION SNOWFLAKE.CORE.ROW_COUNT ON ();
-
-SELECT 'Data quality gates attached to Products 1-3.' AS STATUS;
+-- Share and listing names are per environment: DEV keeps SH_* / LS_*, PROD uses SH_PROD_* / LS_PROD_*
+-- (account-level objects, so DEV and PROD in the same account must not share a name).
+{% set is_prod = '_PRD_' in db %}
+{% set sh = 'SH_PROD_' if is_prod else 'SH_' %}
+{% set ls = 'LS_PROD_' if is_prod else 'LS_' %}
+{% set title_suffix = ' (PROD)' if is_prod else '' %}
 
 -- ============================================================
 -- DATA PRODUCT SHARES
 -- ============================================================
 
 -- Product 1: Customer PII Vault (RESTRICTED)
-CREATE SHARE IF NOT EXISTS SH_CUSTOMER_PII_VAULT
+CREATE SHARE IF NOT EXISTS {{ sh }}CUSTOMER_PII_VAULT
     COMMENT = 'Restricted: Customer PII vault with column-level masking policies. Only ACCOUNTADMIN/COMPLIANCE see unmasked values.';
 
-GRANT USAGE ON DATABASE {{ db }} TO SHARE SH_CUSTOMER_PII_VAULT;
-GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE SH_CUSTOMER_PII_VAULT;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII TO SHARE SH_CUSTOMER_PII_VAULT;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII TO SHARE SH_CUSTOMER_PII_VAULT;
+GRANT USAGE ON DATABASE {{ db }} TO SHARE {{ sh }}CUSTOMER_PII_VAULT;
+GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE {{ sh }}CUSTOMER_PII_VAULT;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII TO SHARE {{ sh }}CUSTOMER_PII_VAULT;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII TO SHARE {{ sh }}CUSTOMER_PII_VAULT;
 
-SELECT 'Share SH_CUSTOMER_PII_VAULT created.' AS STATUS;
+SELECT 'Share {{ sh }}CUSTOMER_PII_VAULT created.' AS STATUS;
 
 -- Product 2: Employee PII Vault (RESTRICTED)
-CREATE SHARE IF NOT EXISTS SH_EMPLOYEE_PII_VAULT
+CREATE SHARE IF NOT EXISTS {{ sh }}EMPLOYEE_PII_VAULT
     COMMENT = 'Restricted: Employee PII vault with column-level masking policies. Only ACCOUNTADMIN/COMPLIANCE see unmasked values.';
 
-GRANT USAGE ON DATABASE {{ db }} TO SHARE SH_EMPLOYEE_PII_VAULT;
-GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE SH_EMPLOYEE_PII_VAULT;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII TO SHARE SH_EMPLOYEE_PII_VAULT;
+GRANT USAGE ON DATABASE {{ db }} TO SHARE {{ sh }}EMPLOYEE_PII_VAULT;
+GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE {{ sh }}EMPLOYEE_PII_VAULT;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII TO SHARE {{ sh }}EMPLOYEE_PII_VAULT;
 
-SELECT 'Share SH_EMPLOYEE_PII_VAULT created.' AS STATUS;
+SELECT 'Share {{ sh }}EMPLOYEE_PII_VAULT created.' AS STATUS;
 
 -- Product 3: Customer 360 & KYC (AI-READY)
-CREATE SHARE IF NOT EXISTS SH_CUSTOMER_360_KYC
+CREATE SHARE IF NOT EXISTS {{ sh }}CUSTOMER_360_KYC
     COMMENT = 'Customer 360 & KYC data product - AI-ready with semantic views and Cortex Agents. Comprehensive customer profiles, AML/KYC screening, advisor performance.';
 
-ALTER SHARE SH_CUSTOMER_360_KYC SET SECURE_OBJECTS_ONLY = FALSE;
+ALTER SHARE {{ sh }}CUSTOMER_360_KYC SET SECURE_OBJECTS_ONLY = FALSE;
 
-GRANT USAGE ON DATABASE {{ db }} TO SHARE SH_CUSTOMER_360_KYC;
-GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE SH_CUSTOMER_360_KYC;
+GRANT USAGE ON DATABASE {{ db }} TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT USAGE ON SCHEMA {{ db }}.{{ crm_agg }} TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Customer 360 core
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_HISTORY TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360 TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_360_ENRICHED TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_HISTORY TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_LIFECYCLE TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Address metadata (no PII)
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_HISTORY TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_HISTORY TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Accounts
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.ACCA_AGG_DT_ACCOUNTS TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Risk & compliance views (excluding cross-database sanctions views)
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_RISK_PROFILE TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_CUSTOMER_RISK_PROFILE TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.CRMA_AGG_VW_SCREENING_STATUS TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Employee / advisor analytics
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_PORTFOLIO_BY_ADVISOR TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_TEAM_LEADER_DASHBOARD TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISORS TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_TEAM_DASHBOARD_ENRICHED TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_EMPLOYEE_HIERARCHY TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ORGANIZATIONAL_CHART TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_CURRENT_ASSIGNMENTS TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ASSIGNMENT_HISTORY TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_WORKLOAD_DISTRIBUTION TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_ADVISOR_PERFORMANCE TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_PORTFOLIO_BY_ADVISOR TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON TABLE {{ db }}.{{ crm_agg }}.EMPA_AGG_DT_TEAM_LEADER_DASHBOARD TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISORS TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ADVISOR_PERFORMANCE_ENRICHED TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_TEAM_DASHBOARD_ENRICHED TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_EMPLOYEE_HIERARCHY TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ORGANIZATIONAL_CHART TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_CURRENT_ASSIGNMENTS TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_ASSIGNMENT_HISTORY TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON VIEW {{ db }}.{{ crm_agg }}.EMPA_AGG_VW_WORKLOAD_DISTRIBUTION TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Semantic views (AI-ready)
-GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.CRMA_SV_CUSTOMER_360 TO SHARE SH_CUSTOMER_360_KYC;
-GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.CRMA_SV_CUSTOMER_360 TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_EMPLOYEE_ADVISOR TO SHARE SH_CUSTOMER_360_KYC;
-GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_EMPLOYEE_ADVISOR TO SHARE SH_CUSTOMER_360_KYC;
-GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE TO SHARE SH_CUSTOMER_360_KYC;
-GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE TO SHARE SH_CUSTOMER_360_KYC;
+GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.CRMA_SV_CUSTOMER_360 TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.CRMA_SV_CUSTOMER_360 TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_EMPLOYEE_ADVISOR TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_EMPLOYEE_ADVISOR TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT SELECT ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT REFERENCES ON SEMANTIC VIEW {{ db }}.{{ crm_agg }}.EMPA_SV_HR_EMPLOYEE TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
 -- Cortex Agents (AI-ready)
-GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.CRM_Customer_360 TO SHARE SH_CUSTOMER_360_KYC;
-GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO SHARE SH_CUSTOMER_360_KYC;
+GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.CRM_Customer_360 TO SHARE {{ sh }}CUSTOMER_360_KYC;
+GRANT USAGE ON AGENT {{ db }}.{{ crm_agg }}.HR_EMPLOYEE_AGENT TO SHARE {{ sh }}CUSTOMER_360_KYC;
 
-SELECT 'Share SH_CUSTOMER_360_KYC created with AI objects.' AS STATUS;
+SELECT 'Share {{ sh }}CUSTOMER_360_KYC created with AI objects.' AS STATUS;
 
 -- ============================================================
 -- ORGANIZATION LISTINGS
 -- ============================================================
 
 -- Product 1: Customer PII Vault
-CREATE ORGANIZATION LISTING IF NOT EXISTS LS_CUSTOMER_PII_VAULT
-SHARE SH_CUSTOMER_PII_VAULT AS
+CREATE ORGANIZATION LISTING IF NOT EXISTS {{ ls }}CUSTOMER_PII_VAULT
+SHARE {{ sh }}CUSTOMER_PII_VAULT AS
 $$
-title: "Customer PII Vault"
+title: "Customer PII Vault{{ title_suffix }}"
 subtitle: "Restricted personal data with column-level masking and GDPR support"
 description: "Restricted PII vault containing customer personal data protected by column-level masking policies. Only ACCOUNTADMIN and COMPLIANCE roles see unmasked values; all other roles receive masked output. Implements the Late Enrichment pattern: downstream analytics carry only CUSTOMER_ID, with PII joined back at display time. Includes customer addresses in a separate address PII table. All columns tagged with SENSITIVITY_LEVEL = restricted. Supports GDPR right-to-erasure. Quality gates: ROW_COUNT and NULL_PERCENT monitored via Snowflake Data Metric Functions."
 organization_profile: "INTERNAL"
@@ -5120,13 +2778,13 @@ locations:
     - name: "PUBLIC.AWS_EU_CENTRAL_1"
 $$;
 
-SELECT 'Listing LS_CUSTOMER_PII_VAULT published.' AS STATUS;
+SELECT 'Listing {{ ls }}CUSTOMER_PII_VAULT published.' AS STATUS;
 
 -- Product 2: Employee PII Vault
-CREATE ORGANIZATION LISTING IF NOT EXISTS LS_EMPLOYEE_PII_VAULT
-SHARE SH_EMPLOYEE_PII_VAULT AS
+CREATE ORGANIZATION LISTING IF NOT EXISTS {{ ls }}EMPLOYEE_PII_VAULT
+SHARE {{ sh }}EMPLOYEE_PII_VAULT AS
 $$
-title: "Employee PII Vault"
+title: "Employee PII Vault{{ title_suffix }}"
 subtitle: "Restricted employee personal data with column-level masking"
 description: "Restricted employee PII vault containing personal data for all bank staff including client advisors, team leaders, and super team leaders. Protected by column-level masking policies (only ACCOUNTADMIN and COMPLIANCE roles see unmasked values). All columns tagged with SENSITIVITY_LEVEL = restricted. Implements the Late Enrichment pattern for HR analytics and advisor performance reporting. Downstream tables carry only EMPLOYEE_ID; this vault is joined at display time for name resolution. Quality gates: ROW_COUNT and NULL_PERCENT monitored via Snowflake Data Metric Functions."
 organization_profile: "INTERNAL"
@@ -5142,13 +2800,13 @@ locations:
     - name: "PUBLIC.AWS_EU_CENTRAL_1"
 $$;
 
-SELECT 'Listing LS_EMPLOYEE_PII_VAULT published.' AS STATUS;
+SELECT 'Listing {{ ls }}EMPLOYEE_PII_VAULT published.' AS STATUS;
 
 -- Product 3: Customer 360 & KYC (AI-Ready)
-CREATE ORGANIZATION LISTING IF NOT EXISTS LS_CUSTOMER_360_KYC
-SHARE SH_CUSTOMER_360_KYC AS
+CREATE ORGANIZATION LISTING IF NOT EXISTS {{ ls }}CUSTOMER_360_KYC
+SHARE {{ sh }}CUSTOMER_360_KYC AS
 $$
-title: "Customer 360 & KYC"
+title: "Customer 360 & KYC{{ title_suffix }}"
 subtitle: "AI-ready customer profiles with AML/KYC screening and advisor analytics"
 description: "Centralized customer master data product with comprehensive 360-degree profiles, SCD Type 2 history tracking, and Late Enrichment PII pattern. Core capabilities: Customer 360 profiles with 70+ attributes (identity, accounts, risk, compliance); PEP (Politically Exposed Persons) checks with confidence scoring; lifecycle engagement scoring, churn prediction, and vulnerability flags; consolidated risk profiles (NO_RISK through CRITICAL); account master data with multi-currency support; SCD Type 2 history for customer attributes and addresses. Advisor analytics: client advisor performance metrics (AUM, client counts, retention), team leader dashboards, organizational hierarchy, and workload distribution. AI-ready: 3 Semantic Views (CRMA_SV_CUSTOMER_360, EMPA_SV_EMPLOYEE_ADVISOR, EMPA_SV_HR_EMPLOYEE) for natural language querying via Cortex Analyst; 2 Cortex Agents (CRM_Customer_360, HR_EMPLOYEE_AGENT) for conversational data exploration; 200+ synonym mappings for business-friendly queries. Quality gates: ROW_COUNT, FRESHNESS, and NULL_PERCENT monitored via Snowflake Data Metric Functions. Data freshness: hourly refresh via dynamic tables (60-minute target lag). 25+ objects included across customer profiles, risk views, advisor performance, and organizational structure."
 organization_profile: "INTERNAL"
@@ -5164,4 +2822,4 @@ locations:
     - name: "PUBLIC.AWS_EU_CENTRAL_1"
 $$;
 
-SELECT 'Listing LS_CUSTOMER_360_KYC published with AI-ready tag.' AS STATUS;
+SELECT 'Listing {{ ls }}CUSTOMER_360_KYC published with AI-ready tag.' AS STATUS;

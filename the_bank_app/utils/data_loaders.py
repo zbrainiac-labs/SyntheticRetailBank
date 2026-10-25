@@ -8,7 +8,7 @@ import pandas as pd
 from .snowflake_connection import get_snowflake_session
 
 
-@st.cache_data(ttl=7200)  # Cache for 1 hour
+@st.cache_data(ttl=14400)  # Cache for 4 hours (240 min)
 def load_customer_360():
     """
     Load complete customer 360° data
@@ -34,177 +34,101 @@ def load_customer_360():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_high_risk_customers():
-    """
-    Load high-risk customers requiring review
-    
-    Returns:
-        pandas.DataFrame: High-risk customer data
-    """
+    """Load high-risk customers requiring review (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FULL_NAME,
-                COUNTRY,
-                ACCOUNT_TIER,
-                OVERALL_RISK_RATING,
-                OVERALL_RISK_SCORE,
-                EXPOSED_PERSON_MATCH_TYPE,
-                EXPOSED_PERSON_MATCH_ACCURACY_PERCENT,
-                SANCTIONS_MATCH_TYPE,
-                SANCTIONS_MATCH_ACCURACY_PERCENT,
-                REQUIRES_EXPOSED_PERSON_REVIEW,
-                REQUIRES_SANCTIONS_REVIEW,
-                HIGH_RISK_CUSTOMER
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            WHERE HIGH_RISK_CUSTOMER = TRUE
-               OR REQUIRES_EXPOSED_PERSON_REVIEW = TRUE
-               OR REQUIRES_SANCTIONS_REVIEW = TRUE
-            ORDER BY OVERALL_RISK_SCORE DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FULL_NAME', 'COUNTRY', 'ACCOUNT_TIER', 'OVERALL_RISK_RATING',
+                'OVERALL_RISK_SCORE', 'EXPOSED_PERSON_MATCH_TYPE', 'EXPOSED_PERSON_MATCH_ACCURACY_PERCENT',
+                'SANCTIONS_MATCH_TYPE', 'SANCTIONS_MATCH_ACCURACY_PERCENT',
+                'REQUIRES_EXPOSED_PERSON_REVIEW', 'REQUIRES_SANCTIONS_REVIEW', 'HIGH_RISK_CUSTOMER']
+        cols = [c for c in cols if c in df.columns]
+        mask = pd.Series(False, index=df.index)
+        if 'HIGH_RISK_CUSTOMER' in df.columns:
+            mask |= df['HIGH_RISK_CUSTOMER'] == True
+        if 'REQUIRES_EXPOSED_PERSON_REVIEW' in df.columns:
+            mask |= df['REQUIRES_EXPOSED_PERSON_REVIEW'] == True
+        if 'REQUIRES_SANCTIONS_REVIEW' in df.columns:
+            mask |= df['REQUIRES_SANCTIONS_REVIEW'] == True
+        result = df.loc[mask, cols].copy()
+        if 'OVERALL_RISK_SCORE' in result.columns:
+            result = result.sort_values('OVERALL_RISK_SCORE', ascending=False)
+        return result
     except Exception as e:
         st.error(f"Error loading high-risk customers: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_risk_distribution():
-    """
-    Load risk distribution summary
-    
-    Returns:
-        pandas.DataFrame: Risk distribution counts
-    """
+    """Load risk distribution summary (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                OVERALL_RISK_RATING,
-                COUNT(*) as CUSTOMER_COUNT,
-                AVG(OVERALL_RISK_SCORE) as AVG_RISK_SCORE
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            GROUP BY OVERALL_RISK_RATING
-            ORDER BY AVG_RISK_SCORE DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'OVERALL_RISK_RATING' not in df.columns:
+            return pd.DataFrame()
+        result = df.groupby('OVERALL_RISK_RATING').agg(
+            CUSTOMER_COUNT=('OVERALL_RISK_RATING', 'size'),
+            AVG_RISK_SCORE=('OVERALL_RISK_SCORE', 'mean')
+        ).reset_index().sort_values('AVG_RISK_SCORE', ascending=False)
+        return result
     except Exception as e:
         st.error(f"Error loading risk distribution: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_pep_sanctions_summary():
-    """
-    Load PEP and sanctions screening summary
-    
-    Returns:
-        tuple: (pep_df, sanctions_df)
-    """
+    """Load PEP and sanctions screening summary (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        pep_query = """
-            SELECT 
-                EXPOSED_PERSON_MATCH_TYPE,
-                COUNT(*) as COUNT,
-                AVG(EXPOSED_PERSON_MATCH_ACCURACY_PERCENT) as AVG_ACCURACY,
-                SUM(CASE WHEN REQUIRES_EXPOSED_PERSON_REVIEW THEN 1 ELSE 0 END) as REQUIRES_REVIEW
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            GROUP BY EXPOSED_PERSON_MATCH_TYPE
-            ORDER BY COUNT DESC
-        """
-        
-        sanctions_query = """
-            SELECT 
-                SANCTIONS_MATCH_TYPE,
-                COUNT(*) as COUNT,
-                AVG(SANCTIONS_MATCH_ACCURACY_PERCENT) as AVG_ACCURACY,
-                SUM(CASE WHEN REQUIRES_SANCTIONS_REVIEW THEN 1 ELSE 0 END) as REQUIRES_REVIEW
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            GROUP BY SANCTIONS_MATCH_TYPE
-            ORDER BY COUNT DESC
-        """
-        
-        pep_df = session.sql(pep_query).to_pandas()
-        sanctions_df = session.sql(sanctions_query).to_pandas()
-        
+        df = load_customer_360()
+        if df.empty:
+            return pd.DataFrame(), pd.DataFrame()
+        pep_df = df.groupby('EXPOSED_PERSON_MATCH_TYPE').agg(
+            COUNT=('EXPOSED_PERSON_MATCH_TYPE', 'size'),
+            AVG_ACCURACY=('EXPOSED_PERSON_MATCH_ACCURACY_PERCENT', 'mean'),
+            REQUIRES_REVIEW=('REQUIRES_EXPOSED_PERSON_REVIEW', 'sum')
+        ).reset_index().sort_values('COUNT', ascending=False)
+        sanctions_df = df.groupby('SANCTIONS_MATCH_TYPE').agg(
+            COUNT=('SANCTIONS_MATCH_TYPE', 'size'),
+            AVG_ACCURACY=('SANCTIONS_MATCH_ACCURACY_PERCENT', 'mean'),
+            REQUIRES_REVIEW=('REQUIRES_SANCTIONS_REVIEW', 'sum')
+        ).reset_index().sort_values('COUNT', ascending=False)
         return pep_df, sanctions_df
-    
     except Exception as e:
         st.error(f"Error loading PEP/Sanctions summary: {str(e)}")
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_account_tier_distribution():
-    """
-    Load account tier distribution
-    
-    Returns:
-        pandas.DataFrame: Tier distribution with account holdings
-    """
+    """Load account tier distribution (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                ACCOUNT_TIER,
-                COUNT(*) as CUSTOMER_COUNT,
-                AVG(TOTAL_ACCOUNTS) as AVG_TOTAL_ACCOUNTS,
-                AVG(CHECKING_ACCOUNTS) as AVG_CHECKING,
-                AVG(SAVINGS_ACCOUNTS) as AVG_SAVINGS,
-                AVG(BUSINESS_ACCOUNTS) as AVG_BUSINESS,
-                AVG(INVESTMENT_ACCOUNTS) as AVG_INVESTMENT
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            GROUP BY ACCOUNT_TIER
-            ORDER BY CUSTOMER_COUNT DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'ACCOUNT_TIER' not in df.columns:
+            return pd.DataFrame()
+        result = df.groupby('ACCOUNT_TIER').agg(**{
+            'CUSTOMER_COUNT': ('ACCOUNT_TIER', 'size'),
+            **{f'AVG_{c.split("_")[0]}' if c != 'TOTAL_ACCOUNTS' else 'AVG_TOTAL_ACCOUNTS': (c, 'mean')
+               for c in ['TOTAL_ACCOUNTS', 'CHECKING_ACCOUNTS', 'SAVINGS_ACCOUNTS', 'BUSINESS_ACCOUNTS', 'INVESTMENT_ACCOUNTS']
+               if c in df.columns}
+        }).reset_index().sort_values('CUSTOMER_COUNT', ascending=False)
+        return result
     except Exception as e:
         st.error(f"Error loading account tier distribution: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_geographic_distribution():
-    """
-    Load geographic distribution of customers
-    
-    Returns:
-        pandas.DataFrame: Customer counts by country
-    """
+    """Load geographic distribution of customers (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                COUNTRY,
-                COUNT(*) as CUSTOMER_COUNT,
-                COUNT(DISTINCT ACCOUNT_TIER) as TIER_DIVERSITY,
-                AVG(OVERALL_RISK_SCORE) as AVG_RISK_SCORE
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            GROUP BY COUNTRY
-            ORDER BY CUSTOMER_COUNT DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'COUNTRY' not in df.columns:
+            return pd.DataFrame()
+        result = df.groupby('COUNTRY').agg(
+            CUSTOMER_COUNT=('COUNTRY', 'size'),
+            TIER_DIVERSITY=('ACCOUNT_TIER', 'nunique'),
+            AVG_RISK_SCORE=('OVERALL_RISK_SCORE', 'mean')
+        ).reset_index().sort_values('CUSTOMER_COUNT', ascending=False)
+        return result
     except Exception as e:
         st.error(f"Error loading geographic distribution: {str(e)}")
         return pd.DataFrame()
@@ -214,7 +138,7 @@ def load_geographic_distribution():
 # AML & Transaction Monitoring Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_aml_alerts():
     """
     Load AML transaction monitoring alerts
@@ -252,7 +176,7 @@ def load_aml_alerts():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_aml_metrics():
     """
     Load AML key metrics summary
@@ -301,33 +225,15 @@ def load_aml_metrics():
 # Lending Operations Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
 def load_lending_portfolio():
-    """
-    Load lending portfolio overview
-    
-    Returns:
-        pandas.DataFrame: Lending portfolio data
-    """
+    """Load lending portfolio overview (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FULL_NAME,
-                COUNTRY,
-                CREDIT_SCORE_BAND,
-                RISK_CLASSIFICATION,
-                ACCOUNT_TIER,
-                TOTAL_ACCOUNTS
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            ORDER BY CUSTOMER_ID
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FULL_NAME', 'COUNTRY', 'CREDIT_SCORE_BAND', 'RISK_CLASSIFICATION', 'ACCOUNT_TIER', 'TOTAL_ACCOUNTS']
+        cols = [c for c in cols if c in df.columns]
+        return df[cols].sort_values('CUSTOMER_ID') if cols else pd.DataFrame()
     except Exception as e:
         st.error(f"Error loading lending portfolio: {str(e)}")
         return pd.DataFrame()
@@ -337,7 +243,7 @@ def load_lending_portfolio():
 # Wealth Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_wealth_portfolios():
     """
     Load wealth management portfolios
@@ -368,7 +274,7 @@ def load_wealth_portfolios():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_advisor_performance():
     """
     Load advisor performance metrics
@@ -397,34 +303,19 @@ def load_advisor_performance():
 # Sanctions Control Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
 def load_sanctions_matches():
-    """
-    Load sanctions screening matches
-    
-    Returns:
-        pandas.DataFrame: Sanctions match data
-    """
+    """Load sanctions screening matches (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FULL_NAME,
-                COUNTRY,
-                SANCTIONS_MATCH_TYPE,
-                SANCTIONS_MATCH_ACCURACY_PERCENT,
-                REQUIRES_SANCTIONS_REVIEW,
-                OVERALL_SANCTIONS_RISK
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            WHERE SANCTIONS_MATCH_TYPE != 'NO_MATCH'
-            ORDER BY SANCTIONS_MATCH_ACCURACY_PERCENT DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'SANCTIONS_MATCH_TYPE' not in df.columns:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FULL_NAME', 'COUNTRY', 'SANCTIONS_MATCH_TYPE',
+                'SANCTIONS_MATCH_ACCURACY_PERCENT', 'REQUIRES_SANCTIONS_REVIEW', 'OVERALL_SANCTIONS_RISK']
+        cols = [c for c in cols if c in df.columns]
+        result = df[df['SANCTIONS_MATCH_TYPE'] != 'NO_MATCH'][cols].copy()
+        if 'SANCTIONS_MATCH_ACCURACY_PERCENT' in result.columns:
+            result = result.sort_values('SANCTIONS_MATCH_ACCURACY_PERCENT', ascending=False)
+        return result
     except Exception as e:
         st.error(f"Error loading sanctions matches: {str(e)}")
         return pd.DataFrame()
@@ -434,7 +325,7 @@ def load_sanctions_matches():
 # Employee/Advisor Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_advisor_capacity():
     """
     Load advisor capacity and workload
@@ -473,7 +364,7 @@ def load_advisor_capacity():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_team_performance():
     """
     Load team leader dashboard data
@@ -501,67 +392,39 @@ def load_team_performance():
 # KYC & Screening Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
 def load_pep_matches():
-    """
-    Load PEP (Politically Exposed Persons) matches
-    
-    Returns:
-        pandas.DataFrame: PEP match data
-    """
+    """Load PEP matches (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FULL_NAME,
-                COUNTRY,
-                EXPOSED_PERSON_MATCH_TYPE,
-                EXPOSED_PERSON_MATCH_ACCURACY_PERCENT,
-                REQUIRES_EXPOSED_PERSON_REVIEW,
-                OVERALL_EXPOSED_PERSON_RISK
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            WHERE EXPOSED_PERSON_MATCH_TYPE != 'NO_MATCH'
-            ORDER BY EXPOSED_PERSON_MATCH_ACCURACY_PERCENT DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'EXPOSED_PERSON_MATCH_TYPE' not in df.columns:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FULL_NAME', 'COUNTRY', 'EXPOSED_PERSON_MATCH_TYPE',
+                'EXPOSED_PERSON_MATCH_ACCURACY_PERCENT', 'REQUIRES_EXPOSED_PERSON_REVIEW', 'OVERALL_EXPOSED_PERSON_RISK']
+        cols = [c for c in cols if c in df.columns]
+        result = df[df['EXPOSED_PERSON_MATCH_TYPE'] != 'NO_MATCH'][cols].copy()
+        if 'EXPOSED_PERSON_MATCH_ACCURACY_PERCENT' in result.columns:
+            result = result.sort_values('EXPOSED_PERSON_MATCH_ACCURACY_PERCENT', ascending=False)
+        return result
     except Exception as e:
         st.error(f"Error loading PEP matches: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_kyc_completeness():
-    """
-    Load KYC completeness metrics
-    
-    Returns:
-        pandas.DataFrame: KYC completeness data
-    """
+    """Load KYC completeness metrics (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                COUNTRY,
-                COUNT(*) as TOTAL_CUSTOMERS,
-                SUM(CASE WHEN EMAIL IS NOT NULL THEN 1 ELSE 0 END) as EMAIL_COMPLETE,
-                SUM(CASE WHEN PHONE IS NOT NULL THEN 1 ELSE 0 END) as PHONE_COMPLETE,
-                SUM(CASE WHEN EMPLOYER IS NOT NULL THEN 1 ELSE 0 END) as EMPLOYER_COMPLETE,
-                ROUND(AVG(CASE WHEN EMAIL IS NOT NULL THEN 100 ELSE 0 END), 2) as EMAIL_PCT,
-                ROUND(AVG(CASE WHEN PHONE IS NOT NULL THEN 100 ELSE 0 END), 2) as PHONE_PCT
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            GROUP BY COUNTRY
-            ORDER BY TOTAL_CUSTOMERS DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'COUNTRY' not in df.columns:
+            return pd.DataFrame()
+        result = df.groupby('COUNTRY').agg(
+            TOTAL_CUSTOMERS=('COUNTRY', 'size'),
+            EMAIL_COMPLETE=('EMAIL', lambda x: x.notna().sum()),
+            PHONE_COMPLETE=('PHONE', lambda x: x.notna().sum()),
+            EMPLOYER_COMPLETE=('EMPLOYER', lambda x: x.notna().sum()) if 'EMPLOYER' in df.columns else ('COUNTRY', 'size'),
+        ).reset_index()
+        result['EMAIL_PCT'] = (result['EMAIL_COMPLETE'] / result['TOTAL_CUSTOMERS'] * 100).round(2)
+        result['PHONE_PCT'] = (result['PHONE_COMPLETE'] / result['TOTAL_CUSTOMERS'] * 100).round(2)
+        return result.sort_values('TOTAL_CUSTOMERS', ascending=False)
     except Exception as e:
         st.error(f"Error loading KYC completeness: {str(e)}")
         return pd.DataFrame()
@@ -571,35 +434,25 @@ def load_kyc_completeness():
 # Data Quality & Controls Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
 def load_data_quality_metrics():
-    """
-    Load data quality assessment metrics
-    
-    Returns:
-        dict: Data quality metrics
-    """
+    """Load data quality assessment metrics (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                COUNT(*) as TOTAL_RECORDS,
-                COUNT(DISTINCT CUSTOMER_ID) as UNIQUE_CUSTOMERS,
-                SUM(CASE WHEN EMAIL IS NULL THEN 1 ELSE 0 END) as MISSING_EMAIL,
-                SUM(CASE WHEN PHONE IS NULL THEN 1 ELSE 0 END) as MISSING_PHONE,
-                SUM(CASE WHEN DATE_OF_BIRTH IS NULL THEN 1 ELSE 0 END) as MISSING_DOB,
-                SUM(CASE WHEN STREET_ADDRESS IS NULL THEN 1 ELSE 0 END) as MISSING_ADDRESS,
-                ROUND((COUNT(EMAIL) * 100.0 / COUNT(*)), 2) as EMAIL_COMPLETENESS,
-                ROUND((COUNT(PHONE) * 100.0 / COUNT(*)), 2) as PHONE_COMPLETENESS,
-                ROUND((COUNT(DATE_OF_BIRTH) * 100.0 / COUNT(*)), 2) as DOB_COMPLETENESS,
-                ROUND((COUNT(STREET_ADDRESS) * 100.0 / COUNT(*)), 2) as ADDRESS_COMPLETENESS
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df.iloc[0].to_dict() if len(df) > 0 else {}
-    
+        df = load_customer_360()
+        if df.empty:
+            return {}
+        total = len(df)
+        return {
+            'TOTAL_RECORDS': total,
+            'UNIQUE_CUSTOMERS': df['CUSTOMER_ID'].nunique() if 'CUSTOMER_ID' in df.columns else total,
+            'MISSING_EMAIL': int(df['EMAIL'].isna().sum()) if 'EMAIL' in df.columns else 0,
+            'MISSING_PHONE': int(df['PHONE'].isna().sum()) if 'PHONE' in df.columns else 0,
+            'MISSING_DOB': int(df['DATE_OF_BIRTH'].isna().sum()) if 'DATE_OF_BIRTH' in df.columns else 0,
+            'MISSING_ADDRESS': int(df['STREET_ADDRESS'].isna().sum()) if 'STREET_ADDRESS' in df.columns else 0,
+            'EMAIL_COMPLETENESS': round(df['EMAIL'].notna().mean() * 100, 2) if 'EMAIL' in df.columns else 0,
+            'PHONE_COMPLETENESS': round(df['PHONE'].notna().mean() * 100, 2) if 'PHONE' in df.columns else 0,
+            'DOB_COMPLETENESS': round(df['DATE_OF_BIRTH'].notna().mean() * 100, 2) if 'DATE_OF_BIRTH' in df.columns else 0,
+            'ADDRESS_COMPLETENESS': round(df['STREET_ADDRESS'].notna().mean() * 100, 2) if 'STREET_ADDRESS' in df.columns else 0,
+        }
     except Exception as e:
         st.error(f"Error loading data quality metrics: {str(e)}")
         return {}
@@ -609,33 +462,22 @@ def load_data_quality_metrics():
 # Compliance Risk Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
 def load_compliance_risk_summary():
-    """
-    Load overall compliance risk profile
-    
-    Returns:
-        dict: Compliance risk summary metrics
-    """
+    """Load overall compliance risk profile (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                COUNT(*) as TOTAL_CUSTOMERS,
-                SUM(CASE WHEN HIGH_RISK_CUSTOMER THEN 1 ELSE 0 END) as HIGH_RISK_COUNT,
-                SUM(CASE WHEN EXPOSED_PERSON_MATCH_TYPE != 'NO_MATCH' THEN 1 ELSE 0 END) as PEP_MATCHES,
-                SUM(CASE WHEN SANCTIONS_MATCH_TYPE != 'NO_MATCH' THEN 1 ELSE 0 END) as SANCTIONS_MATCHES,
-                SUM(CASE WHEN REQUIRES_EXPOSED_PERSON_REVIEW THEN 1 ELSE 0 END) as PEP_REVIEWS_NEEDED,
-                SUM(CASE WHEN REQUIRES_SANCTIONS_REVIEW THEN 1 ELSE 0 END) as SANCTIONS_REVIEWS_NEEDED,
-                COALESCE(SUM(CASE WHEN HAS_ANOMALY THEN 1 ELSE 0 END), 0) as ANOMALY_COUNT,
-                ROUND(AVG(OVERALL_RISK_SCORE), 2) as AVG_RISK_SCORE
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df.iloc[0].to_dict() if len(df) > 0 else {}
-    
+        df = load_customer_360()
+        if df.empty:
+            return {}
+        return {
+            'TOTAL_CUSTOMERS': len(df),
+            'HIGH_RISK_COUNT': int(df['HIGH_RISK_CUSTOMER'].sum()) if 'HIGH_RISK_CUSTOMER' in df.columns else 0,
+            'PEP_MATCHES': int((df['EXPOSED_PERSON_MATCH_TYPE'] != 'NO_MATCH').sum()) if 'EXPOSED_PERSON_MATCH_TYPE' in df.columns else 0,
+            'SANCTIONS_MATCHES': int((df['SANCTIONS_MATCH_TYPE'] != 'NO_MATCH').sum()) if 'SANCTIONS_MATCH_TYPE' in df.columns else 0,
+            'PEP_REVIEWS_NEEDED': int(df['REQUIRES_EXPOSED_PERSON_REVIEW'].sum()) if 'REQUIRES_EXPOSED_PERSON_REVIEW' in df.columns else 0,
+            'SANCTIONS_REVIEWS_NEEDED': int(df['REQUIRES_SANCTIONS_REVIEW'].sum()) if 'REQUIRES_SANCTIONS_REVIEW' in df.columns else 0,
+            'ANOMALY_COUNT': int(df['HAS_ANOMALY'].sum()) if 'HAS_ANOMALY' in df.columns else 0,
+            'AVG_RISK_SCORE': round(df['OVERALL_RISK_SCORE'].mean(), 2) if 'OVERALL_RISK_SCORE' in df.columns else 0,
+        }
     except Exception as e:
         st.error(f"Error loading compliance risk summary: {str(e)}")
         return {}
@@ -645,7 +487,7 @@ def load_compliance_risk_summary():
 # Churn & Lifecycle Management Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_customer_lifecycle():
     """
     Load customer lifecycle data
@@ -677,7 +519,7 @@ def load_customer_lifecycle():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_lifecycle_summary():
     """
     Load lifecycle stage distribution summary
@@ -716,122 +558,56 @@ def load_lifecycle_summary():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_high_churn_risk_customers():
-    """
-    Load high churn risk customers (>70% probability)
-    
-    Returns:
-        pandas.DataFrame: High churn risk customer data
-    """
+    """Load high churn risk customers >70% (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FIRST_NAME,
-                FAMILY_NAME,
-                LIFECYCLE_STAGE,
-                CHURN_PROBABILITY,
-                DAYS_SINCE_LAST_TRANSACTION,
-                LAST_TRANSACTION_DATE,
-                ACCOUNT_TIER,
-                COUNTRY,
-                EMAIL,
-                PHONE
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            WHERE CHURN_PROBABILITY > 70
-            ORDER BY CHURN_PROBABILITY DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'CHURN_PROBABILITY' not in df.columns:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FIRST_NAME', 'FAMILY_NAME', 'LIFECYCLE_STAGE', 'CHURN_PROBABILITY',
+                'DAYS_SINCE_LAST_TRANSACTION', 'LAST_TRANSACTION_DATE', 'ACCOUNT_TIER', 'COUNTRY', 'EMAIL', 'PHONE']
+        cols = [c for c in cols if c in df.columns]
+        return df[df['CHURN_PROBABILITY'] > 70][cols].sort_values('CHURN_PROBABILITY', ascending=False)
     except Exception as e:
         st.error(f"Error loading high churn risk customers: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_premium_at_risk():
-    """
-    Load GOLD/PLATINUM customers at risk of churning
-    
-    Returns:
-        pandas.DataFrame: Premium customers with high churn risk
-    """
+    """Load GOLD/PLATINUM customers at risk (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FIRST_NAME,
-                FAMILY_NAME,
-                ACCOUNT_TIER,
-                COUNTRY,
-                LIFECYCLE_STAGE,
-                CHURN_PROBABILITY,
-                DAYS_SINCE_LAST_TRANSACTION,
-                LAST_TRANSACTION_DATE,
-                EMAIL,
-                PHONE,
-                PREFERRED_CONTACT_METHOD
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            WHERE ACCOUNT_TIER IN ('GOLD', 'PLATINUM')
-              AND CHURN_PROBABILITY > 70
-            ORDER BY CHURN_PROBABILITY DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'ACCOUNT_TIER' not in df.columns or 'CHURN_PROBABILITY' not in df.columns:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FIRST_NAME', 'FAMILY_NAME', 'ACCOUNT_TIER', 'COUNTRY', 'LIFECYCLE_STAGE',
+                'CHURN_PROBABILITY', 'DAYS_SINCE_LAST_TRANSACTION', 'LAST_TRANSACTION_DATE', 'EMAIL', 'PHONE', 'PREFERRED_CONTACT_METHOD']
+        cols = [c for c in cols if c in df.columns]
+        mask = df['ACCOUNT_TIER'].isin(['GOLD', 'PLATINUM']) & (df['CHURN_PROBABILITY'] > 70)
+        return df.loc[mask, cols].sort_values('CHURN_PROBABILITY', ascending=False)
     except Exception as e:
         st.error(f"Error loading premium at risk: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
 def load_dormant_accounts():
-    """
-    Load dormant accounts (inactive >180 days)
-    
-    Returns:
-        pandas.DataFrame: Dormant account data
-    """
+    """Load dormant accounts >180 days (from cached customer 360)"""
     try:
-        session = get_snowflake_session()
-        
-        query = """
-            SELECT 
-                CUSTOMER_ID,
-                FIRST_NAME,
-                FAMILY_NAME,
-                ACCOUNT_TIER,
-                COUNTRY,
-                LIFECYCLE_STAGE,
-                DAYS_SINCE_LAST_TRANSACTION,
-                LAST_TRANSACTION_DATE,
-                CHURN_PROBABILITY,
-                EMAIL,
-                PHONE,
-                TOTAL_ACCOUNTS
-            FROM CRMA_AGG_VW_CUSTOMER_360_ENRICHED
-            WHERE DAYS_SINCE_LAST_TRANSACTION > 180
-              AND LIFECYCLE_STAGE IN ('DORMANT', 'DECLINING')
-            ORDER BY DAYS_SINCE_LAST_TRANSACTION DESC
-        """
-        
-        df = session.sql(query).to_pandas()
-        return df
-    
+        df = load_customer_360()
+        if df.empty or 'DAYS_SINCE_LAST_TRANSACTION' not in df.columns:
+            return pd.DataFrame()
+        cols = ['CUSTOMER_ID', 'FIRST_NAME', 'FAMILY_NAME', 'ACCOUNT_TIER', 'COUNTRY', 'LIFECYCLE_STAGE',
+                'DAYS_SINCE_LAST_TRANSACTION', 'LAST_TRANSACTION_DATE', 'CHURN_PROBABILITY', 'EMAIL', 'PHONE', 'TOTAL_ACCOUNTS']
+        cols = [c for c in cols if c in df.columns]
+        mask = (df['DAYS_SINCE_LAST_TRANSACTION'] > 180)
+        if 'LIFECYCLE_STAGE' in df.columns:
+            mask &= df['LIFECYCLE_STAGE'].isin(['DORMANT', 'DECLINING'])
+        return df.loc[mask, cols].sort_values('DAYS_SINCE_LAST_TRANSACTION', ascending=False)
     except Exception as e:
         st.error(f"Error loading dormant accounts: {str(e)}")
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def calculate_revenue_at_risk():
     """
     Calculate revenue at risk from potential churn
@@ -865,7 +641,7 @@ def calculate_revenue_at_risk():
 # LCR (Liquidity Coverage Ratio) Data Loaders
 # ============================================================
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_lcr_current_status():
     """
     Load current LCR status
@@ -909,7 +685,7 @@ def load_lcr_current_status():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_lcr_trend(days=90):
     """
     Load LCR trend data
@@ -948,7 +724,7 @@ def load_lcr_trend(days=90):
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_hqla_holdings_detail():
     """
     Load HQLA holdings detail aggregated by asset type
@@ -982,7 +758,7 @@ def load_hqla_holdings_detail():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_deposit_outflows_detail():
     """
     Load deposit outflows detail aggregated by deposit type
@@ -1018,7 +794,7 @@ def load_deposit_outflows_detail():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_lcr_alerts():
     """
     Load active LCR alerts
@@ -1062,7 +838,7 @@ def load_lcr_alerts():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_lcr_monthly_summary():
     """
     Load monthly LCR summary for SNB reporting
@@ -1084,7 +860,7 @@ def load_lcr_monthly_summary():
                 AVG_HQLA_TOTAL,
                 AVG_OUTFLOW_TOTAL,
                 BREACH_DAYS AS DAYS_BELOW_100_PCT,
-                WARNING_DAYS AS DAYS_BELOW_105_PCT,
+                WARNING_DAYS AS DAYS_100_TO_110_PCT,
                 COMPLIANT_DAYS,
                 BREACH_RATE_PCT,
                 CASE 
@@ -1109,7 +885,7 @@ def load_lcr_monthly_summary():
 # LOAN PORTFOLIO DATA LOADERS
 # ============================================================
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_loan_portfolio_summary():
     """
     Load loan portfolio summary metrics
@@ -1144,7 +920,7 @@ def load_loan_portfolio_summary():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_loan_ltv_distribution():
     """
     Load LTV distribution for loan portfolio
@@ -1177,7 +953,7 @@ def load_loan_ltv_distribution():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_loan_application_funnel():
     """
     Load loan application funnel by status
@@ -1213,7 +989,7 @@ def load_loan_application_funnel():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_loan_affordability_analysis():
     """
     Load affordability analysis for loan applications
@@ -1247,7 +1023,7 @@ def load_loan_affordability_analysis():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_loan_compliance_screening():
     """
     Load compliance screening results for loan applications
@@ -1295,7 +1071,7 @@ def load_loan_compliance_screening():
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=14400)
 def load_loan_customer_summary():
     """
     Load customer-level loan summary
@@ -1337,3 +1113,130 @@ def load_loan_customer_summary():
         st.error(f"Error loading customer loan summary: {str(e)}")
         return pd.DataFrame()
 
+
+
+# ============================================================
+# LCR engine loaders (scenarios, attribution, drill-down, simulator)
+# All read the REP_AGG_V001 LCR engine objects; dates are bound parameters.
+# ============================================================
+
+def _lcr_query(query, params=None, error_label="LCR data"):
+    """Run a parameterised LCR query and return a DataFrame (empty on error)."""
+    try:
+        session = get_snowflake_session()
+        return session.sql(query, params=params or []).to_pandas()
+    except Exception as e:
+        st.error(f"Error loading {error_label}: {str(e)}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_scenario_daily():
+    """Daily LCR per scenario (BASE, BANK_STRESS, MARKET_STRESS, COMBINED)."""
+    return _lcr_query("""
+        SELECT AS_OF_DATE, STRESS_SCENARIO, SCENARIO_NAME, IS_REGULATORY, LCR_RATIO, LCR_STATUS,
+               HQLA_TOTAL, L1_TOTAL, L2A_TOTAL, L2B_TOTAL, L2B_CAPPED, L2_UNCAPPED, L2_CAPPED,
+               L2B_CAP_APPLIED, L2_CAP_APPLIED, OUTFLOW_RETAIL, OUTFLOW_CORP, OUTFLOW_FI,
+               OUTFLOW_FACILITIES, OUTFLOW_TOTAL, INFLOW_NONFIN, INFLOW_FI, INFLOW_TOTAL,
+               INFLOW_CAPPED, INFLOW_CAP_APPLIED, NET_OUTFLOW, LCR_BUFFER_CHF
+        FROM REP_AGG_V001.REPP_AGG_DT_LCR_SCENARIO_DAILY
+        ORDER BY AS_OF_DATE, STRESS_SCENARIO
+    """, error_label="LCR scenarios")
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_events():
+    """Showcase liquidity events (latest load per event)."""
+    return _lcr_query("""
+        SELECT EVENT_ID, EVENT_DATE, EVENT_TYPE, DESCRIPTION, COUNTERPARTY_ID, CONTRACT_ID,
+               AMOUNT_CHF, EXPECTED_DIRECTION
+        FROM REP_RAW_V001.LIQI_RAW_TB_EVENTS
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY EVENT_ID ORDER BY INSERT_TIMESTAMP_UTC DESC) = 1
+        ORDER BY EVENT_DATE
+    """, error_label="LCR events")
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_liquidity_gap(as_of_date):
+    """Maturity ladder / liquidity gap for one date, all scenarios."""
+    return _lcr_query("""
+        SELECT STRESS_SCENARIO, BUCKET_CODE, BUCKET_NAME, SORT_ORDER, IN_LCR_HORIZON,
+               CONTRACTUAL_INFLOW_CHF, CONTRACTUAL_OUTFLOW_CHF, BEHAVIORAL_OUTFLOW_CHF,
+               COUNTERBALANCING_CHF, NET_GAP_CHF, CUMULATIVE_GAP_CHF
+        FROM REP_AGG_V001.REPP_AGG_DT_LCR_LIQUIDITY_GAP
+        WHERE AS_OF_DATE = ?
+        ORDER BY STRESS_SCENARIO, SORT_ORDER
+    """, [str(as_of_date)], "liquidity gap")
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_cutoff_deltas(as_of_date, comparison):
+    """Cut-off comparison (DOD/WOW/MOM) by asset class for one date, BASE scenario."""
+    return _lcr_query("""
+        SELECT ASSET_CLASS, PRIOR_DATE, HQLA_DELTA_CHF, OUTFLOW_DELTA_CHF, INFLOW_DELTA_CHF,
+               LCR_RATIO, LCR_PRIOR, LCR_DELTA_PP
+        FROM REP_AGG_V001.REPP_AGG_DT_LCR_CUTOFF_DELTAS
+        WHERE AS_OF_DATE = ? AND COMPARISON_TYPE = ? AND STRESS_SCENARIO = 'BASE'
+        ORDER BY ASSET_CLASS
+    """, [str(as_of_date), comparison], "cut-off deltas")
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_variance_drivers(as_of_date, comparison, scenario="BASE"):
+    """Top-10 client variance drivers (funding-adjusted impact)."""
+    return _lcr_query("""
+        SELECT CLIENT_RANK, POSITION_ID, COUNTERPARTY_NAME, PRODUCT_TYPE, ASSET_CLASS, BUSINESS_UNIT,
+               CLIENT_IMPACT_PP, CONTRIBUTION_PP, SETTLEMENT_IMPACT_PP, DELTA_OUTFLOW_CHF, LCR_DELTA_PP
+        FROM REP_AGG_V001.REPP_AGG_VW_LCR_VARIANCE_DRIVERS
+        WHERE AS_OF_DATE = ? AND COMPARISON_TYPE = ? AND STRESS_SCENARIO = ?
+        ORDER BY CLIENT_RANK
+    """, [str(as_of_date), comparison, scenario], "variance drivers")
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_drilldown(as_of_date, scenario="BASE"):
+    """Drill-down aggregated to counterparty level (asset class > product group > counterparty).
+    Returns (DataFrame, query_seconds)."""
+    import time
+    t0 = time.perf_counter()
+    df = _lcr_query("""
+        SELECT ASSET_CLASS, PRODUCT_GROUP, COUNTERPARTY_NAME, LCR_TREATMENT, BUSINESS_UNIT, CURRENCY,
+               COUNT(*) AS POSITIONS, SUM(EXPOSURE_CHF) AS EXPOSURE_CHF,
+               SUM(WEIGHTED_CHF) AS WEIGHTED_CHF, SUM(LCR_IMPACT_CHF) AS LCR_IMPACT_CHF
+        FROM REP_AGG_V001.REPP_AGG_VW_LCR_DRILLDOWN
+        WHERE AS_OF_DATE = ? AND STRESS_SCENARIO = ?
+        GROUP BY ALL
+    """, [str(as_of_date), scenario], "drill-down")
+    return df, time.perf_counter() - t0
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_drilldown_positions(as_of_date, scenario, asset_class):
+    """Contract-level rows for one asset class (top 500 by weighted amount)."""
+    return _lcr_query("""
+        SELECT POSITION_ID, POSITION_NAME, PRODUCT_TYPE, COUNTERPARTY_NAME, BUSINESS_UNIT, CURRENCY, RATING,
+               EXPOSURE_CHF, WEIGHTED_CHF, LCR_IMPACT_CHF
+        FROM REP_AGG_V001.REPP_AGG_VW_LCR_DRILLDOWN
+        WHERE AS_OF_DATE = ? AND STRESS_SCENARIO = ? AND ASSET_CLASS = ?
+        ORDER BY ABS(WEIGHTED_CHF) DESC
+        LIMIT 500
+    """, [str(as_of_date), scenario, asset_class], "drill-down positions")
+
+
+@st.cache_data(ttl=14400)
+def load_lcr_exceptions(as_of_date):
+    """Quarantined data-quality exceptions for one snapshot date."""
+    return _lcr_query("""
+        SELECT CONTRACT_ID, SOURCE_SYSTEM, PRODUCT_TYPE, COUNTERPARTY_ID, CURRENCY, AMOUNT_CCY,
+               ERROR_CODE, ERROR_DETAIL, LOGGED_AT
+        FROM REP_AGG_V001.REPP_AGG_DT_LCR_EXCEPTIONS
+        WHERE SNAPSHOT_DATE = ?
+        ORDER BY ERROR_CODE, CONTRACT_ID
+    """, [str(as_of_date)], "data-quality exceptions")
+
+
+@st.cache_data(ttl=600)
+def run_lcr_simulation(as_of_date, params_json):
+    """Run the what-if simulator; cached 10 minutes per (date, params)."""
+    return _lcr_query("CALL REP_AGG_V001.REPP_AGG_SP_LCR_SIMULATE(?, ?)",
+                      [str(as_of_date), params_json], "LCR simulation")

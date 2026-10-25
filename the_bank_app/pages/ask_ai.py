@@ -1,6 +1,7 @@
 import streamlit as st
+from utils.ui_helpers import page_header
 
-st.header("Ask AI")
+page_header('Ask AI', 'Ask questions in plain language across all banking domains')
 
 with st.container(border=True):
     st.markdown(

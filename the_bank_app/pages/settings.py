@@ -3,8 +3,9 @@ from datetime import datetime
 from utils.snowflake_connection import get_snowflake_session, test_connection
 from utils.data_loaders import load_data_quality_metrics
 from utils.visualizations import plot_data_quality_completeness
+from utils.ui_helpers import page_header
 
-st.header("Settings & Data Quality")
+page_header('Settings & Data Quality', 'Connection, configuration and data quality')
 
 tab_quality, tab_settings = st.tabs(["Data Quality", "Settings"])
 
