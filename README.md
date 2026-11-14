@@ -45,9 +45,8 @@ SyntheticRetailBank/
 ├── post_deploy.sql                 Seeds, sub-agents, shares/listings (not in DCM); re-runnable
 ├── post_deploy_master-agent.sql    Master agent: hybrid router, caching, observability, regression
 ├── deploy.sh                       Deployment script (DCM + post-deploy hooks)
-├── github-workflow-verification_v1.sh  Workflow SHA256 integrity check
 ├── .github/workflows/
-│   └── update-local-repo.yml       CI/CD: DCM deploy, SonarQube, clone/test/drop, release
+│   └── ci.yml                      CI/CD: lint, unit, image, SonarQube; on main the DataOpsBackbone deploy (DCM, SQL tests, release)
 ├── sources/
 │   ├── definitions/
 │   │   ├── 000_infrastructure.sql  Schemas (16), tag

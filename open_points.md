@@ -34,10 +34,9 @@ SyntheticRetailBank/
 ├── post_deploy.sql                     Streams, file formats, procedures, sub-agents, semantic views
 ├── post_deploy_master-agent.sql         Master agent: hybrid router, caching, observability, regression
 ├── deploy.sh                            Deployment script (DCM + post-deploy hooks)
-├── github-workflow-verification_v1.sh  SHA256 integrity check
 ├── open_points.md                      This file
 ├── .github/workflows/
-│   └── update-local-repo.yml           CI/CD pipeline (reusable DataOpsBackbone workflow)
+│   └── ci.yml                          CI + deploy (calls the reusable DataOpsBackbone pipeline on main)
 ├── sources/
 │   ├── definitions/                    33 SQL files (192 DEFINE + 9 GRANT)
 │   └── macros/

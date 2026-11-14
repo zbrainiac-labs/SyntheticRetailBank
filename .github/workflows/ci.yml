@@ -1,7 +1,8 @@
 name: CI
 
-# Verify every change before the DCM pipeline deploys it: lint, bank-app typecheck + unit
-# tests, arm64 image build + smoke test + Trivy, and the SonarQube quality gate.
+# Verify every change, then deploy main: lint, bank-app typecheck + unit tests, arm64 image
+# build + smoke test + Trivy, the SonarQube quality gate, and -- on main only, after all of them
+# passed -- the DataOpsBackbone pipeline (DCM deploy to DEV, SQL tests, release).
 # Same scripts as local-ci/run.sh, which runs this workflow locally with nektos/act.
 # Modelled on crew-asset-management/.github/workflows/ci.yml (same pinned action SHAs).
 on:
@@ -84,3 +85,28 @@ jobs:
       - name: SonarQube quality gate
         # act has no artifact server: the self-scan runs the unit tests itself there
         run: bash local-ci/sonar-self-scan.sh --strict ${{ !env.ACT && '--no-coverage' || '' }}
+
+  # DataOpsBackbone pipeline (SQLFluff, DCM deploy to DEV, sqlunit/tests.sqltest, release), as in
+  # MasterDataManagement: only on main and only when sonar and image passed. Never under act
+  # (local deploys use deploy.sh).
+  deploy:
+    needs: [sonar, image]
+    if: >-
+      !cancelled() && needs.sonar.result == 'success' && needs.image.result == 'success' &&
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.event.act != true
+    permissions:
+      id-token: write   # OIDC to Snowflake
+      contents: write   # GitHub release
+      actions: read
+      checks: write
+    uses: zbrainiac-labs/DataOpsBackbone/.github/workflows/dataops-pipeline.yml@main
+    with:
+      SOURCE_DATABASE: AAA_DEV_SYNTHETIC_BANK
+      SOURCE_SCHEMA: CRM_RAW_v001
+      DCM_PROJECT_IDENTIFIER: AAA_DEV_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK
+      DCM_TARGET: DEV
+      SNOWFLAKE_ACCOUNT: SFSEEUROPE-DEMO_MDAEPPEN
+      # the sonar job above is this repo's Sonar analysis (with coverage); a second analysis on
+      # the same key would overwrite it (no branches in Community Build). SQLFluff still runs.
+      SONAR_SCAN: false
+    secrets: inherit
