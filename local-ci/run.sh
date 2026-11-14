@@ -82,6 +82,7 @@ if [[ "$USE_ACT" -eq 1 ]]; then
   set +e
   act workflow_dispatch -C "$REPO" -W "$REPO/.github/workflows/ci.yml" \
     -P ubuntu-latest="${ACT_IMAGE:-catthehacker/ubuntu:act-latest}" \
+    -P ubuntu-24.04-arm="${ACT_IMAGE:-catthehacker/ubuntu:act-latest}" \
     --bind --network "$NETWORK" --container-architecture linux/arm64 \
     ${ACT_JOB:+-j "$ACT_JOB"} ${ACT_ARGS[@]+"${ACT_ARGS[@]}"}
   RC=$?
