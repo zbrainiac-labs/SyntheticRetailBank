@@ -63,6 +63,7 @@ docker run --rm --network "$NETWORK" \
     done
     RC=0
     sonar-scanner -Dsonar.host.url="$H" -Dsonar.token="$SONAR_TOKEN" -Dsonar.projectKey="$KEY" \
+      -Dsonar.tests=bank-app/__tests__,bank-app/e2e,sqlunit \
       -Dsonar.working.directory=/tmp/.scannerwork -Dsonar.qualitygate.wait=true \
       >/tmp/scanner.log 2>&1 || RC=$?
     grep -E "ERROR|ANALYSIS SUCCESSFUL|QUALITY GATE|EXECUTION" /tmp/scanner.log || true
