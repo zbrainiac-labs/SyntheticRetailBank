@@ -110,17 +110,22 @@ snow sql ${CONN[@]+"${CONN[@]}"} --role CICD -f "$SCRIPT_DIR/post_deploy_master-
   --enable-templating JINJA
 echo ""
 
-# Step 4: Test gate (LCR validation suite TC-VAL-01..04 / ENG-01..06 + metadata completeness + data uniqueness)
+# Step 4: Test gate (LCR validation suite TC-VAL-01..04 / ENG-01..06 + DtI suite DTI-01..08 + metadata completeness + data uniqueness)
 if [[ "$SKIP_TESTS" == "true" ]]; then
   echo "[4/4] Test gate skipped (--skip-tests)"
 else
   echo "[4/4] Test gate: LCR validation + metadata completeness + data uniqueness..."
   TEST_LOG="$(mktemp)"
-  for f in sqlunit/lcr_validation.sql sqlunit/metadata_check.sql sqlunit/data_check.sql; do
+  for f in sqlunit/lcr_validation.sql sqlunit/dti_validation.sql sqlunit/metadata_check.sql sqlunit/data_check.sql; do
     snow sql ${CONN[@]+"${CONN[@]}"} --role CICD --format CSV -f "$SCRIPT_DIR/$f" >> "$TEST_LOG" 2>&1 || true
   done
-  grep -E "^(TC-|ENG-|META-|DATA-)" "$TEST_LOG" | cut -d, -f1-2
-  if grep -qE "^(TC-|ENG-|META-|DATA-)[^,]*,FAIL" "$TEST_LOG" || ! grep -qE "^(TC-|ENG-|META-|DATA-)" "$TEST_LOG"; then
+  # DtI row access per role: the role is set at login (PAT sessions cannot USE ROLE)
+  for r in DTI_READ_ONLY DTI_LRC_READ; do
+    f="sqlunit/dti_governance_$(echo "$r" | sed 's/^DTI_//' | tr '[:upper:]' '[:lower:]').sql"
+    snow sql ${CONN[@]+"${CONN[@]}"} --role "$r" --format CSV -f "$SCRIPT_DIR/$f" >> "$TEST_LOG" 2>&1 || true
+  done
+  grep -E "^(TC-|ENG-|DTI-|META-|DATA-)" "$TEST_LOG" | cut -d, -f1-2
+  if grep -qE "^(TC-|ENG-|DTI-|META-|DATA-)[^,]*,FAIL" "$TEST_LOG" || ! grep -qE "^(TC-|ENG-|DTI-|META-|DATA-)" "$TEST_LOG"; then
     echo "❌ Test gate FAILED (details: $TEST_LOG)"
     exit 1
   fi

@@ -1,0 +1,145 @@
+[
+  {
+    "table": "LIQI_RAW_TB_HQLA_ELIGIBILITY",
+    "file": "hqla_eligibility.csv",
+    "keys": [
+      "ASSET_TYPE"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DEPOSIT_TYPES",
+    "file": "deposit_types.csv",
+    "keys": [
+      "DEPOSIT_TYPE"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_PRODUCT_MAPPING",
+    "file": "product_mapping.csv",
+    "keys": [
+      "PRODUCT_TYPE",
+      "SOURCE_SYSTEM"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_BEHAVIORAL_RULES",
+    "file": "behavioral_rules.csv",
+    "keys": [
+      "PRODUCT_TYPE",
+      "COUNTERPARTY_SECTOR",
+      "STRESS_SCENARIO"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_MATURITY_BUCKETS",
+    "file": "maturity_buckets.csv",
+    "keys": [
+      "BUCKET_CODE"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_SCENARIOS",
+    "file": "scenarios.csv",
+    "keys": [
+      "SCENARIO_CODE"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_ENTITIES",
+    "file": "dti_entities.csv",
+    "keys": [
+      "ENTITY_ID"
+    ],
+    "mode": "upsert",
+    "comment": "DtI / Stichtagsvergleich (UC2) reference data (061_LIQI_dti_ingestion.sql)"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_LST_POSITIONS",
+    "file": "dti_lst_positions.csv",
+    "keys": [
+      "POSITION_CODE"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_PRODUCT_CLUSTERS",
+    "file": "dti_product_clusters.csv",
+    "keys": [
+      "PRODUCT_CLUSTER"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_LST_ASSIGNMENT",
+    "file": "dti_lst_assignment.csv",
+    "keys": [
+      "SOURCE_SYSTEM",
+      "PRODUCT_TYPE",
+      "COUNTERPARTY_SECTOR",
+      "FLOW_KIND"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_APPLICATIONS",
+    "file": "dti_applications.csv",
+    "keys": [
+      "APPLICATION_ID"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_WLK_CLUSTERS",
+    "file": "dti_wlk_clusters.csv",
+    "keys": [
+      "WLK_CLUSTER"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_BUCKETS",
+    "file": "dti_buckets.csv",
+    "keys": [
+      "BUCKET_CODE"
+    ],
+    "mode": "upsert"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_HOLIDAYS",
+    "file": "dti_holidays.csv",
+    "keys": [
+      "HOLIDAY_DATE"
+    ],
+    "mode": "upsert",
+    "casts": {
+      "HOLIDAY_DATE": "DATE"
+    },
+    "comment": "Zurich bank holidays (switching the calendar = editing reference_data/liqi/dti_holidays.csv)"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_LIMITS",
+    "file": "dti_limits.csv",
+    "keys": [
+      "ENTITY_ID",
+      "BUCKET_CODE"
+    ],
+    "mode": "insert_only",
+    "comment": "insert-only: thresholds are maintained by the DtI owner in the app and must survive redeploys"
+  },
+  {
+    "table": "LIQI_RAW_TB_DTI_ENTITY_ACCESS",
+    "file": "dti_entity_access.csv",
+    "keys": [
+      "ROLE_NAME",
+      "ENTITY_ID"
+    ],
+    "mode": "insert_only",
+    "comment": "DtI entity entitlements for roles below DTI_LRC_READ (row access policy REPP_AGG_RAP_DTI_ENTITY)"
+  }
+]

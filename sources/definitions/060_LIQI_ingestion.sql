@@ -59,6 +59,17 @@ DEFINE TABLE {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_HOLDINGS (
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP() COMMENT 'UTC timestamp when record was loaded into Snowflake. Used for data lineage, SLA monitoring, and identifying late-arriving data. Critical for operational dashboards and data quality tracking.',
     BUSINESS_UNIT VARCHAR(30) COMMENT 'Owning business unit of the HQLA position (always TREASURY for the liquidity buffer). Used for the REQ-UI-02 business-unit filter and for allocating the liquidity buffer to the treasury book in drill-downs.',
     ISSUER_ID VARCHAR(50) COMMENT 'Issuer / obligor of the security or cash balance (FK to LIQI_RAW_TB_COUNTERPARTIES, e.g. ISS_SNB, ISS_CH, ISS_PFB). Provides the counterparty level of the REQ-ANL-02 drill-down path Asset Class -> Product -> Counterparty -> Contract for HQLA positions.',
+    ENTITY_ID VARCHAR(10) COMMENT 'Legal entity holding the security (LE_01..LE_09, see LIQI_RAW_TB_DTI_ENTITIES). Central bank and vault cash are booked centrally at LE_01. Entity filter of the DtI comparison (UC2).',
+    ISSUER_GROUP VARCHAR(50) COMMENT 'Issuer group of the security (Central banks, Sovereigns, Sub-sovereigns, Covered bond issuers, Corporates, Listed equities). Breakdown dimension of unencumbered liquid assets on the DtI securities page (UC2 6.9).',
+    INDUSTRY VARCHAR(50) COMMENT 'Industry of the issuer (Public sector, Financials, Industrials, Utilities, ...). Concentration breakdown of unencumbered liquid assets (UC2 6.9).',
+    WLK_CLUSTER VARCHAR(5) COMMENT 'Internal collateral cluster (Wertpapier-Liquiditaetsklasse I..XIb, see LIQI_RAW_TB_DTI_WLK_CLUSTERS). Drives the collateral pool haircut of the DtI projection and the drill-down from the collateral pool to single securities (UC2 6.3/6.8). IX = not eligible.',
+    WLK_HAIRCUT NUMBER(5,4) COMMENT 'Haircut of the WLK cluster applied to the market value to obtain the collateral (liquidity) value in the DtI collateral pool (e.g. 0.02 = 2%).',
+    NOMINAL_CHF NUMBER(18,2) COMMENT 'Nominal value of the position in CHF (valuation basis "Nominal" on the DtI securities page). For cash equals the balance.',
+    COLLATERAL_VALUE_CHF NUMBER(18,2) COMMENT 'Collateral value after WLK haircut in CHF = MARKET_VALUE_CHF x (1 - WLK_HAIRCUT). Liquidity value of the security in the DtI collateral pool (valuation basis "Collateral Value Base LST").',
+    IS_ENCUMBERED BOOLEAN COMMENT 'TRUE when the security is pledged in secured funding (see LIQI_RAW_TB_DTI_SECURED_FUNDING) and therefore not part of the free collateral pool (UC2 6.9).',
+    IS_MOBILISED BOOLEAN COMMENT 'TRUE when the unencumbered security is already mobilised (deposited in the central bank collateral account) and usable at short notice; FALSE = free but not yet mobilised (UC2 6.9 mobilisation status).',
+    RUN_ID VARCHAR(30) COMMENT 'Generation run of the liquidity book (FK to LIQI_RAW_TB_GENERATION_RUN). Holdings, deposits and the DtI securities of one load share the same run id.',
+    SNAPSHOT_SCOPE VARCHAR(10) COMMENT 'DAILY = LCR window snapshot (every calendar day), MONTH_END = month-end history of the same simulation used by the DtI comparison. The LCR engine reads DAILY only (REPP_AGG_DT_LCR_POSITIONS).',
     PRIMARY KEY (HOLDING_ID, AS_OF_DATE)
 )
 CHANGE_TRACKING = TRUE
@@ -84,6 +95,13 @@ DEFINE TABLE {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_BALANCES (
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP() COMMENT 'UTC timestamp when record was loaded into Snowflake. Used for data lineage, SLA monitoring, and identifying late-arriving data. Critical for operational dashboards and data quality tracking.',
     BUSINESS_UNIT VARCHAR(30) COMMENT 'Owning business unit of the deposit (RETAIL, PRIVATE_BANKING, CORPORATE, TREASURY for interbank deposits). Used for the REQ-UI-02 business-unit filter, funding-mix analysis by segment and allocation of stressed outflows to business units.',
     COUNTERPARTY_ID VARCHAR(50) COMMENT 'Counterparty of the deposit (FK to LIQI_RAW_TB_COUNTERPARTIES; equals CUSTOMER_ID for retail customers, CP_CORP_* / CP_FI_* for wholesale clients). Used to show client names in the Top-10 variance drivers (REQ-UI-03) and the counterparty level of the drill-down.',
+    ENTITY_ID VARCHAR(10) COMMENT 'Legal entity booking the deposit (LE_01..LE_09). Entity filter and entity totals of the DtI comparison (UC2 6.1).',
+    APPLICATION_ID VARCHAR(10) COMMENT 'Source application of the position (EIN = deposits). Column dimension of the DtI application page (UC2 6.4); see LIQI_RAW_TB_DTI_APPLICATIONS.',
+    AKTIV_PASSIV VARCHAR(1) COMMENT 'Balance sheet side from the FRISCO business position: A = asset (Aktiva), P = liability (Passiva). Deposits are always P.',
+    ORIG_APPLICATION VARCHAR(30) COMMENT 'Originating front system of the deposit (Ursprungsanwendung, RETAIL_CORE or CORP_LENDING). Display filter on the DtI deal level page (UC2 6.7).',
+    IS_NEW_BUSINESS BOOLEAN COMMENT 'TRUE for accounts opened within the last 90 days (status Neu), FALSE = existing business (Bestand). Shown on the DtI deal level page (UC2 6.7).',
+    RUN_ID VARCHAR(30) COMMENT 'Generation run of the liquidity book (FK to LIQI_RAW_TB_GENERATION_RUN).',
+    SNAPSHOT_SCOPE VARCHAR(10) COMMENT 'DAILY = LCR window snapshot (every calendar day), MONTH_END = month-end history of the same simulation used by the DtI comparison.',
     PRIMARY KEY (ACCOUNT_ID, AS_OF_DATE)
 )
 CHANGE_TRACKING = TRUE
@@ -104,24 +122,32 @@ DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_HQLA_HOLDINGS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ rep_raw }}.LIQI_RAW_SM_HQLA_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_HOLDINGS (
-        HOLDING_ID, AS_OF_DATE, ASSET_TYPE, ISIN, SECURITY_NAME, CURRENCY,
-        QUANTITY, MARKET_VALUE_CCY, MARKET_VALUE_CHF, FX_RATE, MATURITY_DATE,
-        CREDIT_RATING, SMI_CONSTITUENT, HQLA_ELIGIBLE, PORTFOLIO_CODE, CUSTODIAN,
-        INELIGIBILITY_REASON, BUSINESS_UNIT, ISSUER_ID
-    )
-    FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_HQLA_HOLDINGS
-    FILE_FORMAT = (
-        TYPE = 'CSV'
-        FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-        SKIP_HEADER = 1
-        FIELD_DELIMITER = ','
-        TRIM_SPACE = TRUE
-        NULL_IF = ('NULL', 'null', '')
-        ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    )
-    PATTERN = '.*hqla_holdings.*\\.csv'
-    ON_ERROR = 'CONTINUE';
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_HQLA_HOLDINGS (
+            HOLDING_ID, AS_OF_DATE, ASSET_TYPE, ISIN, SECURITY_NAME, CURRENCY,
+            QUANTITY, MARKET_VALUE_CCY, MARKET_VALUE_CHF, FX_RATE, MATURITY_DATE,
+            CREDIT_RATING, SMI_CONSTITUENT, HQLA_ELIGIBLE, PORTFOLIO_CODE, CUSTODIAN,
+            INELIGIBILITY_REASON, BUSINESS_UNIT, ISSUER_ID,
+            ENTITY_ID, ISSUER_GROUP, INDUSTRY, WLK_CLUSTER, WLK_HAIRCUT, NOMINAL_CHF,
+            COLLATERAL_VALUE_CHF, IS_ENCUMBERED, IS_MOBILISED, RUN_ID, SNAPSHOT_SCOPE
+        )
+        FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_HQLA_HOLDINGS
+        FILE_FORMAT = (
+            TYPE = 'CSV'
+            FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+            SKIP_HEADER = 1
+            FIELD_DELIMITER = ','
+            TRIM_SPACE = TRUE
+            NULL_IF = ('NULL', 'null', '')
+            ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+        )
+        PATTERN = '.*hqla_holdings.*\\.csv'
+        ON_ERROR = 'CONTINUE';
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_SM_HQLA_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_DEPOSIT_BALANCES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -130,24 +156,31 @@ DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_DEPOSIT_BALANCES
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ rep_raw }}.LIQI_RAW_SM_DEPOSIT_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_BALANCES (
-        ACCOUNT_ID, AS_OF_DATE, CUSTOMER_ID, DEPOSIT_TYPE, CURRENCY,
-        BALANCE_CCY, BALANCE_CHF, FX_RATE, IS_INSURED, PRODUCT_COUNT,
-        ACCOUNT_TENURE_DAYS, HAS_DIRECT_DEBIT, IS_OPERATIONAL, COUNTERPARTY_TYPE,
-        CUSTOMER_SEGMENT, ACCOUNT_STATUS, BUSINESS_UNIT, COUNTERPARTY_ID
-    )
-    FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_DEPOSIT_BALANCES
-    FILE_FORMAT = (
-        TYPE = 'CSV'
-        FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-        SKIP_HEADER = 1
-        FIELD_DELIMITER = ','
-        TRIM_SPACE = TRUE
-        NULL_IF = ('NULL', 'null', '')
-        ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    )
-    PATTERN = '.*deposit_balances.*\\.csv'
-    ON_ERROR = 'CONTINUE';
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DEPOSIT_BALANCES (
+            ACCOUNT_ID, AS_OF_DATE, CUSTOMER_ID, DEPOSIT_TYPE, CURRENCY,
+            BALANCE_CCY, BALANCE_CHF, FX_RATE, IS_INSURED, PRODUCT_COUNT,
+            ACCOUNT_TENURE_DAYS, HAS_DIRECT_DEBIT, IS_OPERATIONAL, COUNTERPARTY_TYPE,
+            CUSTOMER_SEGMENT, ACCOUNT_STATUS, BUSINESS_UNIT, COUNTERPARTY_ID,
+            ENTITY_ID, APPLICATION_ID, AKTIV_PASSIV, ORIG_APPLICATION, IS_NEW_BUSINESS, RUN_ID, SNAPSHOT_SCOPE
+        )
+        FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_DEPOSIT_BALANCES
+        FILE_FORMAT = (
+            TYPE = 'CSV'
+            FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+            SKIP_HEADER = 1
+            FIELD_DELIMITER = ','
+            TRIM_SPACE = TRUE
+            NULL_IF = ('NULL', 'null', '')
+            ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
+        )
+        PATTERN = '.*deposit_balances.*\\.csv'
+        ON_ERROR = 'CONTINUE';
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_SM_DEPOSIT_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_CLEANUP_AFTER_LOAD_HQLA_HOLDINGS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -199,6 +232,12 @@ DEFINE TABLE {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CONTRACTS (
     IS_PERFORMING BOOLEAN COMMENT 'Performing status of the exposure. Non-performing assets receive a 0% inflow rate in the LCR (Basel III para 142).',
     COUNTERPARTY_SECTOR VARCHAR(30) COMMENT 'Sector of the counterparty at booking (RETAIL, SME, CORPORATE, FINANCIAL). Key, together with PRODUCT_TYPE, into product mapping and behavioral rules.',
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP() COMMENT 'UTC timestamp when the record was loaded into Snowflake. Used for lineage, SLA monitoring and identification of late-arriving snapshots.',
+    ENTITY_ID VARCHAR(10) COMMENT 'Legal entity booking the contract (LE_01..LE_09). Entity filter and entity totals of the DtI comparison (UC2 6.1).',
+    APPLICATION_ID VARCHAR(10) COMMENT 'Source application of the contract: HYP (mortgages / retail loans), KRE (corporate lending and facilities), GEL (money market / interbank), DER (derivatives). Column dimension of the DtI application page (UC2 6.4).',
+    AKTIV_PASSIV VARCHAR(1) COMMENT 'Balance sheet side from the FRISCO business position: A = asset (loans, placements, facilities), P = liability (interbank borrowing). Splits the DtI product group page into Aktiva / Passiva (UC2 6.5).',
+    ORIG_APPLICATION VARCHAR(30) COMMENT 'Originating front system (Ursprungsanwendung: RETAIL_CORE, CORP_LENDING, TREASURY_TMS). Display filter on the DtI deal level page (UC2 6.7).',
+    IS_NEW_BUSINESS BOOLEAN COMMENT 'TRUE when the contract started or rolled over within the last 30 days (status Neu), FALSE = existing business (Bestand). Shown on the DtI deal level page (UC2 6.7).',
+    SNAPSHOT_SCOPE VARCHAR(10) COMMENT 'DAILY = LCR window snapshot (every calendar day), MONTH_END = month-end history of the same simulation used by the DtI comparison.',
     PRIMARY KEY (CONTRACT_ID, AS_OF_DATE)
 )
 CLUSTER BY (AS_OF_DATE)
@@ -213,7 +252,8 @@ DEFINE TABLE {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CASHFLOWS (
     DIRECTION VARCHAR(3) COMMENT 'Cashflow direction from the bank perspective: IN = receivable (loans, interbank placements), OUT = payable (interbank borrowing).',
     CURRENCY VARCHAR(3) COMMENT 'Cashflow currency per ISO 4217 (same as contract currency); converted to CHF with the end-of-day FX rate of the snapshot date.',
     AMOUNT_CCY NUMBER(18,2) COMMENT 'Cashflow amount in original currency (always positive; sign given by DIRECTION).',
-    INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP() COMMENT 'UTC timestamp when the record was loaded into Snowflake. Used for lineage and load monitoring.'
+    INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP() COMMENT 'UTC timestamp when the record was loaded into Snowflake. Used for lineage and load monitoring.',
+    SNAPSHOT_SCOPE VARCHAR(10) COMMENT 'DAILY = LCR window snapshot, MONTH_END = month-end history used by the DtI comparison (same scope as the contract snapshot).'
 )
 CLUSTER BY (AS_OF_DATE)
 CHANGE_TRACKING = TRUE
@@ -308,14 +348,20 @@ DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_COUNTERPARTIES
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ rep_raw }}.LIQI_RAW_SM_COUNTERPARTY_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_COUNTERPARTIES (
-        COUNTERPARTY_ID, COUNTERPARTY_NAME, SECTOR, COUNTRY, RATING, CUSTOMER_ID, BUSINESS_UNIT
-    )
-    FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_COUNTERPARTIES
-    FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
-                   TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
-    PATTERN = '.*counterparties.*\\.csv'
-    ON_ERROR = 'CONTINUE';
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_COUNTERPARTIES (
+            COUNTERPARTY_ID, COUNTERPARTY_NAME, SECTOR, COUNTRY, RATING, CUSTOMER_ID, BUSINESS_UNIT
+        )
+        FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_COUNTERPARTIES
+        FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
+                       TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
+        PATTERN = '.*counterparties.*\\.csv'
+        ON_ERROR = 'CONTINUE';
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_SM_COUNTERPARTY_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_EVENTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -324,15 +370,21 @@ DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_EVENTS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ rep_raw }}.LIQI_RAW_SM_EVENT_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_EVENTS (
-        EVENT_ID, EVENT_DATE, EVENT_TYPE, DESCRIPTION, COUNTERPARTY_ID, CONTRACT_ID, AMOUNT_CHF,
-        EXPECTED_DIRECTION, EXPECTED_MIN_DELTA_PP
-    )
-    FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_EVENTS
-    FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
-                   TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
-    PATTERN = '.*lcr_events.*\\.csv'
-    ON_ERROR = 'CONTINUE';
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_EVENTS (
+            EVENT_ID, EVENT_DATE, EVENT_TYPE, DESCRIPTION, COUNTERPARTY_ID, CONTRACT_ID, AMOUNT_CHF,
+            EXPECTED_DIRECTION, EXPECTED_MIN_DELTA_PP
+        )
+        FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_EVENTS
+        FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
+                       TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
+        PATTERN = '.*lcr_events.*\\.csv'
+        ON_ERROR = 'CONTINUE';
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_SM_EVENT_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_CONTRACTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -341,15 +393,22 @@ DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_CONTRACTS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ rep_raw }}.LIQI_RAW_SM_CONTRACT_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CONTRACTS (
-        CONTRACT_ID, AS_OF_DATE, COUNTERPARTY_ID, PRODUCT_TYPE, BUSINESS_UNIT, CURRENCY, RATING,
-        START_DATE, MATURITY_DATE, OUTSTANDING_CCY, UNDRAWN_CCY, INTEREST_RATE, IS_PERFORMING, COUNTERPARTY_SECTOR
-    )
-    FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_CONTRACTS
-    FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
-                   TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
-    PATTERN = '.*contracts_.*\\.csv'
-    ON_ERROR = 'CONTINUE';
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CONTRACTS (
+            CONTRACT_ID, AS_OF_DATE, COUNTERPARTY_ID, PRODUCT_TYPE, BUSINESS_UNIT, CURRENCY, RATING,
+            START_DATE, MATURITY_DATE, OUTSTANDING_CCY, UNDRAWN_CCY, INTEREST_RATE, IS_PERFORMING, COUNTERPARTY_SECTOR,
+            ENTITY_ID, APPLICATION_ID, AKTIV_PASSIV, ORIG_APPLICATION, IS_NEW_BUSINESS, SNAPSHOT_SCOPE
+        )
+        FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_CONTRACTS
+        FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
+                       TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
+        PATTERN = '.*contracts_.*\\.csv'
+        ON_ERROR = 'CONTINUE';
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_SM_CONTRACT_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_CASHFLOWS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -358,14 +417,20 @@ DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_LOAD_CASHFLOWS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ rep_raw }}.LIQI_RAW_SM_CASHFLOW_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CASHFLOWS (
-        AS_OF_DATE, CONTRACT_ID, CF_DATE, CF_TYPE, DIRECTION, CURRENCY, AMOUNT_CCY
-    )
-    FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_CASHFLOWS
-    FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
-                   TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
-    PATTERN = '.*cashflows_.*\\.csv'
-    ON_ERROR = 'CONTINUE';
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_CASHFLOWS (
+            AS_OF_DATE, CONTRACT_ID, CF_DATE, CF_TYPE, DIRECTION, CURRENCY, AMOUNT_CCY, SNAPSHOT_SCOPE
+        )
+        FROM @{{ db }}.{{ rep_raw }}.LIQI_RAW_ST_CASHFLOWS
+        FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 FIELD_DELIMITER = ','
+                       TRIM_SPACE = TRUE NULL_IF = ('NULL', 'null', '') ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE)
+        PATTERN = '.*cashflows_.*\\.csv'
+        ON_ERROR = 'CONTINUE';
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_SM_CASHFLOW_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ rep_raw }}.LIQI_RAW_TK_CLEANUP_AFTER_LOAD_CONTRACTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'

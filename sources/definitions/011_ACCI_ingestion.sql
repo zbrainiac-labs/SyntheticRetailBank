@@ -27,11 +27,17 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.ACCI_RAW_TK_LOAD_ACCOUNTS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.ACCI_RAW_SM_ACCOUNT_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS (ACCOUNT_ID, ACCOUNT_TYPE, BASE_CURRENCY, CUSTOMER_ID, STATUS)
-    FROM @{{ db }}.{{ crm_raw }}.ACCI_RAW_ST_ACCOUNTS
-    PATTERN = '.*accounts.*\.csv'
-    FILE_FORMAT = ACCI_RAW_FF_ACCOUNT_CSV
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ crm_raw }}.ACCI_RAW_TB_ACCOUNTS (ACCOUNT_ID, ACCOUNT_TYPE, BASE_CURRENCY, CUSTOMER_ID, STATUS)
+        FROM @{{ db }}.{{ crm_raw }}.ACCI_RAW_ST_ACCOUNTS
+        PATTERN = '.*accounts.*\.csv'
+        FILE_FORMAT = ACCI_RAW_FF_ACCOUNT_CSV
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ crm_raw }}.ACCI_RAW_SM_ACCOUNT_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.ACCI_RAW_TK_CLEANUP_AFTER_LOAD_ACCOUNTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Synthetic Retail Bank">
+  <rect width="64" height="64" rx="14" fill="#0A84FF"/>
+  <path d="M32 12 12 22v4h40v-4L32 12z" fill="#fff"/>
+  <rect x="16" y="29" width="5" height="17" rx="1" fill="#fff"/>
+  <rect x="25.5" y="29" width="5" height="17" rx="1" fill="#fff"/>
+  <rect x="35" y="29" width="5" height="17" rx="1" fill="#fff"/>
+  <rect x="44.5" y="29" width="3.5" height="17" rx="1" fill="#fff" opacity=".85"/>
+  <rect x="12" y="48" width="40" height="4" rx="1" fill="#fff"/>
+  <path d="M42 40l6-6 4 3" stroke="#30D158" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -388,7 +388,8 @@ SELECT
 
     CURRENT_TIMESTAMP() AS LAST_UPDATED
 
-FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER c
+-- current customer version only (the raw table holds every SCD Type 2 update)
+FROM {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT c
 
 INNER JOIN {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT e
     ON c.CUSTOMER_ID = e.CUSTOMER_ID

@@ -234,32 +234,72 @@ Levers are applied to a cut-off date and recomputed with the same shared calcula
 
 ## 4. Requirements and Coverage
 
-Status: **FULL**, **PARTIAL**, **ADAPTED** (met with a deliberate change, see section 6), **OUT OF SCOPE**.
+Each requirement says what the business needs, why it matters, and how the implementation meets it.
 
-| ID | Requirement | Status | Implemented by |
-|---|---|---|---|
-| REQ-ING-01 | Load raw transactions and counterparty master data | FULL | `LIQI_RAW_TB_COUNTERPARTIES`, `LIQI_RAW_TB_CONTRACTS`, `LIQI_RAW_TB_DEPOSIT_BALANCES`, `LIQI_RAW_TB_HQLA_HOLDINGS`; stages + serverless load tasks (`060_LIQI_ingestion.sql`) |
-| REQ-ING-02 | Daily cashflow updates with as-of partitioning | FULL (demo scale) | `LIQI_RAW_TB_CASHFLOWS` (AS_OF_DATE x CONTRACT_ID x CF_DATE x CF_TYPE), clustered by AS_OF_DATE |
-| REQ-ING-03 | Daily FX rates at cut-off | ADAPTED (CHF) | `generators/fx_generator.py`, `REPP_AGG_DT_LCR_FX_DAILY`; missing rate -> `MISSING_FX` |
-| REQ-DQ-01 | Quarantine unmapped products, invalid dates, missing FX | FULL | `REPP_AGG_DT_LCR_POSITIONS` -> `REPP_AGG_DT_LCR_EXCEPTIONS`; app tab *Data Quality* |
-| REQ-MAP-01 | Asset class taxonomy L1 / L2A / L2B / Non-HQLA | FULL | `LIQI_RAW_TB_PRODUCT_MAPPING`, `LIQI_RAW_TB_HQLA_ELIGIBILITY` |
-| REQ-ENG-01 | Contractual cashflows by maturity bucket | FULL | `LIQI_RAW_TB_MATURITY_BUCKETS`, `REPP_AGG_DT_LCR_LIQUIDITY_GAP`; app tab *Behavioral* |
-| REQ-ENG-02 | Behavioral rules for non-maturity products | FULL | `LIQI_RAW_TB_BEHAVIORAL_RULES` (decay profiles, facility drawdowns) |
-| REQ-ENG-03 | Run-off rates and inflow caps per asset class and sector | FULL | `REPP_AGG_DT_LCR_SCENARIO_POSITIONS`, `REPP_AGG_FN_LCR_CALC`; app tab *Flows & Inflow Cap* |
-| REQ-ENG-04 | HQLA buffer with haircuts | ADAPTED (FINMA) | `REPP_AGG_DT_LCR_SCENARIO_COMPONENTS`, `REPP_AGG_FN_LCR_CALC`; app tab *HQLA & Caps* |
-| REQ-ENG-05 | Simultaneous stress scenarios | FULL | `LIQI_RAW_TB_SCENARIOS`, `REPP_AGG_DT_LCR_SCENARIO_DAILY`; `REPP_AGG_SP_LCR_SIMULATE`, `REPP_AGG_SP_LCR_WHAT_IF` |
-| REQ-ANL-01 | DoD / WoW / MoM cut-off deltas | FULL | `REPP_AGG_DT_LCR_CUTOFF_DELTAS`; app tab *Variance* |
-| REQ-ANL-02 | Drill-down gap -> asset class -> product group -> counterparty -> contract | FULL | `REPP_AGG_VW_LCR_DRILLDOWN`; app tab *Drill-down* |
-| REQ-UI-01 | Dashboard to compare cut-offs and visualise gaps | FULL | `the_bank_app/pages/lcr_monitoring.py` (11 tabs, date slider, event markers) |
-| REQ-UI-02 | Filters: business unit, asset class, currency, rating, scenario | PARTIAL | Scenario, business unit, asset class, date; currency as a tab; **no rating filter** |
-| REQ-UI-03 | Root cause analyzer: top 10 contracts driving daily variance | FULL | `REPP_AGG_VW_LCR_VARIANCE_ATTRIBUTION`, `REPP_AGG_VW_LCR_VARIANCE_DRIVERS`; agent tool `LCR_Variance_Drivers` |
-| REQ-PER-01 | Sub-second summaries, < 3 s drill-down | PARTIAL | Pre-aggregated dynamic tables; not measured at multi-million rows |
+Status: **FULL** (met as specified), **PARTIAL** (met in part; the gap is named), **ADAPTED** (met with a deliberate change, see section 6), **OUT OF SCOPE**.
 
-**Beyond the requirements:**
-- Events table `LIQI_RAW_TB_EVENTS` with five showcase events (withdrawal, market stress, recovery, inflows).
-- Semantic views `LCRS_SV_LCR_SCENARIOS`, `LCRS_SV_LCR_DRIVERS`, `LCRS_SV_LCR_EVENTS`; all 8 LCR semantic views have verified queries (18 VQRs).
-- `LIQUIDITY_RISK_AGENT` what-if tool, routed by the master agent.
-- Metadata gate: every LCR object and column has a description.
+### 4.1 Data ingestion
+
+The LCR is only as good as its input: every balance, cashflow and security the bank holds must arrive complete and on time for the daily cut-off.
+
+| ID | Requirement | Why it matters | Status | How it is met |
+|---|---|---|---|---|
+| REQ-ING-01 | Load the bank's positions and the master data of its counterparties: contracts (loans, facilities, interbank), deposit balances, HQLA securities and counterparty details (sector, operational relationship). | Run-off rates depend on who the client is (retail, corporate, bank) and on the product. Without counterparty data, deposits cannot be classified. | FULL | Raw tables `LIQI_RAW_TB_COUNTERPARTIES`, `_CONTRACTS`, `_DEPOSIT_BALANCES`, `_HQLA_HOLDINGS`; files land in stages and serverless tasks load them as soon as new files arrive (`060_LIQI_ingestion.sql`). |
+| REQ-ING-02 | Store the contractual cashflows of every contract per cut-off date, so each day's view can be reproduced later. | The 30-day inflows and outflows come from these cashflows. Keeping one snapshot per day lets Treasury compare cut-offs and lets Audit re-run any past day. | FULL (demo scale) | `LIQI_RAW_TB_CASHFLOWS`, one row per cut-off date, contract, cashflow date and cashflow type; clustered by cut-off date so a single day reads fast. |
+| REQ-ING-03 | Convert every foreign-currency position into CHF with the end-of-day rate of the cut-off date. | The LCR is reported in CHF. A wrong or missing rate silently distorts HQLA and outflows. | ADAPTED (CHF) | One end-of-day rate per currency and calendar day (`fx_generator.py` → `REPP_AGG_DT_LCR_FX_DAILY`), joined on the exact date. A position without a rate is quarantined as `MISSING_FX` instead of being calculated with a guess. |
+
+### 4.2 Data quality and classification
+
+Bad records must never change the reported LCR unnoticed. They are set aside, listed and fixed at the source, while the rest of the book is still calculated.
+
+| ID | Requirement | Why it matters | Status | How it is met |
+|---|---|---|---|---|
+| REQ-DQ-01 | Quarantine records that cannot be calculated correctly: unknown product codes, invalid or past maturity dates, missing FX rates, missing behavioral rules. | FINMA expects complete and accurate figures. A quarantine keeps the daily run going and makes every excluded amount visible, instead of stopping the pipeline or dropping records silently. | FULL | `REPP_AGG_DT_LCR_POSITIONS` checks every record; failures go to `REPP_AGG_DT_LCR_EXCEPTIONS` with a reason code (section 3.6). The app tab *Data Quality* lists them. Test `TC-VAL-03` injects bad records and checks they are caught. |
+| REQ-MAP-01 | Classify every product into the FINMA asset classes: Level 1, Level 2A, Level 2B or non-HQLA. | The class decides the haircut and whether the asset counts towards the buffer at all (section 3.2). | FULL | Rule tables `LIQI_RAW_TB_PRODUCT_MAPPING` (product → asset class) and `LIQI_RAW_TB_HQLA_ELIGIBILITY` (haircuts and eligibility). Changing a rule needs no code change. |
+
+### 4.3 Calculation engine
+
+The engine turns positions into the regulatory LCR and the internal stress figures. One shared calculation is used everywhere, so every screen, report and agent answer shows the same number.
+
+| ID | Requirement | Why it matters | Status | How it is met |
+|---|---|---|---|---|
+| REQ-ENG-01 | Place contractual cashflows into maturity buckets (overnight up to over one year) and show the cumulative liquidity gap. | The LCR only looks 30 days ahead. The maturity ladder shows Treasury where funding gaps open up beyond that horizon. | FULL | Buckets in `LIQI_RAW_TB_MATURITY_BUCKETS`; `REPP_AGG_DT_LCR_LIQUIDITY_GAP` sums the gap per bucket and cumulatively. App tab *Behavioral*. |
+| REQ-ENG-02 | Model how products without a fixed maturity behave: sight deposits run off over a decay profile, committed facilities are partly drawn. | Most deposits can be withdrawn any day. Treating them as never leaving would overstate liquidity; treating them as leaving at once would overstate the risk. | FULL | `LIQI_RAW_TB_BEHAVIORAL_RULES` holds decay profiles and drawdown rates per product, sector and scenario. |
+| REQ-ENG-03 | Apply the regulatory run-off rates per counterparty segment and the 75% inflow cap. | These rates make up the LCR denominator (section 3.3). The inflow cap prevents a bank from offsetting most outflows with expected inflows. | FULL | `REPP_AGG_DT_LCR_SCENARIO_POSITIONS` applies rates per position; `REPP_AGG_FN_LCR_CALC` applies the cap. App tab *Flows & Inflow Cap*. |
+| REQ-ENG-04 | Calculate the HQLA buffer after haircuts and the Level 2 caps. | The buffer is the LCR numerator. Without the caps, a bank could hold mostly lower-quality assets and still look liquid. | ADAPTED (FINMA) | `REPP_AGG_DT_LCR_SCENARIO_COMPONENTS` and `REPP_AGG_FN_LCR_CALC` apply FINMA haircuts and the 15/85 and 2/3 caps (section 3.2). App tab *HQLA & Caps*. |
+| REQ-ENG-05 | Run several stress scenarios side by side with the regulatory LCR. | The regulatory figure alone does not show how close the bank is to a breach under a bank-specific or market-wide crisis. | FULL | Four scenarios in `LIQI_RAW_TB_SCENARIOS` (section 3.4), calculated daily in `REPP_AGG_DT_LCR_SCENARIO_DAILY`. Test `ENG-03` checks that no stress scenario shows a better LCR than BASE. The simulator `REPP_AGG_SP_LCR_SIMULATE` / `REPP_AGG_SP_LCR_WHAT_IF` reuses the same calculation. |
+
+### 4.4 Analysis and root cause
+
+When the LCR moves, management asks "why?" within minutes. The answer must name the client and the contract, and the parts must add up exactly to the total change.
+
+| ID | Requirement | Why it matters | Status | How it is met |
+|---|---|---|---|---|
+| REQ-ANL-01 | Show the change between cut-offs: day over day, week over week, month over month. | Trends and sudden jumps are the first signal of a liquidity problem. | FULL | `REPP_AGG_DT_LCR_CUTOFF_DELTAS`; app tab *Variance*. |
+| REQ-ANL-02 | Drill down from the total gap to asset class, product group, counterparty and single contract. | Treasury needs to see which part of the book drives the figure, down to the contract that can be acted on. | FULL | `REPP_AGG_VW_LCR_DRILLDOWN`; app tab *Drill-down*. |
+
+### 4.5 User interface and agent
+
+Treasury and Risk work with the figures every day; management asks questions in plain language.
+
+| ID | Requirement | Why it matters | Status | How it is met |
+|---|---|---|---|---|
+| REQ-UI-01 | A dashboard to compare cut-off dates and see liquidity gaps. | One place for the daily LCR review, instead of spreadsheets. | FULL | Streamlit page `the_bank_app/pages/lcr_monitoring.py`: 11 tabs, date slider, markers for the known liquidity events. |
+| REQ-UI-02 | Filters for business unit, asset class, currency, rating and scenario. | Different teams look at different slices of the book. | PARTIAL | Scenario, business unit, asset class and date are filters; currency is a separate tab. **Missing: a rating filter.** |
+| REQ-UI-03 | A root cause analyzer that lists the top 10 contracts behind a daily LCR change. | Explains a move in seconds instead of a manual investigation. | FULL | `REPP_AGG_VW_LCR_VARIANCE_ATTRIBUTION` splits the change exactly per position (section 3.7); `REPP_AGG_VW_LCR_VARIANCE_DRIVERS` ranks the top 10. Also available to the agent as tool `LCR_Variance_Drivers`. Test `TC-VAL-04` checks that the CHF 50M withdrawal of event `EVT_01` comes out as the #1 driver. |
+
+### 4.6 Performance
+
+| ID | Requirement | Why it matters | Status | How it is met |
+|---|---|---|---|---|
+| REQ-PER-01 | Summaries in under a second, drill-down in under 3 seconds. | Users stop using a slow tool and go back to spreadsheets. | PARTIAL | Summaries read pre-aggregated dynamic tables. **Not measured at production volume** (multi-million cashflow rows); the volume test was skipped (section 5, TC-VAL-02). |
+
+### 4.7 Beyond the requirements
+
+- **Liquidity events:** `LIQI_RAW_TB_EVENTS` records five showcase events (a CHF 50M corporate withdrawal, market stress, recovery, loan inflows). The dashboard marks them on the timeline, and the agent uses them to explain LCR moves.
+- **Questions in plain language:** 8 semantic views (`LCRS_SV_*`), including scenarios, root-cause drivers and events, let `LIQUIDITY_RISK_AGENT` answer questions such as "why did the LCR drop on 26 August?". All 8 have verified queries (18 in total) that are tested on every deploy.
+- **What-if from the agent:** the agent can call the simulator, for example "what happens if a corporate client withdraws CHF 100M?". The master agent routes such questions to it.
+- **Documented data:** every LCR object and column has a business description; a metadata gate in the test run fails if one is missing.
 
 ## 5. Test Plan
 

@@ -139,54 +139,61 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMERS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
-        CUSTOMER_ID, 
-        FIRST_NAME, 
-        FAMILY_NAME, 
-        DATE_OF_BIRTH, 
-        ONBOARDING_DATE, 
-        REPORTING_CURRENCY, 
-        HAS_ANOMALY,
-        EMPLOYER,
-        POSITION,
-        EMPLOYMENT_TYPE,
-        INCOME_RANGE,
-        ACCOUNT_TIER,
-        EMAIL,
-        PHONE,
-        PREFERRED_CONTACT_METHOD,
-        RISK_CLASSIFICATION,
-        CREDIT_SCORE_BAND,
-        INSERT_TIMESTAMP_UTC
-    )
-    FROM (
-        SELECT 
-            $1::VARCHAR(30),
-            $2::VARCHAR(100),
-            $3::VARCHAR(100),
-            $4::DATE,
-            $5::DATE,
-            $6::VARCHAR(3),
-            $7::BOOLEAN,
-            NULLIF($8, '')::VARCHAR(200), 
-            NULLIF($9, '')::VARCHAR(100),  
-            NULLIF($10, '')::VARCHAR(30),  
-            NULLIF($11, '')::VARCHAR(30),  
-            NULLIF($12, '')::VARCHAR(30),  
-            NULLIF($13, '')::VARCHAR(255), 
-            NULLIF($14, '')::VARCHAR(50),  
-            NULLIF($15, '')::VARCHAR(20),  
-            NULLIF($16, '')::VARCHAR(20),  
-            NULLIF($17, '')::VARCHAR(20),  
-            COALESCE(
-                TRY_CAST($18 AS TIMESTAMP_NTZ), 
-                CURRENT_TIMESTAMP()              
-            ) AS INSERT_TIMESTAMP_UTC
-        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS
-    )
-    PATTERN = '.*customers.*\.csv'
-    FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_CSV
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER (
+            CUSTOMER_ID, 
+            FIRST_NAME, 
+            FAMILY_NAME, 
+            DATE_OF_BIRTH, 
+            ONBOARDING_DATE, 
+            REPORTING_CURRENCY, 
+            HAS_ANOMALY,
+            EMPLOYER,
+            POSITION,
+            EMPLOYMENT_TYPE,
+            INCOME_RANGE,
+            ACCOUNT_TIER,
+            EMAIL,
+            PHONE,
+            PREFERRED_CONTACT_METHOD,
+            RISK_CLASSIFICATION,
+            CREDIT_SCORE_BAND,
+            INSERT_TIMESTAMP_UTC
+        )
+        FROM (
+            SELECT 
+                $1::VARCHAR(30),
+                $2::VARCHAR(100),
+                $3::VARCHAR(100),
+                $4::DATE,
+                $5::DATE,
+                $6::VARCHAR(3),
+                $7::BOOLEAN,
+                NULLIF($8, '')::VARCHAR(200), 
+                NULLIF($9, '')::VARCHAR(100),  
+                NULLIF($10, '')::VARCHAR(30),  
+                NULLIF($11, '')::VARCHAR(30),  
+                NULLIF($12, '')::VARCHAR(30),  
+                NULLIF($13, '')::VARCHAR(255), 
+                NULLIF($14, '')::VARCHAR(50),  
+                NULLIF($15, '')::VARCHAR(20),  
+                NULLIF($16, '')::VARCHAR(20),  
+                NULLIF($17, '')::VARCHAR(20),  
+                COALESCE(
+                    TRY_CAST($18 AS TIMESTAMP_NTZ), 
+                    CURRENT_TIMESTAMP()              
+                ) AS INSERT_TIMESTAMP_UTC
+            FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMERS
+        )
+        -- customers.csv (initial load) and customer_updates_*.csv (SCD Type 2 attribute changes)
+        PATTERN = '.*customer(s|_updates_).*\.csv'
+        FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_CSV
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_ADDRESSES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -194,29 +201,35 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_ADDRESSES
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_ADDRESS_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
-        CUSTOMER_ID, 
-        STREET_ADDRESS, 
-        CITY, 
-        STATE, 
-        ZIPCODE, 
-        COUNTRY, 
-        INSERT_TIMESTAMP_UTC
-    )
-    FROM (
-        SELECT 
-            $1::VARCHAR(30) AS CUSTOMER_ID,
-            $2::VARCHAR(200) AS STREET_ADDRESS,
-            $3::VARCHAR(100) AS CITY,
-            NULLIF($4, '')::VARCHAR(100) AS STATE, 
-            $5::VARCHAR(20) AS ZIPCODE,
-            $6::VARCHAR(50) AS COUNTRY,
-            $7::TIMESTAMP_NTZ AS INSERT_TIMESTAMP_UTC
-        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES
-    )
-    PATTERN = '.*customer_addresses.*\.csv'
-    FILE_FORMAT = CRMI_RAW_FF_ADDRESS_CSV
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES (
+            CUSTOMER_ID, 
+            STREET_ADDRESS, 
+            CITY, 
+            STATE, 
+            ZIPCODE, 
+            COUNTRY, 
+            INSERT_TIMESTAMP_UTC
+        )
+        FROM (
+            SELECT 
+                $1::VARCHAR(30) AS CUSTOMER_ID,
+                $2::VARCHAR(200) AS STREET_ADDRESS,
+                $3::VARCHAR(100) AS CITY,
+                NULLIF($4, '')::VARCHAR(100) AS STATE, 
+                $5::VARCHAR(20) AS ZIPCODE,
+                $6::VARCHAR(50) AS COUNTRY,
+                $7::TIMESTAMP_NTZ AS INSERT_TIMESTAMP_UTC
+            FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_ADDRESSES
+        )
+        PATTERN = '.*customer_addresses.*\.csv'
+        FILE_FORMAT = CRMI_RAW_FF_ADDRESS_CSV
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_ADDRESS_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_EXPOSED_PERSON
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -224,30 +237,36 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_EXPOSED_PERSON
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_EXPOSED_PERSON_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
-        EXPOSED_PERSON_ID, 
-        FULL_NAME, 
-        FIRST_NAME, 
-        LAST_NAME, 
-        DATE_OF_BIRTH, 
-        NATIONALITY,
-        POSITION_TITLE, 
-        ORGANIZATION, 
-        COUNTRY, 
-        EXPOSED_PERSON_CATEGORY, 
-        RISK_LEVEL, 
-        STATUS,
-        START_DATE, 
-        END_DATE, 
-        REFERENCE_LINK, 
-        SOURCE, 
-        LAST_UPDATED, 
-        CREATED_DATE
-    )
-    FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON
-    PATTERN = '.*pep.*\.csv'
-    FILE_FORMAT = CRMI_RAW_FF_EXPOSED_PERSON_CSV
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_EXPOSED_PERSON (
+            EXPOSED_PERSON_ID, 
+            FULL_NAME, 
+            FIRST_NAME, 
+            LAST_NAME, 
+            DATE_OF_BIRTH, 
+            NATIONALITY,
+            POSITION_TITLE, 
+            ORGANIZATION, 
+            COUNTRY, 
+            EXPOSED_PERSON_CATEGORY, 
+            RISK_LEVEL, 
+            STATUS,
+            START_DATE, 
+            END_DATE, 
+            REFERENCE_LINK, 
+            SOURCE, 
+            LAST_UPDATED, 
+            CREATED_DATE
+        )
+        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_EXPOSED_PERSON
+        PATTERN = '.*pep.*\.csv'
+        FILE_FORMAT = CRMI_RAW_FF_EXPOSED_PERSON_CSV
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_EXPOSED_PERSON_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -255,43 +274,49 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_EVENTS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_EVENT_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
-        EVENT_ID,
-        CUSTOMER_ID,
-        EVENT_TYPE,
-        EVENT_DATE,
-        EVENT_TIMESTAMP_UTC,
-        CHANNEL,
-        EVENT_DETAILS,
-        PREVIOUS_VALUE,
-        NEW_VALUE,
-        TRIGGERED_BY,
-        REQUIRES_REVIEW,
-        REVIEW_STATUS,
-        REVIEW_DATE,
-        NOTES
-    )
-    FROM (
-        SELECT 
-            $1::VARCHAR(50),
-            $2::VARCHAR(30),
-            $3::VARCHAR(30),
-            $4::DATE,
-            $5::TIMESTAMP_NTZ,
-            $6::VARCHAR(50),
-            PARSE_JSON(REPLACE($7, '''', '"')), 
-            $8::VARCHAR(500),
-            $9::VARCHAR(500),
-            $10::VARCHAR(100),
-            $11::BOOLEAN,
-            $12::VARCHAR(20),
-            NULLIF($13, '')::DATE, 
-            $14::VARCHAR(1000)
-        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
-    )
-    FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_EVENT_CSV
-    PATTERN = '.*customer_events.*\.csv'
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_EVENT (
+            EVENT_ID,
+            CUSTOMER_ID,
+            EVENT_TYPE,
+            EVENT_DATE,
+            EVENT_TIMESTAMP_UTC,
+            CHANNEL,
+            EVENT_DETAILS,
+            PREVIOUS_VALUE,
+            NEW_VALUE,
+            TRIGGERED_BY,
+            REQUIRES_REVIEW,
+            REVIEW_STATUS,
+            REVIEW_DATE,
+            NOTES
+        )
+        FROM (
+            SELECT 
+                $1::VARCHAR(50),
+                $2::VARCHAR(30),
+                $3::VARCHAR(30),
+                $4::DATE,
+                $5::TIMESTAMP_NTZ,
+                $6::VARCHAR(50),
+                PARSE_JSON(REPLACE($7, '''', '"')), 
+                $8::VARCHAR(500),
+                $9::VARCHAR(500),
+                $10::VARCHAR(100),
+                $11::BOOLEAN,
+                $12::VARCHAR(20),
+                NULLIF($13, '')::DATE, 
+                $14::VARCHAR(1000)
+            FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
+        )
+        FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_EVENT_CSV
+        PATTERN = '.*customer_events.*\.csv'
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_EVENT_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_STATUS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'
@@ -299,31 +324,37 @@ DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_LOAD_CUSTOMER_STATUS
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_STATUS_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS (
-        STATUS_ID,
-        CUSTOMER_ID,
-        STATUS,
-        STATUS_REASON,
-        STATUS_START_DATE,
-        STATUS_END_DATE,
-        IS_CURRENT,
-        LINKED_EVENT_ID
-    )
-    FROM (
-        SELECT 
-            $1::VARCHAR(50),
-            $2::VARCHAR(30),
-            $3::VARCHAR(30),
-            $4::VARCHAR(100),
-            $5::DATE,
-            $6::DATE,
-            $7::BOOLEAN,
-            $8::VARCHAR(50)
-        FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
-    )
-    FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_STATUS_CSV
-    PATTERN = '.*customer_status.*\.csv'
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_CUSTOMER_STATUS (
+            STATUS_ID,
+            CUSTOMER_ID,
+            STATUS,
+            STATUS_REASON,
+            STATUS_START_DATE,
+            STATUS_END_DATE,
+            IS_CURRENT,
+            LINKED_EVENT_ID
+        )
+        FROM (
+            SELECT 
+                $1::VARCHAR(50),
+                $2::VARCHAR(30),
+                $3::VARCHAR(30),
+                $4::VARCHAR(100),
+                $5::DATE,
+                $6::DATE,
+                $7::BOOLEAN,
+                $8::VARCHAR(50)
+            FROM @{{ db }}.{{ crm_raw }}.CRMI_RAW_ST_CUSTOMER_EVENTS
+        )
+        FILE_FORMAT = CRMI_RAW_FF_CUSTOMER_STATUS_CSV
+        PATTERN = '.*customer_status.*\.csv'
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ crm_raw }}.CRMI_RAW_SM_CUSTOMER_STATUS_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ crm_raw }}.CRMI_RAW_TK_CLEANUP_AFTER_LOAD_CUSTOMERS
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'

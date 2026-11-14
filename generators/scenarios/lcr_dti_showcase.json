@@ -1,0 +1,33 @@
+{
+  "_comment": "Showcase scenario of the LCR + DtI book. Offsets are calendar days before the as-of date (LCR) or business days before the latest reporting date (DtI securities). Only this configuration is fixed; all event rows are generated from it.",
+  "lcr_events": {
+    "withdrawal_1": {"offset_days": 60, "account": "CP_CORP_EVT1_DEP_01", "amount_chf": 50000000, "min_delta_pp": 1.0},
+    "stress": {"offset_days": 45, "days": 5, "corporate_operational_run_per_day": 0.035,
+               "price_shock": {"GOVT_BOND_CHF": 0.002, "GOVT_BOND_FOREIGN": 0.003, "CANTON_BOND": 0.012, "COVERED_BOND": 0.012,
+                               "CORPORATE_BOND_AA": 0.016, "CORPORATE_BOND_A_BBB": 0.02, "EQUITY_SMI": 0.025},
+               "funding_share_of_net_outflow": 0.32, "funding_days_to_maturity": 20, "min_delta_pp": 10.0},
+    "recovery": {"offset_days": 38, "price_recovery_share": 0.5, "funding_roll_days": 182,
+                 "reserves_share_of_net_outflow": 0.08, "min_delta_pp": 10.0},
+    "inflow": {"offset_days": 20, "loan_share_of_net_outflow": 0.11, "loan_weights": [0.27, 0.22, 0.20, 0.17, 0.14],
+               "days_to_maturity": 25, "min_delta_pp": 3.0},
+    "withdrawal_2": {"offset_days": 3, "account": "CP_CORP_EVT2_DEP_01", "amount_chf": 40000000, "min_delta_pp": 1.0}
+  },
+  "event_deposits": [
+    {"account": "CP_CORP_EVT1_DEP_01", "counterparty": "CP_CORP_EVT1", "deposit_type": "CORPORATE_NON_OPERATIONAL", "balance_chf": 72000000, "sigma": 0.002},
+    {"account": "CP_CORP_EVT2_DEP_01", "counterparty": "CP_CORP_EVT2", "deposit_type": "CORPORATE_NON_OPERATIONAL", "balance_chf": 58000000, "sigma": 0.002},
+    {"account": "CP_CORP_EVT2_DEP_02", "counterparty": "CP_CORP_EVT2", "deposit_type": "CORPORATE_OPERATIONAL", "balance_chf": 25000000, "sigma": 0.004}
+  ],
+  "dti": {
+    "preliminary_entity": "LE_07",
+    "corrections": [
+      {"id": "CORR-0001", "date": "latest", "entity": "LE_01", "position": "POOL_CB_BALANCE", "value_offset_days": 0,
+       "amount_chf": -15000000, "comment": "Central bank balance corrected after late SIC settlement (manual LRCU input)", "time": "22:15:00"},
+      {"id": "CORR-0002", "date": "previous", "entity": "LE_03", "position": "OUT_DEP_CORPORATE", "value_offset_days": 3,
+       "amount_chf": -2500000, "comment": "Announced corporate withdrawal not yet booked", "time": "21:40:00"}
+    ],
+    "planning": {"months": 12, "new_lending_group_chf": -60000000, "new_lending_monthly_growth": 0.02, "funding_plan_group_chf": 40000000},
+    "securities_purchase": {"offset_business_days": 12, "wlk": "II", "entity": "LE_01", "nominal_chf": 90000000},
+    "wlk_downgrade": {"offset_business_days": 20, "from": "VI", "to": "VII"},
+    "security_maturity": {"wlk": "IV", "days_after_latest": 10}
+  }
+}

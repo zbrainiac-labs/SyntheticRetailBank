@@ -55,6 +55,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_EQUITY_POSITIONS(
 ) COMMENT = 'Concentration Risk and Market Exposure by Security: To track the aggregate net position (long/short) for every traded security across all customers.
 Market Risk: Identifies securities where the banks customers have high volume or concentrated positions, which could impact liquidity and require capital provisioning.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+REFRESH_MODE = INCREMENTAL
 AS
 SELECT
     SYMBOL,                                                      -- Security symbol for position tracking
@@ -85,6 +86,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_EQUITY_CURRENCY_EXPOSURE
 ) COMMENT = 'FX Risk from Foreign Equity Trading: To measure the currency exposure generated specifically by trading securities denominated in non-base currencies.
 Market Risk/Treasury: Isolates the FX risk component of the trading book, ensuring accurate currency hedging and compliance with non-base currency exposure limits.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+REFRESH_MODE = INCREMENTAL
 AS
 SELECT
     CURRENCY,                                                    -- Trading currency for FX exposure analysis
@@ -115,6 +117,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ rep_agg }}.REPP_AGG_DT_HIGH_VALUE_EQUITY_TRADES
 ) COMMENT = 'Large Trade Compliance Monitoring: To filter and track all equity trades exceeding a significant value threshold (e.g., 100k CHF).
 Compliance/Audit: Essential for compliance monitoring to detect potential market manipulation, front-running, or unauthorized large trading activity that requires immediate review and audit trail maintenance.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+REFRESH_MODE = INCREMENTAL
 AS
 SELECT
     TRADE_DATE,                                                  -- Trade execution date for compliance tracking

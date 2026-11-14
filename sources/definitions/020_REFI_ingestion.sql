@@ -30,11 +30,17 @@ DEFINE TASK {{ db }}.{{ ref_raw }}.REFI_RAW_TK_LOAD_FX_RATES
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ ref_raw }}.REFI_RAW_SM_FX_RATE_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ ref_raw }}.REFI_RAW_TB_FX_RATES (DATE, FROM_CURRENCY, TO_CURRENCY, MID_RATE, BID_RATE, ASK_RATE)
-    FROM @{{ db }}.{{ ref_raw }}.REFI_RAW_ST_FX_RATES
-    PATTERN = '.*fx_rates.*\.csv'
-    FILE_FORMAT = REFI_RAW_FF_FX_RATES_CSV
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ ref_raw }}.REFI_RAW_TB_FX_RATES (DATE, FROM_CURRENCY, TO_CURRENCY, MID_RATE, BID_RATE, ASK_RATE)
+        FROM @{{ db }}.{{ ref_raw }}.REFI_RAW_ST_FX_RATES
+        PATTERN = '.*fx_rates.*\.csv'
+        FILE_FORMAT = REFI_RAW_FF_FX_RATES_CSV
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ ref_raw }}.REFI_RAW_SM_FX_RATE_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ ref_raw }}.REFI_RAW_TK_CLEANUP_AFTER_LOAD_FX_RATES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'

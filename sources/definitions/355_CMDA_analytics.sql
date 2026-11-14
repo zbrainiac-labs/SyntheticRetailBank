@@ -36,6 +36,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ cmd_agg }}.CMDA_AGG_DT_TRADE_SUMMARY(
     CREATED_AT TIMESTAMP_NTZ COMMENT 'Record creation timestamp'
 ) COMMENT = 'Enriched commodity trade analytics with risk metrics and classifications'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+REFRESH_MODE = INCREMENTAL
 AS
 SELECT 
     t.TRADE_ID,

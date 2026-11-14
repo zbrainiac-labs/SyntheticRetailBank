@@ -77,23 +77,24 @@ echo "✅ PASSED: Banking data generated successfully"
 
 echo ""
 echo "=================================================="
-echo "Generating FINMA LCR Data (Liquidity Coverage Ratio)"
+echo "Generating FINMA LCR + DtI liquidity book (one shared book)"
 echo "=================================================="
 echo "Configuration:"
-echo "  - Days: 90 (3 months, ending today)"
+echo "  - LCR window: 90 days ending the as-of date (AS_OF_DATE=${AS_OF_DATE:-last Zurich business day covered by FX})"
+echo "  - DtI: business days of the window + 15 month-ends of the same simulation"
 echo "  - Customers: Linked to actual customer base"
-echo "  - Target BASE LCR: 135% (calibrated) with deterministic showcase events"
+echo "  - Target BASE LCR: 135% on the as-of date (calibrated) with deterministic showcase events"
+echo "  - Seed: ${LIQ_SEED:-42} (same seed + as-of date => identical files)"
 echo "  - FX: CHF crosses from $OUTPUT_DIR/fx_rates/"
 echo "  - Output: $OUTPUT_DIR/lcr/"
 echo ""
 
 # Link deposits to actual customers from master data
-./venv/bin/python generators/lcr_data_generator.py \
-    --days 90 \
-    --customer-file "$OUTPUT_DIR/master_data/customers.csv" \
-    --fx-dir "$OUTPUT_DIR/fx_rates" \
-    --target-lcr 135 \
-    --output-dir "$OUTPUT_DIR/lcr"
+LIQ_ARGS=(--days 90 --seed "${LIQ_SEED:-42}" --target-lcr 135
+          --customer-file "$OUTPUT_DIR/master_data/customers.csv"
+          --fx-dir "$OUTPUT_DIR/fx_rates" --output-dir "$OUTPUT_DIR/lcr")
+[[ -n "${AS_OF_DATE:-}" ]] && LIQ_ARGS+=(--as-of-date "$AS_OF_DATE")
+./venv/bin/python generators/lcr_data_generator.py "${LIQ_ARGS[@]}"
 
 if [ $? -ne 0 ]; then
     echo ""

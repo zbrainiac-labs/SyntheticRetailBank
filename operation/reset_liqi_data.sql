@@ -1,0 +1,76 @@
+-- ============================================================
+-- operation/reset_liqi_data.sql - DEV ONLY
+-- Empties the generated LIQI (LCR + DtI) book so a new generator run can be
+-- loaded without mixing runs: suspends the LIQI tasks, truncates every table
+-- the tasks load (TRUNCATE also clears the COPY load history) and removes the
+-- files from the landing stages. Reference tables (seeded by post_deploy.sql
+-- from reference_data/liqi) are NOT touched.
+-- NOTE: LIQI_RAW_TB_DTI_CORRECTIONS also holds corrections entered in the app.
+--
+-- Run:  snow sql -c <conn> --role CICD -f operation/reset_liqi_data.sql
+-- Then: upload-data.sh, operation/execute_all_tasks_and_refresh_dts.sql
+-- ============================================================
+USE DATABASE AAA_DEV_SYNTHETIC_BANK;
+USE SCHEMA REP_RAW_V001;
+
+-- guard: never against another database
+EXECUTE IMMEDIATE $$
+BEGIN
+    IF (CURRENT_DATABASE() <> 'AAA_DEV_SYNTHETIC_BANK') THEN
+        RAISE STATEMENT_ERROR;
+    END IF;
+    RETURN 'DEV guard ok';
+END;
+$$;
+
+-- 1. suspend the LIQI tasks (roots first, then the cleanup children)
+EXECUTE IMMEDIATE $$
+DECLARE
+    n INT DEFAULT 0;
+    rs RESULTSET DEFAULT (SHOW TASKS LIKE 'LIQI_RAW_TK_%' IN SCHEMA AAA_DEV_SYNTHETIC_BANK.REP_RAW_V001);
+    c CURSOR FOR SELECT "name" AS NAME FROM TABLE(RESULT_SCAN(LAST_QUERY_ID())) WHERE "state" = 'started'
+                 ORDER BY IFF("name" LIKE '%CLEANUP%', 1, 0);
+BEGIN
+    FOR r IN c DO
+        EXECUTE IMMEDIATE 'ALTER TASK AAA_DEV_SYNTHETIC_BANK.REP_RAW_V001.' || r.NAME || ' SUSPEND';
+        n := n + 1;
+    END FOR;
+    RETURN n || ' LIQI tasks suspended';
+END;
+$$;
+
+-- 2. truncate the generated tables
+TRUNCATE TABLE LIQI_RAW_TB_HQLA_HOLDINGS;
+TRUNCATE TABLE LIQI_RAW_TB_DEPOSIT_BALANCES;
+TRUNCATE TABLE LIQI_RAW_TB_COUNTERPARTIES;
+TRUNCATE TABLE LIQI_RAW_TB_EVENTS;
+TRUNCATE TABLE LIQI_RAW_TB_CONTRACTS;
+TRUNCATE TABLE LIQI_RAW_TB_CASHFLOWS;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_SECURED_FUNDING;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_REPORT_STATUS;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_CORRECTIONS;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_EVENTS;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_PLANNING;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_SECURITIES;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_SECURITY_CASHFLOWS;
+TRUNCATE TABLE LIQI_RAW_TB_DTI_TRANSACTIONS;
+TRUNCATE TABLE LIQI_RAW_TB_GENERATION_RUN;
+
+-- 3. remove the files of earlier runs from the landing stages
+REMOVE @LIQI_RAW_ST_HQLA_HOLDINGS;
+REMOVE @LIQI_RAW_ST_DEPOSIT_BALANCES;
+REMOVE @LIQI_RAW_ST_COUNTERPARTIES;
+REMOVE @LIQI_RAW_ST_EVENTS;
+REMOVE @LIQI_RAW_ST_CONTRACTS;
+REMOVE @LIQI_RAW_ST_CASHFLOWS;
+REMOVE @LIQI_RAW_ST_DTI_SECURED_FUNDING;
+REMOVE @LIQI_RAW_ST_DTI_CONTROL;
+REMOVE @LIQI_RAW_ST_DTI_POOL;
+
+-- 4. control: every generated table is empty
+SELECT 'reset' AS STEP, COUNT(*) AS NON_EMPTY_TABLES FROM (
+    SELECT COUNT(*) N FROM LIQI_RAW_TB_HQLA_HOLDINGS UNION ALL SELECT COUNT(*) FROM LIQI_RAW_TB_DEPOSIT_BALANCES
+    UNION ALL SELECT COUNT(*) FROM LIQI_RAW_TB_CONTRACTS UNION ALL SELECT COUNT(*) FROM LIQI_RAW_TB_CASHFLOWS
+    UNION ALL SELECT COUNT(*) FROM LIQI_RAW_TB_DTI_SECURITIES UNION ALL SELECT COUNT(*) FROM LIQI_RAW_TB_DTI_TRANSACTIONS
+    UNION ALL SELECT COUNT(*) FROM LIQI_RAW_TB_GENERATION_RUN
+) WHERE N > 0;

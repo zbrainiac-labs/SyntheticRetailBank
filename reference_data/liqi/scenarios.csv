@@ -1,0 +1,5 @@
+SCENARIO_CODE,SCENARIO_NAME,DESCRIPTION,IS_REGULATORY,SORT_ORDER
+BASE,Regulatory LCR (FINMA),Regulatory FINMA LiqV / Basel III LCR assumptions,TRUE,1
+BANK_STRESS,Idiosyncratic bank stress,"Bank-specific stress: higher retail/corporate run-off, more facility drawdowns, lower inflows",FALSE,2
+MARKET_STRESS,Market-wide stress,"Systemic stress: additional HQLA haircuts, moderate run-off increase, lower inflows",FALSE,3
+COMBINED,Combined stress,Combination of idiosyncratic and market-wide stress,FALSE,4

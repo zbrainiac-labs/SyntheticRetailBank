@@ -1,0 +1,16 @@
+PRODUCT_CLUSTER,CLUSTER_NAME,PRODUCT_GROUP,SORT_ORDER
+PC_CB,Central bank and cash,Liquidity reserves,1
+PC_GOV,Government bonds,Securities,2
+PC_PUBLIC,Canton and covered bonds,Securities,3
+PC_CORP_BOND,Corporate bonds and equities,Securities,4
+PC_MORTGAGE,Mortgages and retail loans,Lending,5
+PC_CORP_LOAN,Corporate loans,Lending,6
+PC_MM_PLACEMENT,Interbank placements,Money market,7
+PC_MM_BORROWING,Interbank borrowing,Money market,8
+PC_REPO,Repos and reverse repos,Money market,9
+PC_RETAIL_DEP,Retail deposits,Deposits,10
+PC_CORP_DEP,Corporate deposits,Deposits,11
+PC_FI_DEP,Financial institution deposits,Deposits,12
+PC_CREDIT_LINES,Credit facilities,Commitments,13
+PC_LIQ_LINES,Liquidity facilities,Commitments,14
+PC_PLAN,Planning positions,Planning,15

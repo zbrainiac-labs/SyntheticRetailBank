@@ -23,16 +23,22 @@ DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_LOAD_SWIFT_MESSAGES
     WHEN SYSTEM$STREAM_HAS_DATA('{{ db }}.{{ pay_raw }}.ICGI_RAW_SM_SWIFT_FILES')
     STARTED
 AS
-    COPY INTO {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES (FILE_NAME, RAW_XML)
-    FROM (
-        SELECT 
-            METADATA$FILENAME AS FILE_NAME,         
-            PARSE_XML($1) AS RAW_XML                
-        FROM @{{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
-    )
-    PATTERN = '.*\.xml'                             
-    FILE_FORMAT = ICGI_RAW_FF_XML              
-    ON_ERROR = CONTINUE;
+    EXECUTE IMMEDIATE $$
+    BEGIN
+        COPY INTO {{ db }}.{{ pay_raw }}.ICGI_RAW_TB_SWIFT_MESSAGES (FILE_NAME, RAW_XML)
+        FROM (
+            SELECT 
+                METADATA$FILENAME AS FILE_NAME,         
+                PARSE_XML($1) AS RAW_XML                
+            FROM @{{ db }}.{{ pay_raw }}.ICGI_RAW_ST_SWIFT_INBOUND
+        )
+        PATTERN = '.*\.xml'                             
+        FILE_FORMAT = ICGI_RAW_FF_XML              
+        ON_ERROR = CONTINUE;
+        -- consume the file stream (offset only): it is empty again and does not go stale
+        CREATE OR REPLACE TEMPORARY TABLE STREAM_ADVANCE AS SELECT RELATIVE_PATH FROM {{ db }}.{{ pay_raw }}.ICGI_RAW_SM_SWIFT_FILES WHERE 0 = 1;
+    END;
+    $$;
 
 DEFINE TASK {{ db }}.{{ pay_raw }}.ICGI_RAW_TK_CLEANUP_AFTER_LOAD_SWIFT_MESSAGES
     USER_TASK_MANAGED_INITIAL_WAREHOUSE_SIZE = 'XSMALL'

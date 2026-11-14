@@ -1,0 +1,23 @@
+PRODUCT_TYPE,SOURCE_SYSTEM,ASSET_CLASS,PRODUCT_GROUP,LCR_TREATMENT,HQLA_LEVEL,DESCRIPTION,IS_ACTIVE
+CASH_SNB,HOLDINGS,HQLA_L1_CASH,SNB reserves,HQLA,L1,"CASH_SNB from holdings mapped to HQLA_L1_CASH / SNB reserves (HQLA treatment, FINMA LiqV)",TRUE
+CASH_VAULT,HOLDINGS,HQLA_L1_CASH,Vault cash,HQLA,L1,"CASH_VAULT from holdings mapped to HQLA_L1_CASH / Vault cash (HQLA treatment, FINMA LiqV)",TRUE
+GOVT_BOND_CHF,HOLDINGS,HQLA_L1_SOVEREIGN,Government bonds,HQLA,L1,"GOVT_BOND_CHF from holdings mapped to HQLA_L1_SOVEREIGN / Government bonds (HQLA treatment, FINMA LiqV)",TRUE
+GOVT_BOND_FOREIGN,HOLDINGS,HQLA_L1_SOVEREIGN,Government bonds,HQLA,L1,"GOVT_BOND_FOREIGN from holdings mapped to HQLA_L1_SOVEREIGN / Government bonds (HQLA treatment, FINMA LiqV)",TRUE
+CANTON_BOND,HOLDINGS,HQLA_L2A,Public sector bonds,HQLA,L2A,"CANTON_BOND from holdings mapped to HQLA_L2A / Public sector bonds (HQLA treatment, FINMA LiqV)",TRUE
+COVERED_BOND,HOLDINGS,HQLA_L2A,Covered bonds,HQLA,L2A,"COVERED_BOND from holdings mapped to HQLA_L2A / Covered bonds (HQLA treatment, FINMA LiqV)",TRUE
+CORPORATE_BOND_AA,HOLDINGS,HQLA_L2A,Corporate bonds,HQLA,L2A,"CORPORATE_BOND_AA from holdings mapped to HQLA_L2A / Corporate bonds (HQLA treatment, FINMA LiqV)",TRUE
+CORPORATE_BOND_A_BBB,HOLDINGS,HQLA_L2B,Corporate bonds,HQLA,L2B,"CORPORATE_BOND_A_BBB from holdings mapped to HQLA_L2B / Corporate bonds (HQLA treatment, FINMA LiqV)",TRUE
+EQUITY_SMI,HOLDINGS,HQLA_L2B,Equities,HQLA,L2B,"EQUITY_SMI from holdings mapped to HQLA_L2B / Equities (HQLA treatment, FINMA LiqV)",TRUE
+RETAIL_STABLE_INSURED,DEPOSITS,RETAIL_DEPOSITS,Retail stable deposits,OUTFLOW,,"RETAIL_STABLE_INSURED from deposits mapped to RETAIL_DEPOSITS / Retail stable deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+RETAIL_STABLE,DEPOSITS,RETAIL_DEPOSITS,Retail stable deposits,OUTFLOW,,"RETAIL_STABLE from deposits mapped to RETAIL_DEPOSITS / Retail stable deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+RETAIL_LESS_STABLE,DEPOSITS,RETAIL_DEPOSITS,Retail less stable deposits,OUTFLOW,,"RETAIL_LESS_STABLE from deposits mapped to RETAIL_DEPOSITS / Retail less stable deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+CORPORATE_OPERATIONAL,DEPOSITS,WHOLESALE_DEPOSITS,Operational deposits,OUTFLOW,,"CORPORATE_OPERATIONAL from deposits mapped to WHOLESALE_DEPOSITS / Operational deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+CORPORATE_NON_OPERATIONAL,DEPOSITS,WHOLESALE_DEPOSITS,Non-operational deposits,OUTFLOW,,"CORPORATE_NON_OPERATIONAL from deposits mapped to WHOLESALE_DEPOSITS / Non-operational deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+UNSECURED_WHOLESALE,DEPOSITS,WHOLESALE_DEPOSITS,Non-operational deposits,OUTFLOW,,"UNSECURED_WHOLESALE from deposits mapped to WHOLESALE_DEPOSITS / Non-operational deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+FINANCIAL_INSTITUTION,DEPOSITS,INTERBANK_FUNDING,Financial institution deposits,OUTFLOW,,"FINANCIAL_INSTITUTION from deposits mapped to INTERBANK_FUNDING / Financial institution deposits (OUTFLOW treatment, FINMA LiqV)",TRUE
+INTERBANK_BORROWING,CONTRACTS,INTERBANK_FUNDING,Interbank borrowing,OUTFLOW,,"INTERBANK_BORROWING from contracts mapped to INTERBANK_FUNDING / Interbank borrowing (OUTFLOW treatment, FINMA LiqV)",TRUE
+LOAN_RETAIL,CONTRACTS,LOANS,Retail loans,INFLOW,,"LOAN_RETAIL from contracts mapped to LOANS / Retail loans (INFLOW treatment, FINMA LiqV)",TRUE
+LOAN_CORP,CONTRACTS,LOANS,Corporate loans,INFLOW,,"LOAN_CORP from contracts mapped to LOANS / Corporate loans (INFLOW treatment, FINMA LiqV)",TRUE
+INTERBANK_LOAN,CONTRACTS,INTERBANK_PLACEMENTS,Interbank placements,INFLOW,,"INTERBANK_LOAN from contracts mapped to INTERBANK_PLACEMENTS / Interbank placements (INFLOW treatment, FINMA LiqV)",TRUE
+CREDIT_FACILITY,CONTRACTS,COMMITTED_FACILITIES,Credit facilities,FACILITY,,"CREDIT_FACILITY from contracts mapped to COMMITTED_FACILITIES / Credit facilities (FACILITY treatment, FINMA LiqV)",TRUE
+LIQUIDITY_FACILITY,CONTRACTS,COMMITTED_FACILITIES,Liquidity facilities,FACILITY,,"LIQUIDITY_FACILITY from contracts mapped to COMMITTED_FACILITIES / Liquidity facilities (FACILITY treatment, FINMA LiqV)",TRUE
