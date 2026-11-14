@@ -1,0 +1,93 @@
+name: CI
+
+# Verify every change before the DCM pipeline deploys it: lint, bank-app typecheck + unit
+# tests, arm64 image build + smoke test + Trivy, and the SonarQube quality gate.
+# Same scripts as local-ci/run.sh, which runs this workflow locally with nektos/act.
+# Modelled on crew-asset-management/.github/workflows/ci.yml (same pinned action SHAs).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # DataOpsBackbone v1.1.0 -- provides the SonarQube stack the self-scan runs against
+  BACKBONE_REF: 3b16a8ea1f0f1f943051597b2cf0eff33cdd5b20
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: ShellCheck, ruff, actionlint (containerized, same as local-ci)
+        run: bash local-ci/lint.sh
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: bank-app typecheck + vitest with coverage
+        run: bash local-ci/unit-tests.sh
+
+  image:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: bank-app:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Build arm64 image + smoke test
+        run: bash local-ci/image.sh --tag="$IMAGE"
+      - name: Trivy scan (blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
+
+  # Start the DataOpsBackbone SonarQube stack (GitHub only; under act the local stack is
+  # reused through the sonarnet network) and run the self-scan against it.
+  sonar:
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # new-code detection needs history
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: ${{ !env.ACT }}
+        with:
+          repository: zbrainiac-labs/DataOpsBackbone
+          ref: ${{ env.BACKBONE_REF }}
+          path: dataopsbackbone
+      - name: Start SonarQube stack
+        if: ${{ !env.ACT }}
+        working-directory: dataopsbackbone
+        run: |
+          sudo sysctl -w vm.max_map_count=524288  # Elasticsearch inside SonarQube
+          pw() { openssl rand -hex 12; }
+          cat > .env <<EOF
+          POSTGRES_USER=sonar
+          POSTGRES_PASSWORD=$(pw)
+          POSTGRES_DB=sonar
+          SONAR_JDBC_USERNAME=sonar
+          SONAR_ADMIN_PASS=Ci-$(pw)-Aa1!
+          GRAFANA_ADMIN_PASSWORD=$(pw)
+          EOF
+          echo "SONAR_JDBC_PASSWORD=$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2)" >> .env
+          docker compose --env-file .env up -d --wait sonarqube db
+          docker compose --env-file .env run --rm sonar-init
+      - name: SonarQube quality gate
+        run: bash local-ci/sonar-self-scan.sh --strict
+      - name: SonarQube logs
+        if: ${{ failure() && !env.ACT }}
+        working-directory: dataopsbackbone
+        run: docker compose --env-file .env logs --no-color sonarqube sonar-init | tail -n 200

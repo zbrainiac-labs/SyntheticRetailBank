@@ -247,7 +247,20 @@ Status bands: **FAIL** < 100%, **WARNING** 100–110%, **PASS** >= 110%.
 | 5. Test gate (16 LCR checks + metadata gate) | `snow sql -c <conn> -f sqlunit/lcr_validation.sql` and `-f sqlunit/metadata_check.sql` |
 | 6. App tests | `cd the_bank_app && venv/bin/python tests/test_lcr_page.py && venv/bin/python tests/test_all_pages.py` |
 
-**Engine (single calculation path):** `REPP_AGG_DT_LCR_POSITIONS` (mapping, FX, DQ) → `..._SCENARIO_POSITIONS` → `..._SCENARIO_COMPONENTS` → `..._SCENARIO_DAILY` (4 scenarios, shared UDF `REPP_AGG_FN_LCR_CALC` with L2B 15/85, L2 2/3 and 75% inflow caps). `REPP_AGG_DT_LCR_DAILY` is the BASE scenario.
+**Operation scripts (`operation/`):**
+
+| Script | Purpose |
+|--------|---------|
+| `tasks_and_dts.sql` | Suspend or resume all tasks and dynamic tables, read from Snowflake at run time (`-D action=suspend\|resume`, optional `-D task_like=` / `-D dt_like=`). After a DCM deploy, which resumes every task: `snow sql -c <conn> --role CICD -f operation/tasks_and_dts.sql --enable-templating JINJA -D db=AAA_DEV_SYNTHETIC_BANK -D action=suspend -D task_like=LIQI_RAW_TK_% -D dt_like=-` |
+| `execute_all_tasks_and_refresh_dts.sql` | Run every load task and refresh all dynamic tables in dependency order |
+| `reset_liqi_data.sql` | DEV only: empty the generated LIQI (LCR + DtI) book and its stages before loading a new generator run |
+| `render_reference_seeds.py` | Render the LIQI reference seeds of `post_deploy.sql` from `reference_data/liqi` (`--check` fails if out of sync) |
+| `full_rebuild_test.sh` | From-scratch regression (see below) |
+| `setup_listings.sql` | One-time account-level setup (ACCOUNTADMIN) |
+
+**One liquidity book, shared ports (359):** the LCR (`/liquidity/lcr`) and the DtI (`/dti`) run on one generator run. The raw holdings, deposit, contract and cashflow tables hold the daily window and the month-end history (`SNAPSHOT_SCOPE` = `DAILY` / `MONTH_END`). Both engines read the same ports: `REPP_AGG_DT_LIQ_POSITIONS` (CHF, product mapping, data quality, DtI attributes), `REPP_AGG_DT_LIQ_CASHFLOWS` (valid contracts in CHF), `REPP_AGG_VW_LIQ_RULES` (behavioral rules) and `REPP_AGG_VW_LIQ_CALENDAR` (Zurich business days). A quarantined record is therefore missing on both pages. `sqlunit/data_check.sql` DATA-LIQ-01..07 checks the shared book.
+
+**Engine (single calculation path):** `REPP_AGG_DT_LCR_POSITIONS` (daily slice of the position port) → `..._SCENARIO_POSITIONS` → `..._SCENARIO_COMPONENTS` → `..._SCENARIO_DAILY` (4 scenarios, shared UDF `REPP_AGG_FN_LCR_CALC` with L2B 15/85, L2 2/3 and 75% inflow caps). `REPP_AGG_DT_LCR_DAILY` is the BASE scenario.
 
 **Root cause / attribution:** `REPP_AGG_VW_LCR_VARIANCE_ATTRIBUTION` splits every LCR change exactly per position (dW/N1 − H0·dO/(N0·N1) + H0·dI/(N0·N1)) plus cap adjustment lines; contributions sum to ΔLCR. `CLIENT_IMPACT_PP` adds the cash settlement (a withdrawn deposit also reduces SNB cash) and ranks the top 10 drivers in `REPP_AGG_VW_LCR_VARIANCE_DRIVERS`.
 

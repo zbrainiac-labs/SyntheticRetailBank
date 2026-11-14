@@ -19,6 +19,8 @@ USE SCHEMA {{ rep_raw }};
 
 -- Idempotent MERGE seeds (re-runnable on every deploy)
 
+-- >>> BEGIN GENERATED LIQI REFERENCE SEEDS (operation/render_reference_seeds.py, source reference_data/liqi) - do not edit
+
 MERGE INTO LIQI_RAW_TB_HQLA_ELIGIBILITY t USING (SELECT * FROM VALUES
     ('CASH_SNB', 'Swiss National Bank Reserves', 'L1', 0.0, 1.0, '1.1.1.1', 'Overnight sight deposits with SNB', NULL, FALSE, '2024-01-01'),
     ('CASH_VAULT', 'Physical Cash (Vault)', 'L1', 0.0, 1.0, '1.1.1.2', 'Banknotes and coins in vault', NULL, FALSE, '2024-01-01'),
@@ -207,6 +209,261 @@ MERGE INTO LIQI_RAW_TB_SCENARIOS t USING (SELECT * FROM VALUES
 ON t.SCENARIO_CODE = s.SCENARIO_CODE
 WHEN MATCHED THEN UPDATE SET t.SCENARIO_NAME = s.SCENARIO_NAME, t.DESCRIPTION = s.DESCRIPTION, t.IS_REGULATORY = s.IS_REGULATORY, t.SORT_ORDER = s.SORT_ORDER
 WHEN NOT MATCHED THEN INSERT (SCENARIO_CODE, SCENARIO_NAME, DESCRIPTION, IS_REGULATORY, SORT_ORDER) VALUES (s.SCENARIO_CODE, s.SCENARIO_NAME, s.DESCRIPTION, s.IS_REGULATORY, s.SORT_ORDER);
+
+-- DtI / Stichtagsvergleich (UC2) reference data (061_LIQI_dti_ingestion.sql)
+MERGE INTO LIQI_RAW_TB_DTI_ENTITIES t USING (SELECT * FROM VALUES
+    ('LE_01', 'Legal Entity 1', 1, TRUE, 0.30),
+    ('LE_02', 'Legal Entity 2', 2, TRUE, 0.18),
+    ('LE_03', 'Legal Entity 3', 3, TRUE, 0.14),
+    ('LE_04', 'Legal Entity 4', 4, FALSE, 0.09),
+    ('LE_05', 'Legal Entity 5', 5, FALSE, 0.08),
+    ('LE_06', 'Legal Entity 6', 6, FALSE, 0.07),
+    ('LE_07', 'Legal Entity 7', 7, FALSE, 0.06),
+    ('LE_08', 'Legal Entity 8', 8, FALSE, 0.04),
+    ('LE_09', 'Legal Entity 9', 9, FALSE, 0.04)
+) s (ENTITY_ID, ENTITY_NAME, SORT_ORDER, IS_DEFAULT, CB_BALANCE_SHARE)
+ON t.ENTITY_ID = s.ENTITY_ID
+WHEN MATCHED THEN UPDATE SET t.ENTITY_NAME = s.ENTITY_NAME, t.SORT_ORDER = s.SORT_ORDER, t.IS_DEFAULT = s.IS_DEFAULT, t.CB_BALANCE_SHARE = s.CB_BALANCE_SHARE
+WHEN NOT MATCHED THEN INSERT (ENTITY_ID, ENTITY_NAME, SORT_ORDER, IS_DEFAULT, CB_BALANCE_SHARE) VALUES (s.ENTITY_ID, s.ENTITY_NAME, s.SORT_ORDER, s.IS_DEFAULT, s.CB_BALANCE_SHARE);
+
+MERGE INTO LIQI_RAW_TB_DTI_LST_POSITIONS t USING (SELECT * FROM VALUES
+    ('POOL', 'Collateral Pool', NULL, 1, 1, FALSE, TRUE, FALSE),
+    ('POOL_CB', 'Central bank and cash', 'POOL', 2, 1, FALSE, TRUE, FALSE),
+    ('POOL_CB_BALANCE', 'Central bank balance', 'POOL_CB', 3, 1, TRUE, TRUE, FALSE),
+    ('POOL_VAULT_CASH', 'Vault cash', 'POOL_CB', 3, 2, TRUE, TRUE, FALSE),
+    ('POOL_SEC', 'Securities', 'POOL', 2, 2, FALSE, TRUE, FALSE),
+    ('POOL_SEC_L1', 'Level 1 securities', 'POOL_SEC', 3, 1, TRUE, TRUE, FALSE),
+    ('POOL_SEC_L2A', 'Level 2A securities', 'POOL_SEC', 3, 2, TRUE, TRUE, FALSE),
+    ('POOL_SEC_L2B', 'Level 2B securities', 'POOL_SEC', 3, 3, TRUE, TRUE, FALSE),
+    ('DET', 'Deterministic Cash Flows', NULL, 1, 2, FALSE, TRUE, TRUE),
+    ('DET_FIX', 'Fixed cash flows', 'DET', 2, 1, FALSE, TRUE, TRUE),
+    ('DET_FIX_LOANS', 'Loans', 'DET_FIX', 3, 1, FALSE, TRUE, TRUE),
+    ('DET_FIX_LOANS_RETAIL', 'Mortgages and retail loans', 'DET_FIX_LOANS', 4, 1, TRUE, TRUE, TRUE),
+    ('DET_FIX_LOANS_CORP', 'Corporate loans', 'DET_FIX_LOANS', 4, 2, TRUE, TRUE, TRUE),
+    ('DET_FIX_MM', 'Money market', 'DET_FIX', 3, 2, FALSE, TRUE, TRUE),
+    ('DET_FIX_MM_PLACE', 'Interbank placements', 'DET_FIX_MM', 4, 1, TRUE, TRUE, TRUE),
+    ('DET_FIX_MM_BORROW', 'Interbank borrowing', 'DET_FIX_MM', 4, 2, TRUE, TRUE, TRUE),
+    ('DET_FIX_SEC', 'Security maturities', 'DET_FIX', 3, 3, TRUE, TRUE, TRUE),
+    ('DET_PLAN', 'Planning positions', 'DET', 2, 2, FALSE, FALSE, TRUE),
+    ('DET_PLAN_NEW_LENDING', 'New lending (Kreditneugeschaeft)', 'DET_PLAN', 3, 1, TRUE, FALSE, TRUE),
+    ('DET_PLAN_FUNDING', 'Funding plan (Fundingplanung)', 'DET_PLAN', 3, 2, TRUE, FALSE, TRUE),
+    ('INF', 'Inflows', NULL, 1, 3, FALSE, TRUE, FALSE),
+    ('INF_MODEL', 'Modelled inflows', 'INF', 2, 1, FALSE, TRUE, FALSE),
+    ('INF_REVERSE_REPO', 'Maturing reverse repos', 'INF_MODEL', 3, 1, TRUE, TRUE, FALSE),
+    ('INF_LOAN_RENEWAL', 'Stressed loan repayments', 'INF_MODEL', 3, 2, TRUE, TRUE, FALSE),
+    ('OUT', 'Outflows', NULL, 1, 4, FALSE, TRUE, FALSE),
+    ('OUT_DEP', 'Deposit run-off', 'OUT', 2, 1, FALSE, TRUE, FALSE),
+    ('OUT_DEP_RETAIL', 'Retail deposits', 'OUT_DEP', 3, 1, TRUE, TRUE, FALSE),
+    ('OUT_DEP_CORPORATE', 'Corporate deposits', 'OUT_DEP', 3, 2, TRUE, TRUE, FALSE),
+    ('OUT_DEP_FI', 'Financial institution deposits', 'OUT_DEP', 3, 3, TRUE, TRUE, FALSE),
+    ('OUT_FAC', 'Facility drawdowns', 'OUT', 2, 2, FALSE, TRUE, FALSE),
+    ('OUT_FAC_CREDIT', 'Credit facilities', 'OUT_FAC', 3, 1, TRUE, TRUE, FALSE),
+    ('OUT_FAC_LIQUIDITY', 'Liquidity facilities', 'OUT_FAC', 3, 2, TRUE, TRUE, FALSE),
+    ('OUT_OTHER', 'Other outflows', 'OUT', 2, 3, FALSE, TRUE, FALSE),
+    ('OUT_COLLATERAL_CALLS', 'Collateral calls on repos', 'OUT_OTHER', 3, 1, TRUE, TRUE, FALSE)
+) s (POSITION_CODE, POSITION_NAME, PARENT_CODE, LEVEL_NO, SORT_ORDER, IS_LEAF, IS_DRILLABLE, IS_DETERMINISTIC)
+ON t.POSITION_CODE = s.POSITION_CODE
+WHEN MATCHED THEN UPDATE SET t.POSITION_NAME = s.POSITION_NAME, t.PARENT_CODE = s.PARENT_CODE, t.LEVEL_NO = s.LEVEL_NO, t.SORT_ORDER = s.SORT_ORDER, t.IS_LEAF = s.IS_LEAF, t.IS_DRILLABLE = s.IS_DRILLABLE, t.IS_DETERMINISTIC = s.IS_DETERMINISTIC
+WHEN NOT MATCHED THEN INSERT (POSITION_CODE, POSITION_NAME, PARENT_CODE, LEVEL_NO, SORT_ORDER, IS_LEAF, IS_DRILLABLE, IS_DETERMINISTIC) VALUES (s.POSITION_CODE, s.POSITION_NAME, s.PARENT_CODE, s.LEVEL_NO, s.SORT_ORDER, s.IS_LEAF, s.IS_DRILLABLE, s.IS_DETERMINISTIC);
+
+MERGE INTO LIQI_RAW_TB_DTI_PRODUCT_CLUSTERS t USING (SELECT * FROM VALUES
+    ('PC_CB', 'Central bank and cash', 'Liquidity reserves', 1),
+    ('PC_GOV', 'Government bonds', 'Securities', 2),
+    ('PC_PUBLIC', 'Canton and covered bonds', 'Securities', 3),
+    ('PC_CORP_BOND', 'Corporate bonds and equities', 'Securities', 4),
+    ('PC_MORTGAGE', 'Mortgages and retail loans', 'Lending', 5),
+    ('PC_CORP_LOAN', 'Corporate loans', 'Lending', 6),
+    ('PC_MM_PLACEMENT', 'Interbank placements', 'Money market', 7),
+    ('PC_MM_BORROWING', 'Interbank borrowing', 'Money market', 8),
+    ('PC_REPO', 'Repos and reverse repos', 'Money market', 9),
+    ('PC_RETAIL_DEP', 'Retail deposits', 'Deposits', 10),
+    ('PC_CORP_DEP', 'Corporate deposits', 'Deposits', 11),
+    ('PC_FI_DEP', 'Financial institution deposits', 'Deposits', 12),
+    ('PC_CREDIT_LINES', 'Credit facilities', 'Commitments', 13),
+    ('PC_LIQ_LINES', 'Liquidity facilities', 'Commitments', 14),
+    ('PC_PLAN', 'Planning positions', 'Planning', 15)
+) s (PRODUCT_CLUSTER, CLUSTER_NAME, PRODUCT_GROUP, SORT_ORDER)
+ON t.PRODUCT_CLUSTER = s.PRODUCT_CLUSTER
+WHEN MATCHED THEN UPDATE SET t.CLUSTER_NAME = s.CLUSTER_NAME, t.PRODUCT_GROUP = s.PRODUCT_GROUP, t.SORT_ORDER = s.SORT_ORDER
+WHEN NOT MATCHED THEN INSERT (PRODUCT_CLUSTER, CLUSTER_NAME, PRODUCT_GROUP, SORT_ORDER) VALUES (s.PRODUCT_CLUSTER, s.CLUSTER_NAME, s.PRODUCT_GROUP, s.SORT_ORDER);
+
+MERGE INTO LIQI_RAW_TB_DTI_LST_ASSIGNMENT t USING (SELECT * FROM VALUES
+    ('HOLDINGS', 'CASH_SNB', '*', 'POOL', 'POOL_CB_BALANCE', 'PC_CB'),
+    ('HOLDINGS', 'CASH_VAULT', '*', 'POOL', 'POOL_VAULT_CASH', 'PC_CB'),
+    ('HOLDINGS', 'GOVT_BOND_CHF', '*', 'POOL', 'POOL_SEC_L1', 'PC_GOV'),
+    ('HOLDINGS', 'GOVT_BOND_FOREIGN', '*', 'POOL', 'POOL_SEC_L1', 'PC_GOV'),
+    ('HOLDINGS', 'CANTON_BOND', '*', 'POOL', 'POOL_SEC_L2A', 'PC_PUBLIC'),
+    ('HOLDINGS', 'COVERED_BOND', '*', 'POOL', 'POOL_SEC_L2A', 'PC_PUBLIC'),
+    ('HOLDINGS', 'CORPORATE_BOND_AA', '*', 'POOL', 'POOL_SEC_L2A', 'PC_CORP_BOND'),
+    ('HOLDINGS', 'CORPORATE_BOND_A_BBB', '*', 'POOL', 'POOL_SEC_L2B', 'PC_CORP_BOND'),
+    ('HOLDINGS', 'EQUITY_SMI', '*', 'POOL', 'POOL_SEC_L2B', 'PC_CORP_BOND'),
+    ('HOLDINGS', '*', '*', 'CONTRACTUAL', 'DET_FIX_SEC', NULL),
+    ('CASHFLOWS', 'LOAN_RETAIL', '*', 'CONTRACTUAL', 'DET_FIX_LOANS_RETAIL', 'PC_MORTGAGE'),
+    ('CASHFLOWS', 'LOAN_CORP', '*', 'CONTRACTUAL', 'DET_FIX_LOANS_CORP', 'PC_CORP_LOAN'),
+    ('CASHFLOWS', 'INTERBANK_LOAN', '*', 'CONTRACTUAL', 'DET_FIX_MM_PLACE', 'PC_MM_PLACEMENT'),
+    ('CASHFLOWS', 'INTERBANK_BORROWING', '*', 'CONTRACTUAL', 'DET_FIX_MM_BORROW', 'PC_MM_BORROWING'),
+    ('CASHFLOWS', 'LOAN_CORP', '*', 'INFLOW', 'INF_LOAN_RENEWAL', 'PC_CORP_LOAN'),
+    ('DEPOSITS', 'RETAIL_STABLE_INSURED', '*', 'RUNOFF', 'OUT_DEP_RETAIL', 'PC_RETAIL_DEP'),
+    ('DEPOSITS', 'RETAIL_STABLE', '*', 'RUNOFF', 'OUT_DEP_RETAIL', 'PC_RETAIL_DEP'),
+    ('DEPOSITS', 'RETAIL_LESS_STABLE', '*', 'RUNOFF', 'OUT_DEP_RETAIL', 'PC_RETAIL_DEP'),
+    ('DEPOSITS', 'CORPORATE_OPERATIONAL', '*', 'RUNOFF', 'OUT_DEP_CORPORATE', 'PC_CORP_DEP'),
+    ('DEPOSITS', 'CORPORATE_NON_OPERATIONAL', '*', 'RUNOFF', 'OUT_DEP_CORPORATE', 'PC_CORP_DEP'),
+    ('DEPOSITS', 'FINANCIAL_INSTITUTION', '*', 'RUNOFF', 'OUT_DEP_FI', 'PC_FI_DEP'),
+    ('CONTRACTS', 'CREDIT_FACILITY', '*', 'DRAWDOWN', 'OUT_FAC_CREDIT', 'PC_CREDIT_LINES'),
+    ('CONTRACTS', 'LIQUIDITY_FACILITY', '*', 'DRAWDOWN', 'OUT_FAC_LIQUIDITY', 'PC_LIQ_LINES'),
+    ('SECURED_FUNDING', 'REVERSE_REPO', '*', 'INFLOW', 'INF_REVERSE_REPO', 'PC_REPO'),
+    ('SECURED_FUNDING', 'BILATERAL_REPO', '*', 'RUNOFF', 'OUT_COLLATERAL_CALLS', 'PC_REPO'),
+    ('PLANNING', 'NEW_LENDING', '*', 'CONTRACTUAL', 'DET_PLAN_NEW_LENDING', 'PC_PLAN'),
+    ('PLANNING', 'FUNDING_PLAN', '*', 'CONTRACTUAL', 'DET_PLAN_FUNDING', 'PC_PLAN')
+) s (SOURCE_SYSTEM, PRODUCT_TYPE, COUNTERPARTY_SECTOR, FLOW_KIND, POSITION_CODE, PRODUCT_CLUSTER)
+ON t.SOURCE_SYSTEM = s.SOURCE_SYSTEM AND t.PRODUCT_TYPE = s.PRODUCT_TYPE AND t.COUNTERPARTY_SECTOR = s.COUNTERPARTY_SECTOR AND t.FLOW_KIND = s.FLOW_KIND
+WHEN MATCHED THEN UPDATE SET t.POSITION_CODE = s.POSITION_CODE, t.PRODUCT_CLUSTER = s.PRODUCT_CLUSTER
+WHEN NOT MATCHED THEN INSERT (SOURCE_SYSTEM, PRODUCT_TYPE, COUNTERPARTY_SECTOR, FLOW_KIND, POSITION_CODE, PRODUCT_CLUSTER) VALUES (s.SOURCE_SYSTEM, s.PRODUCT_TYPE, s.COUNTERPARTY_SECTOR, s.FLOW_KIND, s.POSITION_CODE, s.PRODUCT_CLUSTER);
+
+MERGE INTO LIQI_RAW_TB_DTI_APPLICATIONS t USING (SELECT * FROM VALUES
+    ('HYP', 'Mortgages and retail loans', 1),
+    ('KRE', 'Corporate lending', 2),
+    ('GEL', 'Money and capital market', 3),
+    ('WPA', 'Securities', 4),
+    ('EIN', 'Deposits', 5),
+    ('DER', 'Derivatives', 6)
+) s (APPLICATION_ID, APPLICATION_NAME, SORT_ORDER)
+ON t.APPLICATION_ID = s.APPLICATION_ID
+WHEN MATCHED THEN UPDATE SET t.APPLICATION_NAME = s.APPLICATION_NAME, t.SORT_ORDER = s.SORT_ORDER
+WHEN NOT MATCHED THEN INSERT (APPLICATION_ID, APPLICATION_NAME, SORT_ORDER) VALUES (s.APPLICATION_ID, s.APPLICATION_NAME, s.SORT_ORDER);
+
+MERGE INTO LIQI_RAW_TB_DTI_WLK_CLUSTERS t USING (SELECT * FROM VALUES
+    ('I', 'Central bank balances and cash', 0.00, 'L1', 1),
+    ('II', 'Swiss Confederation bonds', 0.02, 'L1', 2),
+    ('III', 'Other AAA sovereign bonds', 0.03, 'L1', 3),
+    ('IV', 'Canton and municipal bonds', 0.05, 'L2A', 4),
+    ('V', 'Covered bonds (Pfandbriefe)', 0.07, 'L2A', 5),
+    ('VI', 'Corporate bonds AA', 0.10, 'L2A', 6),
+    ('VII', 'Corporate bonds A to BBB', 0.20, 'L2B', 7),
+    ('VIII', 'SMI equities', 0.30, 'L2B', 8),
+    ('IX', 'Not eligible', 1.00, 'NONE', 9),
+    ('X', 'Credit claims', 0.40, 'NONE', 10),
+    ('XIa', 'EUR government bonds', 0.03, 'L1', 11),
+    ('XIb', 'USD government bonds', 0.04, 'L1', 12)
+) s (WLK_CLUSTER, CLUSTER_NAME, HAIRCUT, HQLA_CATEGORY, SORT_ORDER)
+ON t.WLK_CLUSTER = s.WLK_CLUSTER
+WHEN MATCHED THEN UPDATE SET t.CLUSTER_NAME = s.CLUSTER_NAME, t.HAIRCUT = s.HAIRCUT, t.HQLA_CATEGORY = s.HQLA_CATEGORY, t.SORT_ORDER = s.SORT_ORDER
+WHEN NOT MATCHED THEN INSERT (WLK_CLUSTER, CLUSTER_NAME, HAIRCUT, HQLA_CATEGORY, SORT_ORDER) VALUES (s.WLK_CLUSTER, s.CLUSTER_NAME, s.HAIRCUT, s.HQLA_CATEGORY, s.SORT_ORDER);
+
+MERGE INTO LIQI_RAW_TB_DTI_BUCKETS t USING (SELECT * FROM VALUES
+    ('W1', '1 week', 'DAY', 7, 1),
+    ('W2', '2 weeks', 'DAY', 14, 2),
+    ('W3', '3 weeks', 'DAY', 21, 3),
+    ('M01', '1 month', 'MONTH', 1, 4),
+    ('M02', '2 months', 'MONTH', 2, 5),
+    ('M03', '3 months', 'MONTH', 3, 6),
+    ('M04', '4 months', 'MONTH', 4, 7),
+    ('M05', '5 months', 'MONTH', 5, 8),
+    ('M06', '6 months', 'MONTH', 6, 9),
+    ('M07', '7 months', 'MONTH', 7, 10),
+    ('M08', '8 months', 'MONTH', 8, 11),
+    ('M09', '9 months', 'MONTH', 9, 12),
+    ('M10', '10 months', 'MONTH', 10, 13),
+    ('M11', '11 months', 'MONTH', 11, 14),
+    ('M12', '12 months', 'MONTH', 12, 15),
+    ('GT12M', '> 12 months', 'MONTH', NULL, 16)
+) s (BUCKET_CODE, BUCKET_NAME, OFFSET_UNIT, OFFSET_VALUE, SORT_ORDER)
+ON t.BUCKET_CODE = s.BUCKET_CODE
+WHEN MATCHED THEN UPDATE SET t.BUCKET_NAME = s.BUCKET_NAME, t.OFFSET_UNIT = s.OFFSET_UNIT, t.OFFSET_VALUE = s.OFFSET_VALUE, t.SORT_ORDER = s.SORT_ORDER
+WHEN NOT MATCHED THEN INSERT (BUCKET_CODE, BUCKET_NAME, OFFSET_UNIT, OFFSET_VALUE, SORT_ORDER) VALUES (s.BUCKET_CODE, s.BUCKET_NAME, s.OFFSET_UNIT, s.OFFSET_VALUE, s.SORT_ORDER);
+
+-- Zurich bank holidays (switching the calendar = editing reference_data/liqi/dti_holidays.csv)
+MERGE INTO LIQI_RAW_TB_DTI_HOLIDAYS t USING (SELECT * FROM VALUES
+    ('2025-01-01'::DATE, 'New Year'),
+    ('2025-01-02'::DATE, 'Berchtoldstag'),
+    ('2025-04-18'::DATE, 'Good Friday'),
+    ('2025-04-21'::DATE, 'Easter Monday'),
+    ('2025-05-01'::DATE, 'Labour Day'),
+    ('2025-05-29'::DATE, 'Ascension Day'),
+    ('2025-06-09'::DATE, 'Whit Monday'),
+    ('2025-08-01'::DATE, 'Swiss National Day'),
+    ('2025-12-25'::DATE, 'Christmas Day'),
+    ('2025-12-26'::DATE, 'St. Stephen''s Day'),
+    ('2026-01-01'::DATE, 'New Year'),
+    ('2026-01-02'::DATE, 'Berchtoldstag'),
+    ('2026-04-03'::DATE, 'Good Friday'),
+    ('2026-04-06'::DATE, 'Easter Monday'),
+    ('2026-05-01'::DATE, 'Labour Day'),
+    ('2026-05-14'::DATE, 'Ascension Day'),
+    ('2026-05-25'::DATE, 'Whit Monday'),
+    ('2026-08-01'::DATE, 'Swiss National Day'),
+    ('2026-12-25'::DATE, 'Christmas Day'),
+    ('2026-12-26'::DATE, 'St. Stephen''s Day'),
+    ('2027-01-01'::DATE, 'New Year'),
+    ('2027-01-02'::DATE, 'Berchtoldstag'),
+    ('2027-03-26'::DATE, 'Good Friday'),
+    ('2027-03-29'::DATE, 'Easter Monday'),
+    ('2027-05-01'::DATE, 'Labour Day'),
+    ('2027-05-06'::DATE, 'Ascension Day'),
+    ('2027-05-17'::DATE, 'Whit Monday'),
+    ('2027-08-01'::DATE, 'Swiss National Day'),
+    ('2027-12-25'::DATE, 'Christmas Day'),
+    ('2027-12-26'::DATE, 'St. Stephen''s Day')
+) s (HOLIDAY_DATE, HOLIDAY_NAME)
+ON t.HOLIDAY_DATE = s.HOLIDAY_DATE
+WHEN MATCHED THEN UPDATE SET t.HOLIDAY_NAME = s.HOLIDAY_NAME
+WHEN NOT MATCHED THEN INSERT (HOLIDAY_DATE, HOLIDAY_NAME) VALUES (s.HOLIDAY_DATE, s.HOLIDAY_NAME);
+
+-- insert-only: thresholds are maintained by the DtI owner in the app and must survive redeploys
+MERGE INTO LIQI_RAW_TB_DTI_LIMITS t USING (SELECT * FROM VALUES
+    ('GROUP', '*', 75000000),
+    ('LE_01', '*', 40000000),
+    ('LE_02', '*', 25000000),
+    ('LE_03', '*', 20000000),
+    ('LE_04', '*', 10000000),
+    ('LE_05', '*', 10000000),
+    ('LE_06', '*', 8000000),
+    ('LE_07', '*', 8000000),
+    ('LE_08', '*', 5000000),
+    ('LE_09', '*', 5000000)
+) s (ENTITY_ID, BUCKET_CODE, COMMENT_THRESHOLD_CHF)
+ON t.ENTITY_ID = s.ENTITY_ID AND t.BUCKET_CODE = s.BUCKET_CODE
+WHEN NOT MATCHED THEN INSERT (ENTITY_ID, BUCKET_CODE, COMMENT_THRESHOLD_CHF) VALUES (s.ENTITY_ID, s.BUCKET_CODE, s.COMMENT_THRESHOLD_CHF);
+
+-- DtI entity entitlements for roles below DTI_LRC_READ (row access policy REPP_AGG_RAP_DTI_ENTITY)
+MERGE INTO LIQI_RAW_TB_DTI_ENTITY_ACCESS t USING (SELECT * FROM VALUES
+    ('DTI_READ_ONLY', 'LE_01'),
+    ('DTI_READ_ONLY', 'LE_02'),
+    ('DTI_READ_ONLY', 'LE_03')
+) s (ROLE_NAME, ENTITY_ID)
+ON t.ROLE_NAME = s.ROLE_NAME AND t.ENTITY_ID = s.ENTITY_ID
+WHEN NOT MATCHED THEN INSERT (ROLE_NAME, ENTITY_ID) VALUES (s.ROLE_NAME, s.ENTITY_ID);
+
+-- <<< END GENERATED LIQI REFERENCE SEEDS
+
+-- Attach the DtI entity row access policy (DCM defines it but cannot attach yet). Idempotent: only
+-- objects without the policy are altered; DCM redeploys keep existing attachments.
+EXECUTE IMMEDIATE $$
+DECLARE
+    n INT DEFAULT 0;
+    rs RESULTSET DEFAULT (
+        SELECT t.KIND, t.FQN
+        FROM (SELECT * FROM VALUES
+                ('DYNAMIC TABLE', '{{ db }}.{{ rep_agg }}.REPP_AGG_DT_DTI_CASHFLOWS'),
+                ('DYNAMIC TABLE', '{{ db }}.{{ rep_agg }}.REPP_AGG_DT_DTI_PROJECTION'),
+                ('DYNAMIC TABLE', '{{ db }}.{{ rep_agg }}.REPP_AGG_DT_DTI_SUMMARY'),
+                ('TABLE', '{{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DTI_SECURITIES'),
+                ('TABLE', '{{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DTI_SECURED_FUNDING'),
+                ('TABLE', '{{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DTI_CORRECTIONS')) t (KIND, FQN)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM TABLE({{ db }}.INFORMATION_SCHEMA.POLICY_REFERENCES(
+                POLICY_NAME => '{{ db }}.{{ rep_agg }}.REPP_AGG_RAP_DTI_ENTITY')) p
+            WHERE UPPER(p.REF_DATABASE_NAME || '.' || p.REF_SCHEMA_NAME || '.' || p.REF_ENTITY_NAME) = UPPER(t.FQN))
+    );
+BEGIN
+    FOR r IN rs DO
+        EXECUTE IMMEDIATE 'ALTER ' || r.KIND || ' ' || r.FQN
+            || ' ADD ROW ACCESS POLICY {{ db }}.{{ rep_agg }}.REPP_AGG_RAP_DTI_ENTITY ON (ENTITY_ID)';
+        n := n + 1;
+    END FOR;
+    RETURN n || ' DtI objects attached to REPP_AGG_RAP_DTI_ENTITY';
+END;
+$$;
 
 USE DATABASE {{ db }};
 USE SCHEMA {{ loa_raw }};
@@ -1554,6 +1811,8 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
       - question: "What happens to the LCR if Alpenbau withdraws another CHF 100M?"
       - question: "How much additional corporate withdrawal can we absorb before breaching 100%?"
       - question: "Which liquidity events explain the September breach?"
+      - question: "What is the Distance-to-Illiquidity per legal entity on the latest reporting date?"
+      - question: "Which LST positions changed most between the latest and the previous reporting date?"
 
   tools:
     - tool_spec:
@@ -1935,6 +2194,15 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
           large loan maturities) with date, description, client and amount. Combine with LCR_Variance_Drivers
           to explain LCR movements in business terms.
     - tool_spec:
+        type: cortex_analyst_text_to_sql
+        name: DTI_Compare
+        description: |
+          UC2 Distance-to-Illiquidity (DtI) and Stichtagsvergleich: DtI in days per legal entity and reporting
+          date (stressed and base), and the signed LST flows behind it by LST position, product cluster,
+          application and product. Use it to compare two reporting dates (default: latest vs previous business
+          day), find the largest position or product deltas, and explain why the DtI moved. Answers only cover the
+          entities the user may see (row access by role). Use LCR tools for the 30-day regulatory LCR instead.
+    - tool_spec:
         type: generic
         name: LCR_What_If
         description: |
@@ -2010,6 +2278,12 @@ CREATE OR REPLACE AGENT LIQUIDITY_RISK_AGENT
         type: warehouse
         warehouse: MD_TEST_WH
         query_timeout: 30
+    DTI_Compare:
+      semantic_view: {{ db }}.{{ rep_agg }}.DTIS_SV_DTI_COMPARISON
+      execution_environment:
+        type: warehouse
+        warehouse: MD_TEST_WH
+        query_timeout: 60
     LCR_What_If:
       identifier: "{{ db }}.{{ rep_agg }}.REPP_AGG_SP_LCR_WHAT_IF"
       name: "REPP_AGG_SP_LCR_WHAT_IF(VARCHAR, VARCHAR)"

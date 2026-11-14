@@ -19,6 +19,7 @@ CASES = [
     ("CRM_AGG_V001.HR_EMPLOYEE_AGENT", "How many active employees do we have per country?"),
     ("PAY_AGG_V001.COMPLIANCE_MONITORING_AGENT", "How many critical anomaly transactions are there?"),
     ("REP_AGG_V001.LIQUIDITY_RISK_AGENT", "What is the current LCR ratio and status?"),
+    ("REP_AGG_V001.LIQUIDITY_RISK_AGENT", "What is the Distance-to-Illiquidity per legal entity on the latest reporting date?"),
     ("REP_AGG_V001.LOAN_PORTFOLIO_AGENT", "What is the average LTV of the mortgage portfolio?"),
     ("REP_AGG_V001.RISK_REGULATORY_AGENT", "What is the total risk weighted assets?"),
     ("REP_AGG_V001.WEALTH_ADVISOR_AGENT", "What is the total portfolio value under management in CHF?"),

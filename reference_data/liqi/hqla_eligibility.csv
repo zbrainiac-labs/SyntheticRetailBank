@@ -1,0 +1,10 @@
+ASSET_TYPE,ASSET_NAME,REGULATORY_LEVEL,HAIRCUT_PCT,HAIRCUT_FACTOR,SNB_COORDINATE,ELIGIBILITY_CRITERIA,MIN_CREDIT_RATING,REQUIRES_SMI_CONSTITUENT,EFFECTIVE_DATE
+CASH_SNB,Swiss National Bank Reserves,L1,0.0,1.0,1.1.1.1,Overnight sight deposits with SNB,,FALSE,2024-01-01
+CASH_VAULT,Physical Cash (Vault),L1,0.0,1.0,1.1.1.2,Banknotes and coins in vault,,FALSE,2024-01-01
+GOVT_BOND_CHF,Swiss Confederation Bonds,L1,0.0,1.0,1.1.1.3,Swiss federal government debt,,FALSE,2024-01-01
+GOVT_BOND_FOREIGN,Foreign Government Bonds (0% RW),L1,0.0,1.0,1.1.1.4,Foreign sovereign debt with 0% risk weight,AA-,FALSE,2024-01-01
+CANTON_BOND,Swiss Canton Bonds,L2A,15.0,0.85,1.1.2.1.1,Cantonal government debt (20% risk weight),,FALSE,2024-01-01
+COVERED_BOND,Covered Bonds (Pfandbriefe),L2A,15.0,0.85,1.1.2.1.2,Swiss Pfandbriefe rated AA- or better,AA-,FALSE,2024-01-01
+CORPORATE_BOND_AA,Corporate Bonds (AA- or better),L2A,15.0,0.85,1.1.2.1.3,Non-financial corporate debt rated AA- or better (Level 2A per Basel III para 52),AA-,FALSE,2024-01-01
+CORPORATE_BOND_A_BBB,Corporate Bonds (A+ to BBB-),L2B,50.0,0.5,1.1.2.2.2,Non-financial corporate debt rated A+ to BBB- (Level 2B per Basel III para 54),BBB-,FALSE,2024-01-01
+EQUITY_SMI,Swiss Market Index (SMI) Equities,L2B,50.0,0.5,1.1.2.2.1,SMI constituent non-financial equities,,TRUE,2024-01-01

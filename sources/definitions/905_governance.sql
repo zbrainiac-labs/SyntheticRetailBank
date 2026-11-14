@@ -3,32 +3,34 @@
 -- Moved from post_deploy.sql. ATTACH statements are reconciled on every
 -- deployment: removing one detaches the policy, tag or DMF.
 -- The SENSITIVITY_LEVEL tag itself is defined in 000_infrastructure.sql.
+-- PII is unmasked for ACCOUNTADMIN, COMPLIANCE and CICD (the role the bank app runs
+-- as locally); every other role, e.g. DTI_READ_ONLY, sees masked values.
 -- ============================================================
 
 DEFINE MASKING POLICY {{ db }}.{{ crm_agg }}.CRMI_AGG_MP_NAME_MASK AS (val STRING) RETURNS STRING ->
     CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
+        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') OR IS_ROLE_IN_SESSION('CICD') THEN val
         WHEN val IS NULL THEN NULL
         ELSE REGEXP_REPLACE(val, '(.)(.+)', '\\1***')
     END;
 
 DEFINE MASKING POLICY {{ db }}.{{ crm_agg }}.CRMI_AGG_MP_EMAIL_MASK AS (val STRING) RETURNS STRING ->
     CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
+        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') OR IS_ROLE_IN_SESSION('CICD') THEN val
         WHEN val IS NULL THEN NULL
         ELSE '****@****.com'
     END;
 
 DEFINE MASKING POLICY {{ db }}.{{ crm_agg }}.CRMI_AGG_MP_PHONE_MASK AS (val STRING) RETURNS STRING ->
     CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
+        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') OR IS_ROLE_IN_SESSION('CICD') THEN val
         WHEN val IS NULL THEN NULL
         ELSE '****'
     END;
 
 DEFINE MASKING POLICY {{ db }}.{{ crm_agg }}.CRMI_AGG_MP_DOB_MASK AS (val DATE) RETURNS DATE ->
     CASE
-        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') THEN val
+        WHEN IS_ROLE_IN_SESSION('ACCOUNTADMIN') OR IS_ROLE_IN_SESSION('COMPLIANCE') OR IS_ROLE_IN_SESSION('CICD') THEN val
         WHEN val IS NULL THEN NULL
         ELSE DATE_FROM_PARTS(1900, 1, 1)
     END;
@@ -43,6 +45,9 @@ ATTACH MASKING POLICY {{ db }}.{{ crm_agg }}.CRMI_AGG_MP_NAME_MASK
      DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII COLUMN STREET_ADDRESS,
      DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII COLUMN CITY,
      DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII COLUMN ZIPCODE,
+     TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES COLUMN STREET_ADDRESS,
+     TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES COLUMN CITY,
+     TABLE {{ db }}.{{ crm_raw }}.CRMI_RAW_TB_ADDRESSES COLUMN ZIPCODE,
      DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII COLUMN FIRST_NAME,
      DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII COLUMN FAMILY_NAME,
      DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII COLUMN FULL_NAME;

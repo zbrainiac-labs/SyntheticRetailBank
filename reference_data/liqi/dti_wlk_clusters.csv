@@ -1,0 +1,13 @@
+WLK_CLUSTER,CLUSTER_NAME,HAIRCUT,HQLA_CATEGORY,SORT_ORDER
+I,Central bank balances and cash,0.00,L1,1
+II,Swiss Confederation bonds,0.02,L1,2
+III,Other AAA sovereign bonds,0.03,L1,3
+IV,Canton and municipal bonds,0.05,L2A,4
+V,Covered bonds (Pfandbriefe),0.07,L2A,5
+VI,Corporate bonds AA,0.10,L2A,6
+VII,Corporate bonds A to BBB,0.20,L2B,7
+VIII,SMI equities,0.30,L2B,8
+IX,Not eligible,1.00,NONE,9
+X,Credit claims,0.40,NONE,10
+XIa,EUR government bonds,0.03,L1,11
+XIb,USD government bonds,0.04,L1,12

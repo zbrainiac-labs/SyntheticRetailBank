@@ -39,6 +39,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ eqt_agg }}.EQTA_AGG_DT_TRADE_SUMMARY(
     CREATED_AT TIMESTAMP_NTZ COMMENT 'UTC timestamp when trade record was created in Snowflake. Used for data lineage tracking, SLA monitoring, and identifying processing delays. Critical for operational dashboards and data quality metrics.'
 ) COMMENT = 'Enriched trade-level analytics combining raw FIX protocol data with calculated metrics, classifications, and time dimensions. Provides comprehensive view of all equity trades for execution quality monitoring, broker performance analysis, regulatory reporting (MiFID II), and customer activity tracking. Used by Trading Desk for execution analysis, Risk for exposure monitoring, Compliance for trade surveillance, and Wealth Management for customer reporting. Automatically refreshes hourly as new trades arrive.'
 TARGET_LAG = '{{ lag }}' WAREHOUSE = {{ wh }}
+REFRESH_MODE = INCREMENTAL
 AS
 SELECT
     t.TRADE_ID,
