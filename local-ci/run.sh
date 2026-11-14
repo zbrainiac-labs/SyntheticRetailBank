@@ -80,9 +80,14 @@ if [[ "$USE_ACT" -eq 1 ]]; then
   # --bind: the job works on the host checkout itself, so the docker run -v "$REPO:..." mounts
   # in the scripts resolve on the Docker Desktop daemon. The host architecture matches arm64.
   set +e
+  # github.event.act marks local runs in ci.yml: Sonar key -local, no deploy job
+  EVENT=$(mktemp); trap 'rm -f "$EVENT"' EXIT
+  echo '{"act": true}' > "$EVENT"
   act workflow_dispatch -C "$REPO" -W "$REPO/.github/workflows/ci.yml" \
+    -e "$EVENT" \
     -P ubuntu-latest="${ACT_IMAGE:-catthehacker/ubuntu:act-latest}" \
     -P ubuntu-24.04-arm="${ACT_IMAGE:-catthehacker/ubuntu:act-latest}" \
+    -P self-hosted="${ACT_IMAGE:-catthehacker/ubuntu:act-latest}" \
     --bind --network "$NETWORK" --container-architecture linux/arm64 \
     ${ACT_JOB:+-j "$ACT_JOB"} ${ACT_ARGS[@]+"${ACT_ARGS[@]}"}
   RC=$?
