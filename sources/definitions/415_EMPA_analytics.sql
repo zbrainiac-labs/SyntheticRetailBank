@@ -16,6 +16,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.EMPI_AGG_DT_EMPLOYEE_PII(
     PHONE VARCHAR(50) COMMENT 'Employee phone number (PII)'
 )
 TARGET_LAG = '{{ lag }}'
+REFRESH_MODE = INCREMENTAL
 DATA_METRIC_SCHEDULE = '60 MINUTE'
 WAREHOUSE = {{ wh }}
 COMMENT = 'PII vault: centralized employee personal data for late enrichment pattern.'

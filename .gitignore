@@ -9,3 +9,12 @@ output/
 .snowflake/
 *.p8
 *.pub
+
+# local-ci output
+test-results/
+
+# local caches and logs
+.ruff_cache/
+.cache/
+*.log
+venv*/

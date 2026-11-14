@@ -38,6 +38,8 @@ set -e
 
 # --- Default values ---
 CONNECTION_NAME=""
+# Target database: all objects are fully qualified with it (no USE statements).
+TARGET_DB="${TARGET_DB:-AAA_DEV_SYNTHETIC_BANK}"
 DRY_RUN=false
 MAX_RETRIES=3
 RETRY_DELAY=5
@@ -473,9 +475,7 @@ execute_upload() {
     
     # Upload files to stage with retry logic
     local sql_command="
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
-        USE SCHEMA $schema;
-        PUT file://$local_pattern @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
+        PUT file://$local_pattern @$TARGET_DB.$schema.$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
     "
     
     local upload_result=0
@@ -609,9 +609,7 @@ execute_single_files_upload() {
     if [[ $file_count -le $BATCH_SIZE ]]; then
         # Small batch - upload all at once
         local sql_command="
-            USE DATABASE AAA_DEV_SYNTHETIC_BANK;
-            USE SCHEMA $schema;
-            PUT file://$source_dir/$file_pattern @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
+            PUT file://$source_dir/$file_pattern @$TARGET_DB.$schema.$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
         "
         
         if execute_sql_with_retry "$sql_command" "$description" > /dev/null 2>&1; then
@@ -647,9 +645,7 @@ execute_single_files_upload() {
             
             # Upload batch
             local batch_sql="
-                USE DATABASE AAA_DEV_SYNTHETIC_BANK;
-                USE SCHEMA $schema;
-                PUT file://$temp_batch_dir/* @$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
+                PUT file://$temp_batch_dir/* @$TARGET_DB.$schema.$stage_name AUTO_COMPRESS=FALSE OVERWRITE=TRUE PARALLEL=8;
             "
             
             if execute_sql_with_retry "$batch_sql" "$description (batch $batch_num/$num_batches)" > /dev/null 2>&1; then
@@ -856,9 +852,7 @@ upload_to_stage \
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for EMPI_RAW_SM_EMPLOYEE_FILES..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
-        USE SCHEMA CRM_RAW_V001;
-        SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_SM_EMPLOYEE_FILES') AS has_data;
+        SELECT SYSTEM\$STREAM_HAS_DATA('$TARGET_DB.CRM_RAW_V001.EMPI_RAW_SM_EMPLOYEE_FILES') AS has_data;
     " > /dev/null 2>&1
 fi
 
@@ -873,9 +867,7 @@ upload_to_stage \
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for EMPI_RAW_SM_ASSIGNMENT_FILES..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
-        USE SCHEMA CRM_RAW_V001;
-        SELECT SYSTEM\$STREAM_HAS_DATA('EMPI_RAW_SM_ASSIGNMENT_FILES') AS has_data;
+        SELECT SYSTEM\$STREAM_HAS_DATA('$TARGET_DB.CRM_RAW_V001.EMPI_RAW_SM_ASSIGNMENT_FILES') AS has_data;
     " > /dev/null 2>&1
 fi
 
@@ -1021,16 +1013,42 @@ upload_single_files \
     "LCR Events" \
     "lcr_events.csv"
 
+# DtI / Stichtagsvergleich (UC2) feeds - written by the same LCR generator
+upload_single_files \
+    "$GENERATED_DATA_DIR/lcr" \
+    "LIQI_RAW_ST_DTI_SECURED_FUNDING" \
+    "REP_RAW_V001" \
+    "DtI Secured Funding" \
+    "dti_secured_funding_*.csv"
+
+for dti_file in dti_report_status.csv dti_corrections.csv dti_events.csv dti_planning.csv generation_run.csv; do
+    upload_single_files \
+        "$GENERATED_DATA_DIR/lcr" \
+        "LIQI_RAW_ST_DTI_CONTROL" \
+        "REP_RAW_V001" \
+        "DtI Control ($dti_file)" \
+        "$dti_file"
+done
+
+# DtI pool securities and business-day transactions (one stage); the month-end history is part of the
+# holdings / deposit / contract / cashflow files (SNAPSHOT_SCOPE = MONTH_END)
+for dti_pattern in "dti_securities_*.csv" "dti_security_cashflows_*.csv" "dti_transactions_*.csv"; do
+    upload_single_files \
+        "$GENERATED_DATA_DIR/lcr" \
+        "LIQI_RAW_ST_DTI_POOL" \
+        "REP_RAW_V001" \
+        "DtI Pool ($dti_pattern)" \
+        "$dti_pattern"
+done
+
 # Refresh stream metadata for LCR files
 if [[ "$DRY_RUN" != "true" ]]; then
     echo "  [INFO] Refreshing stream metadata for LCR data..."
     snow sql -c "$CONNECTION_NAME" -q "
-        USE DATABASE AAA_DEV_SYNTHETIC_BANK;
-        USE SCHEMA REP_RAW_V001;
-        SELECT SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_HQLA_FILES') AS hqla_stream_has_data,
-               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_DEPOSIT_FILES') AS deposit_stream_has_data,
-               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_CONTRACT_FILES') AS contract_stream_has_data,
-               SYSTEM\$STREAM_HAS_DATA('LIQI_RAW_SM_CASHFLOW_FILES') AS cashflow_stream_has_data;
+        SELECT SYSTEM\$STREAM_HAS_DATA('$TARGET_DB.REP_RAW_V001.LIQI_RAW_SM_HQLA_FILES') AS hqla_stream_has_data,
+               SYSTEM\$STREAM_HAS_DATA('$TARGET_DB.REP_RAW_V001.LIQI_RAW_SM_DEPOSIT_FILES') AS deposit_stream_has_data,
+               SYSTEM\$STREAM_HAS_DATA('$TARGET_DB.REP_RAW_V001.LIQI_RAW_SM_CONTRACT_FILES') AS contract_stream_has_data,
+               SYSTEM\$STREAM_HAS_DATA('$TARGET_DB.REP_RAW_V001.LIQI_RAW_SM_CASHFLOW_FILES') AS cashflow_stream_has_data;
     " > /dev/null 2>&1
 fi
 

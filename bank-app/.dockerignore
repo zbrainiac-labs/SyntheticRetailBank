@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*
+*.pem
+*.p8
+test-results
+reports
+playwright-report
+coverage
+Dockerfile
+docker-compose.yml

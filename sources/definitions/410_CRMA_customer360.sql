@@ -22,6 +22,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_CUSTOMER_PII(
     PREFERRED_CONTACT_METHOD VARCHAR(20) COMMENT 'Preferred contact method'
 )
 TARGET_LAG = '{{ lag }}'
+REFRESH_MODE = INCREMENTAL
 DATA_METRIC_SCHEDULE = '60 MINUTE'
 WAREHOUSE = {{ wh }}
 COMMENT = 'PII vault: centralized customer personal data for late enrichment pattern. Protected by masking and row access policies. All downstream DTs carry only CUSTOMER_ID.'
@@ -57,6 +58,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMI_AGG_DT_ADDRESS_PII(
     ADDRESS_EFFECTIVE_DATE TIMESTAMP_NTZ COMMENT 'Date when current address became effective'
 )
 TARGET_LAG = '{{ lag }}'
+REFRESH_MODE = INCREMENTAL
 DATA_METRIC_SCHEDULE = '60 MINUTE'
 WAREHOUSE = {{ wh }}
 COMMENT = 'PII vault: centralized customer address data for late enrichment pattern. One row per customer (latest address).'
@@ -87,6 +89,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_CURRENT(
     IS_CURRENT BOOLEAN COMMENT 'Boolean flag indicating this is the current address (always TRUE)'
 ) 
 TARGET_LAG = '{{ lag }}' 
+REFRESH_MODE = INCREMENTAL
 WAREHOUSE = {{ wh }}
 COMMENT = 'Current address metadata per customer. PII (street, city, zipcode) stored in CRMI_AGG_DT_ADDRESS_PII vault. Join on CUSTOMER_ID for full address.'
 AS
@@ -114,6 +117,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_ADDRESSES_HISTORY(
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ COMMENT 'Original timestamp when address was recorded in system'
 ) 
 TARGET_LAG = '{{ lag }}' 
+REFRESH_MODE = INCREMENTAL
 WAREHOUSE = {{ wh }}
 COMMENT = 'SCD Type 2 address history metadata. PII (street, city, zipcode) stored in CRMI_AGG_DT_ADDRESS_PII vault.'
 AS
@@ -148,6 +152,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_CURRENT(
     IS_CURRENT BOOLEAN COMMENT 'Boolean flag indicating this is the current record (always TRUE)'
 ) 
 TARGET_LAG = '{{ lag }}' 
+REFRESH_MODE = INCREMENTAL
 WAREHOUSE = {{ wh }}
 COMMENT = 'Current customer attributes (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault. Join on CUSTOMER_ID for full profile.'
 AS
@@ -193,6 +198,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_HISTORY(
     INSERT_TIMESTAMP_UTC TIMESTAMP_NTZ COMMENT 'Original timestamp when this version was recorded in system'
 ) 
 TARGET_LAG = '{{ lag }}' 
+REFRESH_MODE = INCREMENTAL
 WAREHOUSE = {{ wh }}
 COMMENT = 'SCD Type 2 customer attribute history (PII removed). PII stored in CRMI_AGG_DT_CUSTOMER_PII vault.'
 AS
