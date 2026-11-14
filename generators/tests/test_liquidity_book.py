@@ -50,7 +50,7 @@ class LiquidityBookTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_reference_seeds_in_sync(self):
-        r = subprocess.run([sys.executable, str(REPO / "tools" / "render_reference_seeds.py"), "--check"], check=False,
+        r = subprocess.run([sys.executable, str(REPO / "operation" / "render_reference_seeds.py"), "--check"], check=False,
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 

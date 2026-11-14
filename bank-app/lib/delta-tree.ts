@@ -61,7 +61,7 @@ export function passesAmount(values: Record<string, number>, min: number): boole
  * unfiltered and still reconcile with the hidden rows.
  */
 export function pruneByAmount(nodes: DeltaNode[], min: number): DeltaNode[] {
-  if (!(min > 0)) return nodes; // also covers NaN from a missing filter value
+  if (Number.isNaN(min) || min <= 0) return nodes; // NaN from a missing filter value = no filter
   return nodes
     .filter((n) => passesAmount(n.values, min))
     .map((n) => (n.children ? { ...n, children: pruneByAmount(n.children, min) } : n));
