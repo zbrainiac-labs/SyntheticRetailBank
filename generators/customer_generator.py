@@ -11,6 +11,8 @@ from faker import Faker
 from config import GeneratorConfig
 from base_generator import BaseGenerator
 
+UNITED_KINGDOM = "United Kingdom"
+
 
 @dataclass
 class Customer:
@@ -70,7 +72,7 @@ class CustomerGenerator(BaseGenerator):
         
         # Country mappings for consistent data
         self.locale_to_country = {
-            'en_GB': 'United Kingdom',
+            'en_GB': UNITED_KINGDOM,
             'de_DE': 'Germany', 
             'fr_FR': 'France',
             'it_IT': 'Italy',
@@ -86,7 +88,7 @@ class CustomerGenerator(BaseGenerator):
         
         # Country to currency mappings for reporting currency
         self.country_to_currency = {
-            'United Kingdom': 'GBP',
+            UNITED_KINGDOM: 'GBP',
             'Germany': 'EUR',
             'France': 'EUR',
             'Italy': 'EUR',
@@ -188,7 +190,7 @@ class CustomerGenerator(BaseGenerator):
             street_address = fake_local.street_address()
             city = fake_local.city()
             # Handle state/region differences across EMEA countries
-            if country in ['United Kingdom', 'Germany', 'Spain', 'Italy']:
+            if country in [UNITED_KINGDOM, 'Germany', 'Spain', 'Italy']:
                 state = fake_local.state() if hasattr(fake_local, 'state') and fake_local.state else ''
             else:
                 state = fake_local.administrative_unit() if hasattr(fake_local, 'administrative_unit') else ''

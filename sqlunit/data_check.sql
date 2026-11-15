@@ -173,3 +173,16 @@ SELECT 'DATA-LIQ-06 one generator run' AS TEST_NAME,
            || ', deposits ' || COALESCE(d.RUN_ID, '-') || ', securities ' || COALESCE(s.RUN_ID, '-')
            || ' (' || (h.N + d.N + s.N) || ' id sets, ' || (h.MISSING + d.MISSING + s.MISSING) || ' rows without id)' AS DETAIL
 FROM runs h CROSS JOIN dep d CROSS JOIN sec s;
+
+-- DATA-LIQ-08: a manual correction never turns the central bank balance of an entity negative (CB balance =
+--              SNB reserves x fixed CB share + POOL_CB_BALANCE corrections, per entity and reporting date)
+WITH cb AS (
+    SELECT AS_OF_DATE, ENTITY_ID, SUM(BASE_CHF) AS BAL
+    FROM REP_AGG_V001.REPP_AGG_DT_DTI_CASHFLOWS
+    WHERE POSITION_CODE = 'POOL_CB_BALANCE'
+    GROUP BY 1, 2
+)
+SELECT 'DATA-LIQ-08 CB balance >= 0 after corrections' AS TEST_NAME,
+       IFF(COUNT(*) > 0 AND MIN(BAL) >= 0, 'PASS', 'FAIL') AS STATUS,
+       COUNT(*) || ' entity dates, min ' || ROUND(MIN(BAL) / 1e6, 1) || 'M (' || MIN_BY(ENTITY_ID || ' ' || AS_OF_DATE, BAL) || ')' AS DETAIL
+FROM cb;

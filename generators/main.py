@@ -29,6 +29,8 @@ from commodity_generator import CommodityTradeGenerator
 from customer_lifecycle_generator import CustomerLifecycleGenerator
 from employee_generator import EmployeeGenerator
 
+CUSTOMERS_CSV = "customers.csv"
+
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -453,7 +455,7 @@ def main():
                 swift_generator = SWIFTGenerator(args.swift_generator_script, seed=config.random_seed)
                 
                 # Generate SWIFT messages
-                customer_file_path = str(Path(config.output_directory) / "master_data" / "customers.csv")
+                customer_file_path = str(Path(config.output_directory) / "master_data" / CUSTOMERS_CSV)
                 swift_results = swift_generator.generate_swift_messages(
                     customer_file_path=customer_file_path,
                     output_dir=swift_output_dir,
@@ -486,7 +488,7 @@ def main():
                 print("=" * 80)
                 
                 # Initialize PEP generator with customer file
-                customer_file_path = str(Path(config.output_directory) / "master_data" / "customers.csv")
+                customer_file_path = str(Path(config.output_directory) / "master_data" / CUSTOMERS_CSV)
                 pep_generator = PEPGenerator(customer_file=customer_file_path, seed=config.random_seed)
                 
                 # Generate PEP data
@@ -534,7 +536,7 @@ def main():
                 mortgage_generator = MortgageEmailGenerator(output_dir=email_output_dir)
                 
                 # Generate mortgage emails
-                customer_file_path = str(Path(config.output_directory) / "master_data" / "customers.csv")
+                customer_file_path = str(Path(config.output_directory) / "master_data" / CUSTOMERS_CSV)
                 address_file_path = str(Path(config.output_directory) / "master_data" / "customer_addresses.csv")
                 mortgage_generator.generate_mortgage_emails(
                     customer_file=customer_file_path,
@@ -568,7 +570,7 @@ def main():
                 print("=" * 80)
                 
                 # Initialize address update generator
-                customer_file_path = str(Path(config.output_directory) / "master_data" / "customers.csv")
+                customer_file_path = str(Path(config.output_directory) / "master_data" / CUSTOMERS_CSV)
                 output_dir = str(Path(config.output_directory) / "master_data")
                 
                 address_generator = AddressUpdateGenerator(customer_file_path, output_dir, seed=config.random_seed)
@@ -600,7 +602,7 @@ def main():
                 print("=" * 80)
                 
                 # Initialize customer update generator
-                customer_file_path = str(Path(config.output_directory) / "master_data" / "customers.csv")
+                customer_file_path = str(Path(config.output_directory) / "master_data" / CUSTOMERS_CSV)
                 output_dir = str(Path(config.output_directory) / "master_data")
                 
                 customer_update_generator = CustomerUpdateGenerator(customer_file_path, output_dir, seed=config.random_seed)
@@ -834,7 +836,7 @@ def main():
                 print("=" * 80)
                 
                 # Initialize lifecycle event generator
-                customer_file_path = str(Path(config.output_directory) / "master_data" / "customers.csv")
+                customer_file_path = str(Path(config.output_directory) / "master_data" / CUSTOMERS_CSV)
                 address_updates_dir = str(Path(config.output_directory) / "master_data" / "address_updates")
                 customer_updates_dir = str(Path(config.output_directory) / "master_data" / "customer_updates")
                 output_dir = str(Path(config.output_directory) / "master_data")

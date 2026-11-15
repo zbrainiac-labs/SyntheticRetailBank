@@ -4,18 +4,16 @@ import {
   activeOverrides,
   defaultFilters,
   effectiveFilters,
+  restoreSaved,
   setOverride,
   type DtiFilters,
   type FilterKey,
   type PageOverrides,
+  type SavedFilters,
 } from "@/lib/filters/model";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-interface State {
-  global: DtiFilters;
-  version: number;
-  pages: Record<string, PageOverrides>;
-}
+type State = SavedFilters;
 
 interface Ctx {
   state: State;
@@ -25,25 +23,6 @@ interface Ctx {
 
 const STORAGE_KEY = "bank-app.dti-filters.v1";
 const FilterCtx = createContext<Ctx | null>(null);
-
-/**
- * Saved state from an older app version: filters it lacks take the defaults, and
- * dates that are no longer reporting dates (e.g. after a data reload) fall back to the defaults.
- */
-function sanitize(defaults: DtiFilters, saved: State, dates: string[], latestDate: string, previousDate: string): State {
-  const valid = (d: string | undefined) => d === undefined || dates.includes(d);
-  const global = { ...defaults, ...saved.global };
-  if (!valid(global.referenceDate)) global.referenceDate = latestDate;
-  if (!valid(global.comparisonDate)) global.comparisonDate = previousDate;
-  const pages: Record<string, PageOverrides> = {};
-  for (const [page, o] of Object.entries(saved.pages ?? {})) {
-    const values = { ...o.values };
-    if (!valid(values.referenceDate)) delete values.referenceDate;
-    if (!valid(values.comparisonDate)) delete values.comparisonDate;
-    pages[page] = { ...o, values };
-  }
-  return { ...saved, global, pages };
-}
 
 export function FilterProvider({
   latestDate,
@@ -60,12 +39,13 @@ export function FilterProvider({
     global: defaultFilters(latestDate, previousDate),
     version: 0,
     pages: {},
+    asOf: latestDate,
   }));
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setState((s) => sanitize(s.global, { ...s, ...(JSON.parse(saved) as State) }, dates, latestDate, previousDate));
+      if (saved) setState((s) => restoreSaved(s.global, JSON.parse(saved) as Partial<State>, dates, latestDate));
     } catch {
       /* ignore corrupt storage */
     }
@@ -84,7 +64,7 @@ export function FilterProvider({
   // A Filter Page change resets the local selections on all pages.
   const setGlobal = useCallback(
     (patch: Partial<DtiFilters>) =>
-      setState((s) => ({ global: { ...s.global, ...patch }, version: s.version + 1, pages: {} })),
+      setState((s) => ({ ...s, global: { ...s.global, ...patch }, version: s.version + 1, pages: {} })),
     [],
   );
   const setPage = useCallback(

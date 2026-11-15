@@ -5,6 +5,7 @@ import { DataTable, LoaderState, Panel } from "@/components/data/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { StateView } from "@/components/query-view";
 import { PageHeader } from "@/components/page-header";
+import { FilterCard } from "@/components/risk/common";
 import { StatCard, StatCardSkeleton } from "@/components/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { num, useLoader, type LoaderRow } from "@/lib/loaders/client";
@@ -124,7 +125,15 @@ function AddressHistory({ id }: Readonly<{ id: string }>) {
         <p className="text-sm text-muted-foreground">Not available for this role.</p>
       ) : (
         <LoaderState q={history} empty="No address history.">
-          {(rows) => <DataTable rows={rows} />}
+          {(rows) => (
+            <DataTable
+              rows={rows}
+              // zipcodes look numeric but are codes: render as-is (no thousands separator)
+              columns={Object.keys(rows[0] ?? {}).map((k) =>
+                k === "ZIPCODE" ? { key: k, render: (r: LoaderRow) => (typeof r.ZIPCODE === "string" || typeof r.ZIPCODE === "number" ? String(r.ZIPCODE) : "—") } : k,
+              )}
+            />
+          )}
         </LoaderState>
       )}
     </div>
@@ -159,7 +168,8 @@ function listParams(linked: string, name: string, country: string, tiers: string
   };
 }
 
-function Kpis() {
+/** KPI cards; Critical / High Risk and PEP Matches toggle the matching list checkbox. */
+function Kpis({ flags, toggle }: Readonly<{ flags: Flags; toggle: (f: "highRisk" | "pep") => void }>) {
   const kpis = useLoader("customer360.kpis");
   const k = kpis.data?.rows[0];
   if (kpis.isError) {
@@ -169,8 +179,8 @@ function Kpis() {
   return (
     <>
       <StatCard label="Total Customers" value={formatNumber(num(k.TOTAL_CUSTOMERS))} />
-      <StatCard label="Critical / High Risk" value={formatNumber(num(k.CRITICAL_HIGH))} />
-      <StatCard label="PEP Matches" value={formatNumber(num(k.PEP_MATCHES))} />
+      <FilterCard label="Critical / High Risk" value={formatNumber(num(k.CRITICAL_HIGH))} active={flags.highRisk} onToggle={() => toggle("highRisk")} />
+      <FilterCard label="PEP Matches" value={formatNumber(num(k.PEP_MATCHES))} active={flags.pep} onToggle={() => toggle("pep")} />
       <StatCard label="Avg Risk Score" value={formatNumber(num(k.AVG_RISK_SCORE), 1)} />
     </>
   );
@@ -207,7 +217,7 @@ function Customer360() {
     <div className="space-y-6">
       <PageHeader eyebrow="Banking" title="Customer 360" description="Complete view of a customer: profile, accounts, activity and risk" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpis />
+        <Kpis flags={flags} toggle={(f) => setFlags((cur) => ({ ...cur, [f]: !cur[f] }))} />
       </div>
 
       <Panel title="Search & Filter">
@@ -296,7 +306,19 @@ function Customer360() {
             <DataTable
               rows={rows}
               columns={[
-                "CUSTOMER_ID",
+                {
+                  key: "CUSTOMER_ID",
+                  // select the customer and jump to the profile panel below
+                  render: (r) => (
+                    <a
+                      href="#customer-profile"
+                      onClick={() => setSelected(String(r.CUSTOMER_ID))}
+                      className="text-primary underline-offset-2 hover:underline"
+                    >
+                      {String(r.CUSTOMER_ID)}
+                    </a>
+                  ),
+                },
                 "FULL_NAME",
                 "COUNTRY",
                 "ACCOUNT_TIER",
@@ -309,7 +331,7 @@ function Customer360() {
             />
           </Panel>
           <Panel title="Customer Profile">
-            <div className="space-y-4">
+            <div id="customer-profile" className="scroll-mt-4 space-y-4">
               <label className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Select a customer to view detailed profile:</span>
                 <select

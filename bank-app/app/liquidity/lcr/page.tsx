@@ -11,7 +11,7 @@ import { StatCard } from "@/components/stat-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { num, useLoader, type LoaderRow } from "@/lib/loaders/client";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatPercentTick, lcrAxisDomain } from "@/lib/format";
 import { defaultDate } from "@/lib/liquidity/book";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -75,7 +75,7 @@ function StatusBands({ yMax }: { yMax: number }) {
       <ReferenceArea y1={FAIL_LIMIT} y2={PASS_LIMIT} fill={STATUS.WARNING} fillOpacity={0.08} ifOverflow="hidden" />
       <ReferenceLine y={FAIL_LIMIT} stroke={STATUS.FAIL} strokeDasharray="3 3" label={{ value: "100% minimum", position: "insideBottomRight", fontSize: 11 }} />
       <ReferenceLine y={PASS_LIMIT} stroke={STATUS.WARNING} strokeDasharray="3 3" label={{ value: "110% target", position: "insideTopRight", fontSize: 11 }} />
-      <YAxis domain={[Math.max(0, Math.min(80, yMax - 100)), Math.ceil(yMax + 10)]} tickFormatter={(v) => `${v}%`} tick={CHART_THEME.tick} width={48} />
+      <YAxis domain={lcrAxisDomain(yMax)} tickFormatter={formatPercentTick} tick={CHART_THEME.tick} width={48} />
     </>
   );
 }
@@ -846,7 +846,7 @@ function SimulatorTab({ asOf }: { asOf: string }) {
               <BarChart data={wf}>
                 <CartesianGrid stroke={CHART_THEME.grid} strokeDasharray="3 3" />
                 <XAxis dataKey="name" tick={CHART_THEME.tick} interval={0} angle={-20} textAnchor="end" height={70} />
-                <YAxis tick={CHART_THEME.tick} tickFormatter={(v) => `${v}%`} />
+                <YAxis tick={CHART_THEME.tick} tickFormatter={formatPercentTick} />
                 <Tooltip content={<ChartTooltip />} />
                 <ReferenceLine y={FAIL_LIMIT} stroke={STATUS.FAIL} strokeDasharray="3 3" />
                 <Bar dataKey="base" stackId="w" fill="transparent" isAnimationActive={false} />

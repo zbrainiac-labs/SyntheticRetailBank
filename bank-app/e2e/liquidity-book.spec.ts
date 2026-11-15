@@ -47,3 +47,14 @@ test("LCR HQLA holdings and DtI free assets are the same securities", async ({ r
   expect(lcrSecurities).toBeGreaterThan(100);
   expect(securities.size).toBe(lcrSecurities);
 });
+
+test("DtI free assets WLK I = LCR central bank and vault cash", async ({ request }) => {
+  const { asOf } = await bookDates(request);
+  const holdings = (await (await request.get("/api/data/lcr.hqla-holdings")).json()).rows as { ASSET_TYPE: string; MARKET_VALUE_CHF: number }[];
+  const lcrCash = holdings.filter((h) => h.ASSET_TYPE.startsWith("CASH")).reduce((s, h) => s + Number(h.MARKET_VALUE_CHF), 0);
+  const all = "LE_01,LE_02,LE_03,LE_04,LE_05,LE_06,LE_07,LE_08,LE_09";
+  const body = await (await request.get(`/api/dti/free-assets?ref=${asOf}&entities=${all}&basis=MV`)).json();
+  const wlkI = (body.assets as { wlk: string; value: number }[]).find((a) => a.wlk === "I")?.value ?? 0;
+  expect(lcrCash).toBeGreaterThan(0);
+  expect(Math.abs(wlkI - lcrCash)).toBeLessThan(1);
+});

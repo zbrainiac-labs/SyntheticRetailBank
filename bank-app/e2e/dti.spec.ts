@@ -18,12 +18,16 @@ test("meta lists reporting dates and the LST tree", async ({ request }) => {
   expect(body.thresholds.GROUP).toBeGreaterThan(0);
 });
 
-test("withdrawal of LE_02 is the largest delta (central bank balance, W1)", async ({ request }) => {
+test("withdrawal of LE_02: the deposit leaves the run-off, the entity pays its CB share (W1)", async ({ request }) => {
   const { rows } = await (await request.get(`/api/dti/compare?${await withdrawalQuery(request)}`)).json();
   const top = [...rows].sort((a, b) => Math.abs(b.delta ?? 0) - Math.abs(a.delta ?? 0))[0];
-  expect(top.position).toBe("POOL_CB_BALANCE");
+  // the withdrawn deposit no longer runs off under stress: the largest delta, positive
+  expect(top.position).toBe("OUT_DEP_CORPORATE");
   expect(top.period).toBe("W1");
-  expect(top.delta).toBeLessThan(-40e6);
+  expect(top.delta).toBeGreaterThan(20e6);
+  // settled from the SNB reserves: LE_02 carries its fixed central bank share of the cash drop
+  const cb = rows.find((r: { position: string; period: string }) => r.position === "POOL_CB_BALANCE" && r.period === "W1");
+  expect(cb.delta).toBeLessThan(-20e6);
 });
 
 test("invalid parameters are rejected", async ({ request }) => {

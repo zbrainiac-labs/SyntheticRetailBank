@@ -1,8 +1,9 @@
 "use client";
 
-import { Callout, Chart, SELECT_CLS } from "@/components/banking/charts";
+import { Callout, Chart } from "@/components/banking/charts";
 import { ChartTooltip, CHART_THEME } from "@/components/chart-utils";
 import { DataTable, LoaderState, Panel } from "@/components/data/data-table";
+import { CUSTOMER_LINK_COLUMN, FilterCard, FilterNote } from "@/components/risk/common";
 import { EmptyState } from "@/components/empty-state";
 import { QueryView } from "@/components/query-view";
 import { PageHeader } from "@/components/page-header";
@@ -11,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { num, useLoader, type LoaderRow } from "@/lib/loaders/client";
 import { formatNumber } from "@/lib/format";
-import Link from "next/link";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -25,7 +25,7 @@ const STAGE_COLOR: Record<string, string> = {
 };
 
 const PREMIUM_COLS = [
-  "CUSTOMER_ID",
+  CUSTOMER_LINK_COLUMN,
   "FIRST_NAME",
   "FAMILY_NAME",
   "ACCOUNT_TIER",
@@ -51,32 +51,6 @@ function downloadCsv(rows: LoaderRow[], file: string) {
   URL.revokeObjectURL(url);
 }
 
-/** show_profile_picker: pick a customer and open it on Customer 360. */
-function ProfilePicker({ rows }: { rows: LoaderRow[] }) {
-  const [id, setId] = useState("");
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <select aria-label="Customer profile" value={id} onChange={(e) => setId(e.target.value)} className={`${SELECT_CLS} min-w-72`}>
-        <option value="">Select a customer to view profile...</option>
-        {rows.map((r) => (
-          <option key={String(r.CUSTOMER_ID)} value={String(r.CUSTOMER_ID)}>
-            {String(r.CUSTOMER_ID)}
-          </option>
-        ))}
-      </select>
-      {id ? (
-        <Button asChild size="sm">
-          <Link href={`/banking/customer-360?customer=${encodeURIComponent(id)}`}>View profile</Link>
-        </Button>
-      ) : (
-        <Button size="sm" disabled>
-          View profile
-        </Button>
-      )}
-    </div>
-  );
-}
-
 function Histogram({ rows, width, color, lines, xLabel }: { rows: LoaderRow[]; width: number; color: string; lines: { x: number; label: string; color: string }[]; xLabel: string }) {
   const data = rows.map((r) => ({ x: num(r.BIN_START) + width / 2, v: num(r.CUSTOMERS) }));
   const max = Math.max(...data.map((d) => d.x + width / 2), ...lines.map((l) => l.x));
@@ -97,14 +71,14 @@ function Histogram({ rows, width, color, lines, xLabel }: { rows: LoaderRow[]; w
   );
 }
 
-function ChurnKpis({ k }: Readonly<{ k: Record<string, unknown> | undefined }>) {
+function ChurnKpis({ k, dormantActive, onDormant }: Readonly<{ k: Record<string, unknown> | undefined; dormantActive: boolean; onDormant: () => void }>) {
   if (!k) return [0, 1, 2, 3].map((i) => <StatCardSkeleton key={i} />);
   return (
     <>
       <StatCard label="Total Customers" value={formatNumber(num(k.TOTAL_CUSTOMERS))} />
       <StatCard label="At-Risk (>70%)" value={formatNumber(num(k.AT_RISK_CUSTOMERS))} hint={`${formatNumber(num(k.CRITICAL_CUSTOMERS))} critical (>90%)`} />
       <StatCard label="Revenue at Risk" value={`CHF ${formatNumber(num(k.TOTAL_REVENUE_AT_RISK), 0)}K`} hint="Total balance of at-risk customers" />
-      <StatCard label="Dormant (>180d)" value={formatNumber(num(k.DORMANT_180))} />
+      <FilterCard label="Dormant (>180d)" value={formatNumber(num(k.DORMANT_180))} active={dormantActive} onToggle={onDormant} />
     </>
   );
 }
@@ -118,6 +92,13 @@ export default function ChurnLifecyclePage() {
   const premium = useLoader("churn.premium-at-risk");
   const dormStats = useLoader("churn.dormant-stats");
   const dormHist = useLoader("churn.dormant-histogram");
+  const dormList = useLoader("churn.dormant-list");
+  // Dormant card toggles the customer list in the Dormant Accounts panel
+  const [showDormant, setShowDormant] = useState(false);
+  const toggleDormant = () => {
+    setShowDormant((v) => !v);
+    if (!showDormant) document.getElementById("dormant-accounts")?.scrollIntoView({ behavior: "smooth" });
+  };
   const k = kpis.data?.rows[0];
 
   if (kpis.isError) return <EmptyState variant="error" title="Error loading lifecycle data" description={kpis.error.message} />;
@@ -126,12 +107,13 @@ export default function ChurnLifecyclePage() {
   }
   const ds = dormStats.data?.rows[0];
   const dormantCount = ds ? num(ds.DORMANT_COUNT) : 0;
+  const neverTransacted = ds ? num(ds.NEVER_TRANSACTED) : 0;
 
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Banking" title="Churn & Lifecycle" description="Customer lifecycle, dormancy and churn-risk signals" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <ChurnKpis k={k} />
+        <ChurnKpis k={k} dormantActive={showDormant} onDormant={toggleDormant} />
       </div>
 
       <Panel title="Customer Lifecycle Stage Distribution">
@@ -229,8 +211,7 @@ export default function ChurnLifecyclePage() {
           <div className="space-y-4">
             <Callout tone="error" title={`${formatNumber(premiumRows.length)} premium customers at high risk of churning (>70%)`} />
             <DataTable rows={premiumRows} columns={PREMIUM_COLS} maxRows={1000} />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <ProfilePicker rows={premiumRows} />
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -245,16 +226,19 @@ export default function ChurnLifecyclePage() {
         </QueryView>
       </Panel>
 
-      <Panel title="Dormant Accounts (>180 Days)" description="DORMANT / DECLINING customers inactive for more than 180 days">
+      <div id="dormant-accounts" className="scroll-mt-4">
+      <Panel title="Dormant Accounts (>180 Days)" description="Customers without a transaction for more than 180 days (same rule as the Dormant card)">
         <QueryView q={dormStats} skeleton={<Skeleton className="h-32 w-full" />} errorTitle="Query failed">
           {() =>
             dormantCount === 0 ? (
           <Callout tone="success" title="No dormant accounts" />
         ) : (
           <div className="space-y-4">
-            <Callout tone="warning" title={`${formatNumber(dormantCount)} customers inactive for more than 180 days`} />
+            <Callout tone="warning" title={`${formatNumber(dormantCount)} customers inactive for more than 180 days`}>
+              {neverTransacted > 0 ? `${formatNumber(neverTransacted)} of them have no transaction yet (newly onboarded).` : null}
+            </Callout>
             <div className="grid gap-4 lg:grid-cols-2">
-              <LoaderState q={dormHist}>
+              <LoaderState q={dormHist} empty="No customer with a last transaction older than 180 days.">
                 {(rows) => {
                   const lo = num(rows[0].BIN_START);
                   const w = rows.length > 1 ? num(rows[1].BIN_START) - lo : 1;
@@ -270,16 +254,29 @@ export default function ChurnLifecyclePage() {
                 }}
               </LoaderState>
               <dl className="space-y-2 text-sm">
-                <div><dt className="inline font-medium">Avg Days Inactive: </dt><dd className="inline">{formatNumber(num(ds?.AVG_DAYS_INACTIVE), 0)}</dd></div>
-                <div><dt className="inline font-medium">Longest Inactive: </dt><dd className="inline">{formatNumber(num(ds?.MAX_DAYS_INACTIVE), 0)}</dd></div>
+                <div><dt className="inline font-medium">Avg Days Inactive: </dt><dd className="inline">{ds?.AVG_DAYS_INACTIVE == null ? "—" : formatNumber(num(ds.AVG_DAYS_INACTIVE), 0)}</dd></div>
+                <div><dt className="inline font-medium">Longest Inactive: </dt><dd className="inline">{ds?.MAX_DAYS_INACTIVE == null ? "—" : formatNumber(num(ds.MAX_DAYS_INACTIVE), 0)}</dd></div>
                 <div><dt className="inline font-medium">Premium Dormant: </dt><dd className="inline">{formatNumber(num(ds?.PREMIUM_DORMANT))}</dd></div>
               </dl>
             </div>
+            {showDormant ? (
+              <div className="space-y-2">
+                <FilterNote count={dormantCount} noun="dormant customers" filter="Dormant (>180d)" onClear={() => setShowDormant(false)} />
+                <LoaderState q={dormList}>
+                  {(rows) => <DataTable rows={rows} columns={[CUSTOMER_LINK_COLUMN, "ACCOUNT_TIER", "COUNTRY", "LIFECYCLE_STAGE", "LAST_TRANSACTION_DATE", "DAYS_INACTIVE", "CHURN_PROBABILITY"]} maxRows={1000} />}
+                </LoaderState>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setShowDormant(true)} className="text-sm text-primary underline-offset-2 hover:underline">
+                Show dormant customers
+              </button>
+            )}
           </div>
             )
           }
         </QueryView>
       </Panel>
+      </div>
 
       <h2 className="text-lg font-semibold">Recommended Actions</h2>
       <div className="grid gap-4 md:grid-cols-3">

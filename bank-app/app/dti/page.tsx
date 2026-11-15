@@ -1,6 +1,7 @@
 "use client";
 
 import { ChartTooltip, CHART_THEME, formatTick, getYAxisWidth } from "@/components/chart-utils";
+import { DtiEventsCard } from "@/components/dti/events-card";
 import { PageFilterBar } from "@/components/dti/filter-bar";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -317,6 +318,8 @@ export default function DtiSummaryPage() {
               </Table>
             </CardContent>
           </Card>
+
+          <DtiEventsCard f={f} />
         </>
       )}
     </div>

@@ -22,6 +22,8 @@ from pathlib import Path
 from faker import Faker
 from base_generator import BaseGenerator
 
+TROY_OUNCE, METRIC_TON = "Troy Ounce", "Metric Ton"
+
 
 @dataclass
 class CommodityTrade:
@@ -124,7 +126,7 @@ class CommodityTradeGenerator(BaseGenerator):
         'PRECIOUS_METAL': {
             'Gold': {
                 'code': 'XAU',
-                'unit': 'Troy Ounce',
+                'unit': TROY_OUNCE,
                 'contract_size': 100,
                 'price_range': (1800, 2100),
                 'currency': 'USD',
@@ -133,7 +135,7 @@ class CommodityTradeGenerator(BaseGenerator):
             },
             'Silver': {
                 'code': 'XAG',
-                'unit': 'Troy Ounce',
+                'unit': TROY_OUNCE,
                 'contract_size': 5000,
                 'price_range': (22, 28),
                 'currency': 'USD',
@@ -142,7 +144,7 @@ class CommodityTradeGenerator(BaseGenerator):
             },
             'Platinum': {
                 'code': 'XPT',
-                'unit': 'Troy Ounce',
+                'unit': TROY_OUNCE,
                 'contract_size': 50,
                 'price_range': (900, 1100),
                 'currency': 'USD',
@@ -151,7 +153,7 @@ class CommodityTradeGenerator(BaseGenerator):
             },
             'Palladium': {
                 'code': 'XPD',
-                'unit': 'Troy Ounce',
+                'unit': TROY_OUNCE,
                 'contract_size': 100,
                 'price_range': (1500, 2000),
                 'currency': 'USD',
@@ -171,7 +173,7 @@ class CommodityTradeGenerator(BaseGenerator):
             },
             'Aluminum': {
                 'code': 'ALI',
-                'unit': 'Metric Ton',
+                'unit': METRIC_TON,
                 'contract_size': 25,
                 'price_range': (2200, 2800),
                 'currency': 'USD',
@@ -180,7 +182,7 @@ class CommodityTradeGenerator(BaseGenerator):
             },
             'Zinc': {
                 'code': 'ZNC',
-                'unit': 'Metric Ton',
+                'unit': METRIC_TON,
                 'contract_size': 25,
                 'price_range': (2500, 3200),
                 'currency': 'USD',
@@ -189,7 +191,7 @@ class CommodityTradeGenerator(BaseGenerator):
             },
             'Nickel': {
                 'code': 'NKL',
-                'unit': 'Metric Ton',
+                'unit': METRIC_TON,
                 'contract_size': 6,
                 'price_range': (16000, 22000),
                 'currency': 'USD',

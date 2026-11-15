@@ -143,3 +143,14 @@ export function formatChfM(value: unknown, fractionDigits = 1): string {
     maximumFractionDigits: fractionDigits,
   });
 }
+
+/** Percent axis tick: whole percent, no floating-point noise (47.669999 → "48%"). */
+export function formatPercentTick(value: number): string {
+  return `${Math.round(value)}%`;
+}
+
+/** LCR chart y-axis domain on multiples of 10%: up to 100pp below the maximum (floor 0, at most 80), +10pp
+ * headroom, so the ticks land on round values (40% | 70% | 100% | 130% | 160%). */
+export function lcrAxisDomain(yMax: number): [number, number] {
+  return [Math.floor(Math.max(0, Math.min(80, yMax - 100)) / 10) * 10, Math.ceil((yMax + 10) / 10) * 10];
+}

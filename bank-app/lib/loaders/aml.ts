@@ -16,7 +16,8 @@ export const LOADERS_AML: Record<string, LoaderDef> = {
   },
   "aml.anomaly-queue": {
     sql: `SELECT CUSTOMER_ID, FULL_NAME, ACCOUNT_TIER, COUNTRY, OVERALL_RISK_RATING,
-                 ROUND(OVERALL_RISK_SCORE, 1) AS OVERALL_RISK_SCORE
+                 ROUND(OVERALL_RISK_SCORE, 1) AS OVERALL_RISK_SCORE,
+                 HIGH_RISK_CUSTOMER  -- filter for the High-Risk + Anomaly card
             FROM ${C360}
            WHERE HAS_ANOMALY
            ORDER BY OVERALL_RISK_SCORE DESC, CUSTOMER_ID`,

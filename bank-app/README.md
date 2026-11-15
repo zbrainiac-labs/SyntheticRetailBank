@@ -226,6 +226,17 @@ try {
 
 ---
 
+### Bank app: KPI filter cards and customer links
+
+Shared in `components/risk/common.tsx`; use these instead of new pickers or ad-hoc toggles:
+
+- `useCardFilter({ id: { label, test } })`: returns `card(id, value)` (a `FilterCard`, toggles on click, `aria-pressed`), `apply(rows)`, `label` and `clear`. Use it when a KPI card counts a subset of the list below it; the card value and `test` must use the same rule.
+- `FilterNote`: "N rows (filter) show all" line above a filtered list.
+- `CUSTOMER_LINK_COLUMN`: `DataTable` column that renders `CUSTOMER_ID` as a link to `/banking/customer-360?customer=<id>`.
+- `DataTable` formats numeric-looking strings as numbers; give code columns (zip codes, IDs) a `render` that returns the raw string.
+
+---
+
 ## Design guidelines
 
 - **Aesthetic**: Unless instructed otherwise, use your best judgement to choose an appropriate style for the app. By default, tend towards minimal, enterprise and professional design.

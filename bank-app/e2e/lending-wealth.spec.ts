@@ -62,3 +62,39 @@ test("wealth advisor management tab shows team performance", async ({ page }) =>
   await expect(page.getByText("Available Capacity", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Team Performance")).toBeVisible({ timeout: 30_000 });
 });
+
+test("U14 lending portfolio summary is grouped and adds up to the status cards", async ({ page, request }) => {
+  const { rows } = await (await request.get("/api/data/lending.portfolio")).json();
+  const sum = (status?: string) =>
+    rows
+      .filter((r: { APPLICATION_STATUS: string }) => !status || r.APPLICATION_STATUS === status)
+      .reduce((s: number, r: { LOAN_COUNT: unknown }) => s + Number(r.LOAN_COUNT), 0);
+  // every application has one of the three card statuses
+  expect(sum("APPROVED") + sum("UNDER_REVIEW") + sum("DECLINED")).toBe(sum());
+  await page.goto("/risk/lending");
+  await expect(page.getByText("Portfolio summary")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("One row per country / product / status; Loan count = number of applications in that group.")).toBeVisible();
+});
+
+test("U15 wealth AUM cards are not truncated", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/risk/wealth");
+  const kpis = page.getByTestId("wealth-kpis");
+  await expect(kpis.getByText("Total Advisors")).toBeVisible({ timeout: 30_000 });
+  for (const label of ["Total AUM", "Avg AUM/Client"]) {
+    const value = kpis.getByText(label, { exact: true }).locator("xpath=ancestor::div[contains(@class,'p-5')]").locator("p.text-2xl");
+    await expect(value).toHaveText(/^CHF -?[\d,]+[MK]$/);
+    // truncate shows an ellipsis when the value is wider than the card
+    expect(await value.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+});
+
+test("U16 wealth capacity chart uses a square-root clients axis", async ({ page }) => {
+  await page.goto("/risk/wealth");
+  await expect(page.getByText(/Clients \(square-root scale\) vs\. portfolio value/)).toBeVisible({ timeout: 30_000 });
+  // sqrt-axis ticks (150 may be dropped when it collides with 200)
+  const ticks = page.locator(".recharts-cartesian-axis-tick-value");
+  for (const t of ["10", "25", "50", "100", "200"]) {
+    await expect(ticks.filter({ hasText: new RegExp(`^${t}$`) }).first()).toBeVisible({ timeout: 30_000 });
+  }
+});

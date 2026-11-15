@@ -32,6 +32,8 @@ import numpy as np
 import pandas as pd
 import reference_loader as ref
 
+PUBLIC_SECTOR = "Public sector"
+
 # Issuer groups that several tables below refer to
 COVERED_BONDS, EQUITIES, CREDIT_CLAIMS = "Covered bond issuers", "Listed equities", "Credit claims"
 
@@ -65,7 +67,7 @@ ISSUERS = {
     EQUITIES: ["SMI constituent"],
     CREDIT_CLAIMS: ["SME loan pool"],
 }
-INDUSTRY = {"Sovereigns": "Public sector", "Supranationals": "Public sector", "Sub-sovereigns": "Public sector",
+INDUSTRY = {"Sovereigns": PUBLIC_SECTOR, "Supranationals": PUBLIC_SECTOR, "Sub-sovereigns": PUBLIC_SECTOR,
             COVERED_BONDS: "Financials", EQUITIES: "Industrials", CREDIT_CLAIMS: "Financials"}
 CORP_INDUSTRIES = ["Consumer", "Healthcare", "Healthcare", "Industrials", "Telecom", "Materials"]
 CCY = {"XIa": "EUR", "XIb": "USD"}
@@ -73,13 +75,16 @@ CCY = {"XIa": "EUR", "XIb": "USD"}
 ENTITY_SHARES = ref.entity_shares()
 
 # Calibration (group totals in CHF). Short-term liquidity comes from treasury bill ladders (market value,
-# length in calendar days): one bill per business day, rolled to the far end at maturity, so the pool inflow
-# profile is the same on every reporting date. Long bonds (13-120 months) mostly land in GT12M.
+# length in calendar days): a fixed number of rungs (the next business days), rolled to the far end at
+# maturity, so the pool size and inflow profile are the same on every reporting date and weekday.
+# Every rung is booked at all legal entities by their share. Long bonds (13-120 months) mostly land in GT12M.
 LADDERS = [(600e6, 20), (150e6, 10)]
 LADDER_BILLS = 3  # bills maturing per business day and ladder (different WLK clusters)
 LADDER_CLUSTERS = ["II", "IV", "III", "XIa", "V", "II"]
 LONG_MV_CHF = 1_250e6
 HORIZON_DAYS = 400  # cashflows beyond this are collapsed into one LATER row
+REBALANCE_MOVES = 1  # intra-group collateral transfers per business day
+REBALANCE_BAND = 0.10  # rebalance only when an entity is more than 10% off its buffer target
 
 
 def crc(key: str) -> int:
@@ -97,6 +102,16 @@ def entity_for(key: str) -> str:
 
 def is_business_day(d: date, holidays: set) -> bool:
     return d.weekday() < 5 and d not in holidays
+
+
+def next_business_day(d: date, holidays: set) -> date:
+    """d itself when it is a business day, else the following business day (maturities never fall on holidays)."""
+    while not is_business_day(d, holidays):
+        d += timedelta(days=1)
+    return d
+
+
+ENTITY_WEIGHT = {e: w / 100.0 for e, w in ENTITY_SHARES}
 
 
 def add_months(d: date, months: int) -> date:
@@ -141,6 +156,10 @@ class DtiSecuritiesGenerator:
         self.events: list[dict] = []
         self.cash_delta = 0.0   # settlement of purchases against SNB reserves, taken by the LCR book
         self.flow_scale = 1.0   # calibrated book scale for the DtI transaction amounts
+        # booking share of the securities book per legal entity (default: CB share; the LCR book rebooks it to
+        # the entities' liquidity need, see rebook)
+        self.book_shares: list[tuple[str, float]] = [(e, w / 100.0) for e, w in ENTITY_SHARES]
+        self.cash = 0.0  # central bank + vault cash of the group (allocated by the fixed CB share)
         self.planted = False
         bdays = [first + timedelta(days=i) for i in range((last - first).days + 1)]
         self.bdays = [d for d in bdays if is_business_day(d, holidays)]
@@ -159,13 +178,13 @@ class DtiSecuritiesGenerator:
         if wlk == "VIII":
             mat, freq, coupon = None, 0, 0.0
         else:
-            mat = add_months(d, int(rng.integers(13, 121)))
+            mat = next_business_day(add_months(d, int(rng.integers(13, 121))), self.holidays)
             freq = int(rng.choice([1, 1, 1, 2, 12]))
             coupon = max(0.0, WLK[wlk][3] + 0.004 * rng.standard_normal())
         if nominal is None:
             nominal = float(rng.lognormal(math.log(10e6), 0.6))
-        sec = Security(sid, wlk, entity or entity_for(sid), group, issuer, CCY.get(wlk, "CHF"), nominal, coupon, freq,
-                       mat, False, idio=float(1 + 0.01 * rng.standard_normal()))
+        sec = Security(sid, wlk, entity or self._weighted_entity(sid), group, issuer, CCY.get(wlk, "CHF"), nominal,
+                       coupon, freq, mat, False, idio=float(1 + 0.01 * rng.standard_normal()))
         k = crc(sid + "enc") % 100
         sec.encumbered = wlk not in ("IX", "X") and k < 12
         sec.mobilised = not sec.encumbered and wlk not in ("IX", "X") and k < 45
@@ -191,6 +210,66 @@ class DtiSecuritiesGenerator:
             s.nominal *= LONG_MV_CHF / mv
 
     # -------------------------------------------------------------- dynamics
+    def set_targets(self, need: dict[str, float], cash: float = 0.0):
+        """Current buffer target per entity (share of the stressed outflow), used by the daily rebalancing. The
+        target covers the whole buffer: central bank cash (allocated by the fixed CB share) plus free securities."""
+        total = sum(need.values())
+        self.book_shares = [(e, need.get(e, 0.0) / total) for e, _ in ENTITY_SHARES]
+        self.cash = cash
+
+    def rebook(self, need: dict[str, float], cash: float = 0.0):
+        """Book the securities at the legal entities by their liquidity need (share of the stressed 30-day
+        outflow): every entity holds its own buffer, so entity DtI follows the group instead of an id hash.
+        Deterministic greedy fill (largest position first, to the entity with the largest gap to its target);
+        positions pinned by a showcase event keep their entity."""
+        self.set_targets(need, cash)
+        free = sorted(self._free_book(), key=lambda s: (-self.mv(s), s.sid))
+        gap = self._gaps(free)
+        for s in free:
+            gap[s.entity] += self.mv(s)
+        for s in free:
+            s.entity = _largest(gap)
+            gap[s.entity] -= self.mv(s)
+
+    def _free_book(self) -> list[Security]:
+        """Free (unencumbered, HQLA-eligible) persistent securities that treasury may move between entities."""
+        return [s for s in self.secs if not s.events and not s.encumbered and s.wlk not in ("IX", "X")]
+
+    def _gaps(self, free: list[Security]) -> dict[str, float]:
+        """Target minus booked buffer (CB cash share + free securities) per entity (positive = below target)."""
+        pool = sum(self.mv(s) for s in free)
+        gap = {e: w * (pool + self.cash) - ENTITY_WEIGHT[e] * self.cash for e, w in self.book_shares}
+        for s in free:
+            gap[s.entity] -= self.mv(s)
+        return gap
+
+    def _rebalance(self, moves: int = REBALANCE_MOVES):
+        """Intra-group collateral management: treasury transfers up to `moves` free securities per business day
+        from the entity furthest above its buffer target to the one furthest below, but only when that entity
+        is more than REBALANCE_BAND off its target and the transfer reduces both gaps (no daily churn), so
+        every entity keeps its own buffer through maturities and encumbrance changes."""
+        for _ in range(moves):
+            free = self._free_book()
+            gap = self._gaps(free)
+            pool = sum(self.mv(s) for s in free)
+            give, take = _smallest(gap), _largest(gap)
+            target = dict(self.book_shares)
+            band = REBALANCE_BAND * (pool + self.cash)
+            if gap[take] <= band * target[take] and -gap[give] <= band * target[give]:
+                return
+            fits = [s for s in free if s.entity == give and self.mv(s) <= min(-gap[give], gap[take])]
+            if not fits:
+                return
+            max(fits, key=lambda s: (self.mv(s), s.sid)).entity = take
+
+    def _weighted_entity(self, key: str) -> str:
+        x, acc = (crc(key + "book") % 10_000) / 10_000, 0.0
+        for e, w in self.book_shares:
+            acc += w
+            if x < acc:
+                return e
+        return self.book_shares[-1][0]
+
     def evolve(self, d: date, latest: date):
         """Business-day step of the securities book (called by the LCR book generator)."""
         self._evolve(d)
@@ -241,9 +320,11 @@ class DtiSecuritiesGenerator:
             old = pool[int(rng.integers(0, len(pool)))]
             proceeds = self.mv(old)
             self.secs.remove(old)
-            new = self._new(buy_wlk, d, nominal=proceeds / self.price[buy_wlk])
+            # the booking entity keeps its collateral: the switch is a trade, not a transfer between entities
+            new = self._new(buy_wlk, d, nominal=proceeds / self.price[buy_wlk], entity=old.entity)
             self.cash_delta += proceeds - self.mv(new)
-        # encumbrance changes: one security pledged (repo) and one released per day, so the share stays stable
+        # encumbrance changes: one security pledged (repo) and one released per day, so the share stays stable;
+        # independent of the entity booking (the daily rebalancing keeps every entity's free buffer on target)
         eligible = [s for s in self.secs if s.wlk not in ("IX", "X") and not s.events]
         for pledge in (True, False):
             cand = [s for s in eligible if s.encumbered != pledge]
@@ -251,13 +332,15 @@ class DtiSecuritiesGenerator:
                 s = cand[int(rng.integers(0, len(cand)))]
                 s.encumbered = pledge
                 s.mobilised = s.mobilised and not pledge
+        self._rebalance()
         self._apply_events(d)
         self._deposit_and_loan_txns(d)
 
     def _apply_events(self, d: date):
         if d == self.evt_purchase:
             p = self.cfg["securities_purchase"]
-            s = self._new(p["wlk"], d, nominal=p["nominal_chf"] * self.flow_scale, entity=p["entity"])
+            # configured size, not scaled with the book: one visible purchase, not a restructuring of an entity
+            s = self._new(p["wlk"], d, nominal=p["nominal_chf"], entity=p["entity"])
             s.events.append("DTI_05")
             s.encumbered = s.mobilised = False  # bought for the liquidity buffer: free collateral
             amt = self.mv(s)
@@ -292,29 +375,44 @@ class DtiSecuritiesGenerator:
         return s
 
     # ---------------------------------------------------- DtI transactions
+    def _txn_entity(self) -> tuple[str, float]:
+        """Booking entity of a business-day transaction and its size factor: tickets scale with the entity share,
+        so a movement is a few percent of the entity's book (a CHF 40M ticket never hits the smallest entity)."""
+        x = crc(f"TXN-{self.txn_seq:06d}") % 100
+        acc = 0
+        for e, w in ENTITY_SHARES:
+            acc += w
+            if x < acc:
+                return e, ENTITY_WEIGHT[e]
+        e = ENTITY_SHARES[-1][0]
+        return e, ENTITY_WEIGHT[e]
+
     def _deposit_and_loan_txns(self, d: date):
         """Large corporate deposit movements (temporary) and loan new business on each business day."""
         rng = self.rng
         for _ in range(int(rng.integers(3, 7))):
             self.txn_seq += 1
-            amt = float(rng.uniform(2e6, 15e6)) * (1 if rng.random() < 0.5 else -1) * self.flow_scale
+            entity, size = self._txn_entity()
+            amt = float(rng.uniform(2e6, 15e6)) * (1 if rng.random() < 0.5 else -1) * self.flow_scale * size
             dtype = str(rng.choice(["CORPORATE_OPERATIONAL", "CORPORATE_NON_OPERATIONAL", "FINANCIAL_INSTITUTION"]))
             self.txns.append({"TXN_ID": f"TXN-{self.txn_seq:06d}", "TXN_TYPE": "DEPOSIT_MOVEMENT",
-                                  "ENTITY_ID": entity_for(f"TXN-{self.txn_seq:06d}"), "PRODUCT_TYPE": dtype,
+                                  "ENTITY_ID": entity, "PRODUCT_TYPE": dtype,
                                   "COUNTERPARTY_TYPE": "FINANCIAL_INSTITUTION" if dtype == "FINANCIAL_INSTITUTION" else "CORPORATE",
                                   "APPLICATION_ID": "EIN", "AKTIV_PASSIV": "P", "BOOK_DATE": d,
                                   "END_DATE": d + timedelta(days=int(rng.integers(7, 45))), "AMOUNT_CHF": amt,
                                   "RATE": 0.0, "IS_NEW_BUSINESS": False})
         for _ in range(int(rng.integers(0, 3))):
             self.txn_seq += 1
+            entity, size = self._txn_entity()
             corp = rng.random() < 0.6
             self.txns.append({"TXN_ID": f"TXN-{self.txn_seq:06d}", "TXN_TYPE": "NEW_LOAN",
-                                  "ENTITY_ID": entity_for(f"TXN-{self.txn_seq:06d}"),
+                                  "ENTITY_ID": entity,
                                   "PRODUCT_TYPE": "LOAN_CORP" if corp else "LOAN_RETAIL",
                                   "COUNTERPARTY_TYPE": "CORPORATE" if corp else "RETAIL",
                                   "APPLICATION_ID": "KRE" if corp else "HYP", "AKTIV_PASSIV": "A", "BOOK_DATE": d,
                                   "END_DATE": d + timedelta(days=int(rng.integers(30, 181))),
-                                  "AMOUNT_CHF": float(rng.uniform(1e6, 5e6) if corp else rng.uniform(0.2e6, 1e6)) * self.flow_scale,
+                                  "AMOUNT_CHF": float(rng.uniform(1e6, 5e6) if corp else rng.uniform(0.2e6, 1e6))
+                                  * self.flow_scale * size * len(ENTITY_SHARES),
                                   "RATE": float(0.02 + 0.01 * rng.random()), "IS_NEW_BUSINESS": True})
 
     def txn_rows(self, d: date) -> list[dict]:
@@ -356,27 +454,41 @@ class DtiSecuritiesGenerator:
             near.append((mat, "LATER", far))
         return near
 
+    def _rungs(self, d: date, n: int) -> list[date]:
+        """The next n business days after d (maturity dates of the ladder rungs)."""
+        out, m = [], d
+        while len(out) < n:
+            m += timedelta(days=1)
+            if is_business_day(m, self.holidays):
+                out.append(m)
+        return out
+
     def _ladder(self, d: date) -> list[Security]:
-        """Treasury bill ladders on reporting date d: for every business day of each ladder, LADDER_BILLS
-        unencumbered bills mature (one per cluster). Ids are keyed by maturity date, so a bill keeps its id
-        and nominal on every reporting date until it matures - the ladder rolls without changing shape."""
+        """Treasury bill ladders on reporting date d: a fixed number of rungs (the next business days, about
+        5/7 of the ladder length), LADDER_BILLS bills per rung (one per cluster), each booked at every legal
+        entity by its share. Ids are keyed by maturity date and entity, so a bill keeps its id, entity and nominal
+        on every reporting date until it matures - the ladder rolls without changing size, shape or entity mix
+        on any weekday."""
         out = []
         for li, (mv, days) in enumerate(LADDERS):
-            n_rungs = days * 5 / 7  # business days per ladder (approx.), keeps the bill nominal stable
-            for i in range(1, days + 1):
-                m = d + timedelta(days=i)
-                if not is_business_day(m, self.holidays):
-                    continue
+            rungs = self._rungs(d, round(days * 5 / 7))
+            for m in rungs:
                 for k in range(LADDER_BILLS):
-                    wlk = LADDER_CLUSTERS[(k + li) % len(LADDER_CLUSTERS)]
-                    sid = f"BIL-{li}{k}-{m:%Y%m%d}"
-                    group = issuer_group_for(wlk, sid)
-                    s = Security(sid, wlk, entity_for(sid), group, ISSUERS[group][crc(sid) % len(ISSUERS[group])],
-                                 CCY.get(wlk, "CHF"), mv / n_rungs / LADDER_BILLS, 0.0, 0, m, True)
-                    s.idio = 1 - 0.005 * i / 365  # discount paper, pulls to par
-                    s.isin = f"CH{crc(sid + 'isin') % 10**10:010d}"
-                    s.name = f"{s.issuer} Bill {m.isoformat()}"
-                    out.append(s)
+                    out += self._bills(li, k, m, d, mv / len(rungs) / LADDER_BILLS)
+        return out
+
+    def _bills(self, li: int, k: int, m: date, d: date, nominal: float) -> list[Security]:
+        wlk = LADDER_CLUSTERS[(k + li) % len(LADDER_CLUSTERS)]
+        key = f"BIL-{li}{k}-{m:%Y%m%d}"
+        group = issuer_group_for(wlk, key)
+        issuer = ISSUERS[group][crc(key) % len(ISSUERS[group])]
+        out = []
+        for e, w in self.book_shares:
+            s = Security(f"{key}-{e[-2:]}", wlk, e, group, issuer, CCY.get(wlk, "CHF"), nominal * w, 0.0, 0, m, True)
+            s.idio = 1 - 0.005 * (m - d).days / 365  # discount paper, pulls to par
+            s.isin = f"CH{crc(key + 'isin') % 10**10:010d}"
+            s.name = f"{issuer} Bill {m.isoformat()}"
+            out.append(s)
         return out
 
     def snapshot(self, d: date, run_id: str = ""):
@@ -420,3 +532,13 @@ class DtiSecuritiesGenerator:
 def issuer_group_for(wlk: str, sid: str) -> str:
     groups = WLK[wlk][2]
     return groups[crc(sid) % len(groups)]
+
+
+def _largest(gap: dict[str, float]) -> str:
+    """Entity with the largest gap to its buffer target (ties: highest id, deterministic)."""
+    return max(gap.items(), key=lambda kv: (kv[1], kv[0]))[0]
+
+
+def _smallest(gap: dict[str, float]) -> str:
+    """Entity furthest above its buffer target (ties: lowest id, deterministic)."""
+    return min(gap.items(), key=lambda kv: (kv[1], kv[0]))[0]

@@ -79,7 +79,7 @@ export const LOADERS_CUSTOMER360: Record<string, LoaderDef> = {
     // (masked like the current address); one row per version
     sql: `SELECT TO_VARCHAR(h.VALID_FROM) AS VALID_FROM, TO_VARCHAR(h.VALID_TO) AS VALID_TO,
                  IFF(h.IS_CURRENT, 'Current', 'Previous') AS STATUS,
-                 a.STREET_ADDRESS, a.CITY, a.STATE, a.ZIPCODE, h.COUNTRY
+                 a.STREET_ADDRESS, a.CITY, a.STATE, TO_VARCHAR(a.ZIPCODE) AS ZIPCODE, h.COUNTRY
             FROM ${DB}.CRM_AGG_V001.CRMA_AGG_DT_ADDRESSES_HISTORY h
             JOIN ${DB}.CRM_RAW_V001.CRMI_RAW_TB_ADDRESSES a
               ON a.CUSTOMER_ID = h.CUSTOMER_ID AND a.INSERT_TIMESTAMP_UTC = h.INSERT_TIMESTAMP_UTC

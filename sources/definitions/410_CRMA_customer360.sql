@@ -387,7 +387,7 @@ DEFINE DYNAMIC TABLE {{ db }}.{{ crm_agg }}.CRMA_AGG_DT_CUSTOMER_360(
     POA_HOLDER_NAME VARCHAR(200) COMMENT 'Full name of Power of Attorney holder authorized to make decisions on behalf of customer. NULL if HAS_POWER_OF_ATTORNEY is FALSE. Used for contact routing and legal compliance.',
     LEGAL_CAPACITY_CONCERNS_FLAG BOOLEAN COMMENT 'Flag indicating potential legal capacity concerns requiring specialist assessment. Used to ensure appropriate protections for customers who may lack capacity to understand loan obligations per Mental Capacity Act (UK) or equivalent.',
 
-    LIFECYCLE_STAGE VARCHAR(20) COMMENT 'Customer lifecycle stage: NEW (<90d), ACTIVE (recent activity), MATURE (12m+ tenure, steady), DECLINING (reduced engagement), DORMANT (180d+ inactive), CHURNED (account closed). Used for journey mapping and retention targeting.',
+    LIFECYCLE_STAGE VARCHAR(20) COMMENT 'Customer lifecycle stage: NEW (<90d tenure), CHURNED (churn/close event), DORMANT (no transaction for 180d+), DECLINING (no transaction for 90-180d), MATURE (12m+ tenure, steady), ACTIVE (otherwise). Used for journey mapping and retention targeting.',
     ENGAGEMENT_SCORE NUMBER(5,2) COMMENT 'Lifecycle engagement score (0-100) based on event frequency and recency. Higher scores indicate more engaged customers. Used for segmentation and propensity modeling.',
     CHURN_PROBABILITY NUMBER(5,2) COMMENT 'ML-derived churn probability percentage (0-100). Currently rule-based proxy using dormancy and event patterns. Future: replace with Snowflake ML model output.',
     TOTAL_LIFECYCLE_EVENTS NUMBER(10,0) COMMENT 'Total count of lifecycle events (ONBOARDING, ADDRESS_CHANGE, ACCOUNT_UPGRADE, etc.) for customer journey depth analysis.',
@@ -658,11 +658,14 @@ SELECT
 
     FALSE AS LEGAL_CAPACITY_CONCERNS_FLAG,
 
+    -- DORMANT / DECLINING use transaction recency (same rule as IS_DORMANT_TRANSACTIONALLY),
+    -- not the last CRM event: customers paying daily were flagged DORMANT when they had no
+    -- address change, upgrade etc. for 180 days
     CASE 
         WHEN DATEDIFF(day, c.ONBOARDING_DATE, CURRENT_DATE()) <= 90 THEN 'NEW'
         WHEN lifecycle.CHURN_COUNT > 0 OR lifecycle.ACCOUNT_CLOSE_COUNT > 0 THEN 'CHURNED'
-        WHEN lifecycle.IS_DORMANT_LIFECYCLE = TRUE THEN 'DORMANT'
-        WHEN lifecycle.ENGAGEMENT_SCORE < 30 AND lifecycle.DAYS_SINCE_LAST_EVENT > 90 THEN 'DECLINING'
+        WHEN COALESCE(DATEDIFF(day, MAX(txn.VALUE_DATE), CURRENT_DATE()), 9999) >= 180 THEN 'DORMANT'
+        WHEN COALESCE(DATEDIFF(day, MAX(txn.VALUE_DATE), CURRENT_DATE()), 9999) > 90 THEN 'DECLINING'
         WHEN DATEDIFF(day, c.ONBOARDING_DATE, CURRENT_DATE()) >= 365 AND lifecycle.ENGAGEMENT_SCORE >= 50 THEN 'MATURE'
         ELSE 'ACTIVE'
     END AS LIFECYCLE_STAGE,

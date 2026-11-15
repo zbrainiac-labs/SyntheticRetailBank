@@ -92,3 +92,37 @@ export function toSearchParams(sel: Record<string, string | number | undefined>)
   for (const [k, v] of Object.entries(sel)) if (v !== undefined && v !== "") p.set(k, String(v));
   return p.toString();
 }
+
+/** Filter state persisted in the browser; `asOf` = latest reporting date of the book it was saved for. */
+export interface SavedFilters {
+  global: DtiFilters;
+  version: number;
+  pages: Record<string, PageOverrides>;
+  asOf?: string;
+}
+
+const DATE_KEYS = ["referenceDate", "comparisonDate"] as const;
+
+/**
+ * Restore saved filters: filters the saved state lacks take the defaults. Dates are kept only while the book
+ * is the same (same latest reporting date) and still a reporting date - after a data reload the pages open on
+ * the new as-of date again instead of a date picked in an earlier session.
+ */
+export function restoreSaved(
+  defaults: DtiFilters,
+  saved: Partial<SavedFilters>,
+  dates: string[],
+  latestDate: string,
+): SavedFilters {
+  const sameBook = saved.asOf === latestDate;
+  const keep = (d: string | undefined) => sameBook && d !== undefined && dates.includes(d);
+  const global = { ...defaults, ...saved.global };
+  for (const k of DATE_KEYS) if (!keep(global[k])) global[k] = defaults[k];
+  const pages: Record<string, PageOverrides> = {};
+  for (const [page, o] of Object.entries(saved.pages ?? {})) {
+    const values = { ...o.values };
+    for (const k of DATE_KEYS) if (values[k] !== undefined && !keep(values[k])) delete values[k];
+    pages[page] = { ...o, values };
+  }
+  return { global, version: saved.version ?? 0, pages, asOf: latestDate };
+}

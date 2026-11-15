@@ -1,12 +1,86 @@
 "use client";
 
 import { ChartTooltip, CHART_THEME } from "@/components/chart-utils";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { num, type LoaderRow } from "@/lib/loaders/client";
 import { formatNumber } from "@/lib/format";
 import Link from "next/link";
+import type React from "react";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+/** CUSTOMER_ID column that deep-links into the Customer 360 profile. */
+export const CUSTOMER_LINK_COLUMN = {
+  key: "CUSTOMER_ID",
+  render: (r: LoaderRow) => (
+    <Link
+      href={`/banking/customer-360?customer=${encodeURIComponent(String(r.CUSTOMER_ID))}`}
+      className="text-primary underline-offset-2 hover:underline"
+    >
+      {String(r.CUSTOMER_ID)}
+    </Link>
+  ),
+};
+
+/** KPI card that toggles a list filter (click again to clear). */
+export function FilterCard({
+  label,
+  value,
+  active,
+  onToggle,
+}: Readonly<{ label: string; value: React.ReactNode; active: boolean; onToggle: () => void }>) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`${label}: filter the list below`}
+      onClick={onToggle}
+      className="rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+    >
+      <StatCard
+        label={label}
+        value={value}
+        hint={active ? "Filtering list - click to clear" : "Click to filter list"}
+        className={active ? "h-full ring-2 ring-[var(--primary)]" : "h-full hover:bg-muted/40"}
+      />
+    </button>
+  );
+}
+
+/** "N <noun> (filter label) show all" line above a filtered list. */
+export function FilterNote({ count, noun, filter, onClear }: Readonly<{ count: number; noun: string; filter?: string; onClear: () => void }>) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      <strong className="text-foreground">{formatNumber(count, 0)}</strong> {noun}
+      {filter && (
+        <>
+          {" "}({filter}){" "}
+          <button type="button" onClick={onClear} className="underline">
+            show all
+          </button>
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
+ * Card-driven filter over a row set: `defs` maps a filter id to its label and row predicate.
+ * Returns the filtered rows plus card/note props for the active filter.
+ */
+export function useCardFilter<K extends string>(defs: Record<K, { label: string; test: (r: LoaderRow) => boolean }>) {
+  const [active, setActive] = useState<K | null>(null);
+  return {
+    active,
+    clear: () => setActive(null),
+    label: active ? defs[active].label : undefined,
+    apply: (rows: LoaderRow[]) => (active ? rows.filter(defs[active].test) : rows),
+    card: (k: K, value: React.ReactNode) => (
+      <FilterCard key={k} label={defs[k].label} value={value} active={active === k} onToggle={() => setActive((c) => (c === k ? null : k))} />
+    ),
+  };
+}
 
 /** Risk rating colours (Streamlit COLORS map, mapped to theme tokens). */
 export const RISK_COLOR: Record<string, string> = {
@@ -84,39 +158,6 @@ export function MatchTypeBars({ rows, keyName, color }: { rows: LoaderRow[]; key
         <Bar dataKey="Matches" fill={color} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
-  );
-}
-
-/** show_profile_picker: pick a customer and open Customer 360. */
-export function ProfilePicker({ rows, idCol = "CUSTOMER_ID" }: { rows: LoaderRow[]; idCol?: string }) {
-  const ids = [...new Set(rows.map((r) => String(r[idCol] ?? "")).filter(Boolean))];
-  const [sel, setSel] = useState("");
-  if (!ids.length) return null;
-  return (
-    <div className="flex items-center gap-2">
-      <select
-        aria-label="Customer profile"
-        className="h-9 flex-1 rounded-md border bg-background px-2 text-sm"
-        value={sel}
-        onChange={(e) => setSel(e.target.value)}
-      >
-        <option value="">Select a customer to view profile...</option>
-        {ids.map((id) => (
-          <option key={id} value={id}>
-            {id}
-          </option>
-        ))}
-      </select>
-      {sel ? (
-        <Button asChild size="sm">
-          <Link href={`/banking/customer-360?customer=${encodeURIComponent(sel)}`}>View profile</Link>
-        </Button>
-      ) : (
-        <Button size="sm" disabled>
-          View profile
-        </Button>
-      )}
-    </div>
   );
 }
 

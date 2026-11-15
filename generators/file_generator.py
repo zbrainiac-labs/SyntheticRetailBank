@@ -14,6 +14,8 @@ from fx_generator import FXRateGenerator, AccountGenerator
 from equity_generator import EquityTradeGenerator
 from employee_generator import EmployeeGenerator
 
+CSV_GLOB, TXT_GLOB, XML_GLOB = "*.csv", "*.txt", "*.xml"
+
 
 class FileGenerator:
     """Manages the generation of all output files"""
@@ -481,10 +483,10 @@ class FileGenerator:
                     f.write("\n📁 SWIFT Messages (swift_messages/):\n")
                     swift_dir = self.output_dir / "swift_messages"
                     if swift_dir.exists():
-                        swift_files = sorted(swift_dir.glob("*.xml"))[:10]  # Show first 10
+                        swift_files = sorted(swift_dir.glob(XML_GLOB))[:10]  # Show first 10
                         for swift_file in swift_files:
                             f.write(f"  {swift_file.name}\n")
-                        total_files = len(list(swift_dir.glob("*.xml")))
+                        total_files = len(list(swift_dir.glob(XML_GLOB)))
                         if total_files > 10:
                             f.write(f"  ... ({total_files - 10} more files)\n")
                 
@@ -496,10 +498,10 @@ class FileGenerator:
                     f.write("\n📁 Mortgage Emails (emails/):\n")
                     email_dir = self.output_dir / "emails"
                     if email_dir.exists():
-                        email_files = sorted(email_dir.glob("*.txt"))[:10]  # Show first 10
+                        email_files = sorted(email_dir.glob(TXT_GLOB))[:10]  # Show first 10
                         for email_file in email_files:
                             f.write(f"  {email_file.name}\n")
-                        total_files = len(list(email_dir.glob("*.txt")))
+                        total_files = len(list(email_dir.glob(TXT_GLOB)))
                         if total_files > 10:
                             f.write(f"  ... ({total_files - 10} more files)\n")
                 
@@ -514,14 +516,14 @@ class FileGenerator:
                     f.write("\n📁 Fixed Income Trades (fixed_income_trades/):\n")
                     fi_dir = self.output_dir / "fixed_income_trades"
                     if fi_dir.exists():
-                        for fi_file in sorted(fi_dir.glob("*.csv")):
+                        for fi_file in sorted(fi_dir.glob(CSV_GLOB)):
                             f.write(f"  {fi_file.name}\n")
                 
                 if 'commodity' in additional_results and additional_results['commodity']:
                     f.write("\n📁 Commodity Trades (commodity_trades/):\n")
                     comm_dir = self.output_dir / "commodity_trades"
                     if comm_dir.exists():
-                        for comm_file in sorted(comm_dir.glob("*.csv")):
+                        for comm_file in sorted(comm_dir.glob(CSV_GLOB)):
                             f.write(f"  {comm_file.name}\n")
                 
                 if 'lifecycle' in additional_results and additional_results['lifecycle']:
@@ -651,9 +653,9 @@ class FileGenerator:
         """Clean the output directory of previously generated files (selective cleaning)"""
         if self.output_dir.exists():
             # Clean main directory files
-            for file in self.output_dir.glob("*.csv"):
+            for file in self.output_dir.glob(CSV_GLOB):
                 file.unlink()
-            for file in self.output_dir.glob("*.txt"):
+            for file in self.output_dir.glob(TXT_GLOB):
                 file.unlink()
             
             # Clean specific subdirectories that should be regenerated
@@ -679,11 +681,11 @@ class FileGenerator:
             for subdir_name in subdirs_to_clean:
                 subdir = self.output_dir / subdir_name
                 if subdir.exists():
-                    for file in subdir.glob("*.csv"):
+                    for file in subdir.glob(CSV_GLOB):
                         file.unlink()
-                    for file in subdir.glob("*.txt"):
+                    for file in subdir.glob(TXT_GLOB):
                         file.unlink()
-                    for file in subdir.glob("*.xml"):
+                    for file in subdir.glob(XML_GLOB):
                         file.unlink()
                     for file in subdir.glob("*.json"):
                         file.unlink()
@@ -693,11 +695,11 @@ class FileGenerator:
             for parent_dir, nested_dir in nested_subdirs_to_clean:
                 nested_path = self.output_dir / parent_dir / nested_dir
                 if nested_path.exists():
-                    for file in nested_path.glob("*.csv"):
+                    for file in nested_path.glob(CSV_GLOB):
                         file.unlink()
-                    for file in nested_path.glob("*.txt"):
+                    for file in nested_path.glob(TXT_GLOB):
                         file.unlink()
-                    for file in nested_path.glob("*.xml"):
+                    for file in nested_path.glob(XML_GLOB):
                         file.unlink()
                     for file in nested_path.glob("*.json"):
                         file.unlink()

@@ -93,7 +93,8 @@ function Portfolio({ rows }: { rows: LoaderRow[] }) {
   const statuses = [...new Set(rows.map((r) => String(r.WORKLOAD_STATUS ?? "n/a")))];
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-4 xl:grid-cols-8" data-testid="wealth-kpis">
+      {/* 2 x 4 cards: 8 in one row truncates values like "CHF -313M" */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="wealth-kpis">
         {kpis.map((k) => (
           <StatCard key={k.label} label={k.label} value={k.value} />
         ))}
@@ -114,13 +115,14 @@ function Portfolio({ rows }: { rows: LoaderRow[] }) {
             </BarChart>
           </ResponsiveContainer>
         </Panel>
-        <Panel title="Advisor Capacity Analysis" description="Clients vs. portfolio value; bubble size = |AUM|, colour = workload status">
+        <Panel title="Advisor Capacity Analysis" description="Clients (square-root scale) vs. portfolio value; bubble size = |AUM|, colour = workload status">
           <ResponsiveContainer width="100%" height={500}>
-            <ScatterChart>
+            <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
               <CartesianGrid stroke={CHART_THEME.grid} strokeDasharray="3 3" />
-              <XAxis type="number" dataKey="x" name="Clients" tick={CHART_THEME.tick} />
+              {/* sqrt scale spreads the many small books (1-40 clients) away from the ones at capacity (200) */}
+              <XAxis type="number" dataKey="x" name="Clients" scale="sqrt" domain={[0, "dataMax"]} ticks={[0, 10, 25, 50, 100, 150, 200]} tick={CHART_THEME.tick} />
               <YAxis type="number" dataKey="y" name="Portfolio value" tick={CHART_THEME.tick} tickFormatter={formatTick} width={60} />
-              <ZAxis type="number" dataKey="z" range={[40, 600]} name="|AUM|" />
+              <ZAxis type="number" dataKey="z" range={[30, 260]} name="|AUM|" />
               <Tooltip content={<AdvisorTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {statuses.map((s, i) => (
@@ -128,7 +130,8 @@ function Portfolio({ rows }: { rows: LoaderRow[] }) {
                   key={s}
                   name={s}
                   fill={WORKLOAD_COLOR[s] ?? CHART_COLORS[i % CHART_COLORS.length]}
-                  fillOpacity={0.7}
+                  fillOpacity={0.55}
+                  stroke="var(--background)"
                   data={rows
                     .filter((r) => String(r.WORKLOAD_STATUS ?? "n/a") === s)
                     .map((r) => ({
