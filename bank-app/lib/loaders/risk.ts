@@ -37,9 +37,13 @@ export const LOADERS_RISK: Record<string, LoaderDef> = {
                  EXPOSED_PERSON_MATCH_TYPE, SANCTIONS_MATCH_TYPE,
                  CASE WHEN REQUIRES_EXPOSED_PERSON_REVIEW THEN 'PEP Review'
                       WHEN REQUIRES_SANCTIONS_REVIEW THEN 'Sanctions Review'
-                      ELSE 'Risk Assessment' END AS ACTION_REQUIRED
+                      ELSE 'Risk Assessment' END AS ACTION_REQUIRED,
+                 -- flags behind the Overview KPI cards (used as list filters, not displayed)
+                 OVERALL_RISK_RATING IN ('CRITICAL', 'HIGH') AS IS_CRITICAL_HIGH,
+                 REQUIRES_EXPOSED_PERSON_REVIEW, REQUIRES_SANCTIONS_REVIEW
             FROM ${C360}
            WHERE HIGH_RISK_CUSTOMER OR REQUIRES_EXPOSED_PERSON_REVIEW OR REQUIRES_SANCTIONS_REVIEW
+              OR OVERALL_RISK_RATING IN ('CRITICAL', 'HIGH')
            ORDER BY OVERALL_RISK_SCORE DESC, CUSTOMER_ID`,
   },
   /** plot_compliance_risk_heatmap: average risk score by country (top 20) */

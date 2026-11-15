@@ -15,6 +15,9 @@ from dataclasses import dataclass, field, asdict
 from xml.etree.ElementTree import Element, SubElement, tostring, parse, fromstring
 from xml.dom import minidom
 
+PACS_008 = "pacs.008.001.08"
+PACS_008_NS = f"urn:iso:std:iso:20022:tech:xsd:{PACS_008}"
+
 
 def get_next_business_day() -> date:
     """Get next business day (skip weekends)"""
@@ -97,7 +100,7 @@ def extract_end_to_end_id_from_pacs008(xml_content: str) -> Optional[str]:
     try:
         root = fromstring(xml_content)
         # Look for EndToEndId in the namespace
-        namespaces = {'ns': 'urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08'}
+        namespaces = {'ns': PACS_008_NS}
         end_to_end_element = root.find('.//ns:EndToEndId', namespaces)
         if end_to_end_element is not None:
             return end_to_end_element.text
@@ -119,7 +122,7 @@ def extract_message_id_from_pacs008(xml_content: str) -> Optional[str]:
     try:
         root = fromstring(xml_content)
         # Look for MsgId in the namespace
-        namespaces = {'ns': 'urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08'}
+        namespaces = {'ns': PACS_008_NS}
         msg_id_element = root.find('.//ns:MsgId', namespaces)
         if msg_id_element is not None:
             return msg_id_element.text
@@ -192,7 +195,7 @@ def generate_xsd_validation_report(xml_content: str) -> Dict[str, Any]:
     }
     
     # Check namespace
-    if 'xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"' in xml_content:
+    if f'xmlns="{PACS_008_NS}"' in xml_content:
         report["namespace_correct"] = True
     else:
         report["recommendations"].append("Use correct namespace for pacs.008.001.08")
@@ -606,7 +609,7 @@ class PACS008Message:
 class OriginalGroupInformation:
     """Original group information for status report"""
     original_message_identification: str
-    original_message_name_identification: str = "pacs.008.001.08"
+    original_message_name_identification: str = PACS_008
     original_creation_date_time: Optional[datetime] = None
     original_number_of_transactions: Optional[str] = None
     original_control_sum: Optional[Decimal] = None
@@ -672,7 +675,7 @@ class BusinessApplicationHeader:
     from_party: str = ""  # BIC of sending institution
     to_party: str = ""    # BIC of receiving institution
     business_message_identifier: str = field(default_factory=generate_cbpr_compliant_id)
-    message_definition_identifier: str = "pacs.008.001.08"
+    message_definition_identifier: str = PACS_008
     business_service: str = "swift.cbprplus.01"
     creation_date: datetime = field(default_factory=datetime.now)
     copy_duplicate: str = "CODU"  # COPY or DUPL
@@ -683,7 +686,7 @@ class SWIFTMessageGenerator:
     """Generator for SWIFT PACS messages"""
     
     def __init__(self):
-        self.namespace = "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+        self.namespace = PACS_008_NS
         self.pacs002_namespace = "urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10"
         self.bah_namespace = "urn:iso:std:iso:20022:tech:xsd:head.001.001.01"
     
@@ -1428,7 +1431,7 @@ def generate_pacs002(original_message_id, transaction_status, original_end_to_en
             # Extract creation timestamp from PACS.008 for realistic delay calculation
             try:
                 root = fromstring(pacs008_content)
-                namespaces = {'ns': 'urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08'}
+                namespaces = {'ns': PACS_008_NS}
                 creation_element = root.find('.//ns:CreDtTm', namespaces)
                 if creation_element is not None:
                     # Parse the timestamp (format: 2025-08-17T10:12:29.015)
@@ -1564,7 +1567,7 @@ def generate_production_pacs008(from_bic, to_bic, amount, currency, debtor_name,
     bah = BusinessApplicationHeader(
         from_party=from_bic,
         to_party=to_bic,
-        message_definition_identifier="pacs.008.001.08",
+        message_definition_identifier=PACS_008,
         business_service="swift.cbprplus.01"
     )
     

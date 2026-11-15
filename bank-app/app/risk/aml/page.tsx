@@ -3,10 +3,10 @@
 import { ChartTooltip, CHART_THEME } from "@/components/chart-utils";
 import { DataTable, LoaderState, Panel, Tabs } from "@/components/data/data-table";
 import { PageHeader } from "@/components/page-header";
-import { CountList, CsvButton, ProfilePicker } from "@/components/risk/common";
+import { CountList, CsvButton, CUSTOMER_LINK_COLUMN, isTrue, useCardFilter } from "@/components/risk/common";
 import { StatCard, StatCardSkeleton } from "@/components/stat-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { num, useLoader } from "@/lib/loaders/client";
+import { num, useLoader, type LoaderRow } from "@/lib/loaders/client";
 import { formatNumber } from "@/lib/format";
 import { useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -25,16 +25,23 @@ function KpiGrid({ loading, children }: { loading: boolean; children: React.Reac
   );
 }
 
+/** Fraud KPI cards that filter the anomaly queue (every queue row is anomalous). */
+const QUEUE_FILTERS = {
+  anomalous: { label: "Anomalous Customers", test: () => true },
+  highRisk: { label: "High-Risk + Anomaly", test: (r: LoaderRow) => isTrue(r.HIGH_RISK_CUSTOMER) },
+};
+
 function Fraud() {
   const kpis = useLoader("aml.fraud-kpis");
   const queue = useLoader("aml.anomaly-queue");
+  const f = useCardFilter(QUEUE_FILTERS);
   const k = kpis.data?.rows[0];
   return (
     <div className="space-y-6">
       <KpiGrid loading={kpis.isPending}>
         <StatCard label="Total Customers" value={formatNumber(num(k?.TOTAL_CUSTOMERS), 0)} />
-        <StatCard label="Anomalous Customers" value={formatNumber(num(k?.ANOMALOUS_CUSTOMERS), 0)} />
-        <StatCard label="High-Risk + Anomaly" value={formatNumber(num(k?.HIGH_RISK_ANOMALY), 0)} />
+        {f.card("anomalous", formatNumber(num(k?.ANOMALOUS_CUSTOMERS), 0))}
+        {f.card("highRisk", formatNumber(num(k?.HIGH_RISK_ANOMALY), 0))}
         <StatCard label="Anomaly Rate" value={`${num(k?.ANOMALY_RATE_PCT).toFixed(1)}%`} />
       </KpiGrid>
       <Panel
@@ -42,17 +49,30 @@ function Fraud() {
         actions={queue.data?.rows.length ? <CsvButton rows={queue.data.rows} label="Export Anomaly Report (CSV)" filename="anomaly_report" /> : null}
       >
         <LoaderState q={queue} empty="No anomalous transaction patterns detected">
-          {(rows) => (
-            <div className="space-y-3">
-              <Alert className="border-[var(--warning)]">
-                <AlertDescription>
-                  <strong>{rows.length}</strong> customers flagged with anomalous transaction patterns
-                </AlertDescription>
-              </Alert>
-              <DataTable rows={rows} />
-              <ProfilePicker rows={rows} />
-            </div>
-          )}
+          {(all) => {
+            const rows = f.apply(all);
+            return (
+              <div className="space-y-3">
+                <Alert className="border-[var(--warning)]">
+                  <AlertDescription>
+                    <strong>{rows.length}</strong> customers flagged with anomalous transaction patterns
+                    {f.label && (
+                      <>
+                        {" "}({f.label}){" "}
+                        <button type="button" onClick={f.clear} className="underline">
+                          show all
+                        </button>
+                      </>
+                    )}
+                  </AlertDescription>
+                </Alert>
+                <DataTable
+                  rows={rows}
+                  columns={[CUSTOMER_LINK_COLUMN, "FULL_NAME", "ACCOUNT_TIER", "COUNTRY", "OVERALL_RISK_RATING", "OVERALL_RISK_SCORE"]}
+                />
+              </div>
+            );
+          }}
         </LoaderState>
       </Panel>
     </div>
@@ -116,8 +136,10 @@ function Aml() {
         <LoaderState q={alerts} empty="No AML alerts found">
           {(rows) => (
             <div className="space-y-3">
-              <DataTable rows={rows} />
-              <ProfilePicker rows={rows} />
+              <DataTable
+                rows={rows}
+                columns={Object.keys(rows[0] ?? {}).map((k) => (k === "CUSTOMER_ID" ? CUSTOMER_LINK_COLUMN : k))}
+              />
             </div>
           )}
         </LoaderState>

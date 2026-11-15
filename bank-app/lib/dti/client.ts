@@ -9,6 +9,7 @@ import type {
   SecuritiesResponse,
   SummaryResponse,
 } from "@/lib/dti/types";
+import type { DtiEvent, DtiHistoryPoint } from "@/lib/dti/events";
 import type { DtiFilters } from "@/lib/filters/model";
 import { useQuery } from "@tanstack/react-query";
 
@@ -48,6 +49,15 @@ export function useCompare(f: DtiFilters, extra: Record<string, string | null | 
 export function useSummary(f: DtiFilters) {
   const qs = dtiQuery(f);
   return useQuery({ queryKey: ["dti", "summary", qs], queryFn: () => getJson<SummaryResponse>(`/api/dti/summary?${qs}`) });
+}
+
+/** Group DtI history of the selected entities and the events of the book (Summary page). */
+export function useDtiEvents(f: DtiFilters) {
+  const qs = dtiQuery(f);
+  return useQuery({
+    queryKey: ["dti", "events", qs],
+    queryFn: () => getJson<{ history: DtiHistoryPoint[]; events: DtiEvent[] }>(`/api/dti/events?${qs}`),
+  });
 }
 
 export function useSecurities(f: DtiFilters, wlk: string) {

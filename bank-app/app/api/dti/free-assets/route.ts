@@ -1,6 +1,7 @@
 import { dtiSql } from "@/lib/dti/access";
 import { respond } from "@/lib/dti/api";
-import { ParamError, RAW, isoDate, placeholders } from "@/lib/dti/params";
+import { withCentralBankCash } from "@/lib/dti/free-assets";
+import { AGG, ParamError, RAW, isoDate, placeholders } from "@/lib/dti/params";
 import { ENTITIES } from "@/lib/filters/model";
 import type { NextRequest } from "next/server";
 
@@ -13,7 +14,8 @@ const BREAKDOWN = { ISSUER_GROUP: "ISSUER_GROUP", INDUSTRY: "INDUSTRY", CURRENCY
  * Securities - additional information (UC2 6.9): unencumbered assets of the
  * DtI collateral pool (LIQI_RAW_TB_DTI_SECURITIES) on one reporting date,
  * independent of the Summary filters. Day 365 drops securities that mature
- * within the LST period (e.g. the treasury bill ladder).
+ * within the LST period (e.g. the treasury bill ladder). WLK I shows the central
+ * bank and vault cash of the selected entities from the DtI engine (fixed CB share).
  */
 export async function GET(req: NextRequest) {
   return respond(async () => {
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
          AND (h.MATURITY_DATE IS NULL OR h.MATURITY_DATE > DATEADD(day, ?, ?::DATE))`;
     const freeBinds = [ref, ...entities, day, ref];
 
-    const [assets, secured, breakdownRows, mobil] = await Promise.all([
+    const [assets, secured, breakdownRows, mobil, cash] = await Promise.all([
       query(
         `SELECT w.WLK_CLUSTER, w.CLUSTER_NAME, w.HQLA_CATEGORY, w.HAIRCUT, w.SORT_ORDER, COALESCE(SUM(h.${val}), 0) AS VAL
            FROM ${RAW}.LIQI_RAW_TB_DTI_WLK_CLUSTERS w
@@ -60,6 +62,13 @@ export async function GET(req: NextRequest) {
           GROUP BY 1`,
         freeBinds,
       ),
+      query(
+        `SELECT COALESCE(SUM(BASE_CHF), 0) AS CASH
+           FROM ${AGG}.REPP_AGG_DT_DTI_CASHFLOWS
+          WHERE AS_OF_DATE = ?::DATE AND ENTITY_ID IN (${ent}) AND FLOW_KIND = 'POOL' AND NOT IS_CORRECTION
+            AND POSITION_CODE IN ('POOL_CB_BALANCE', 'POOL_VAULT_CASH')`,
+        [ref, ...entities],
+      ),
     ]);
 
     return {
@@ -67,13 +76,16 @@ export async function GET(req: NextRequest) {
       day,
       basis,
       breakdown,
-      assets: assets.rows.map((r) => ({
-        wlk: r.WLK_CLUSTER as string,
-        name: r.CLUSTER_NAME as string,
-        hqla: r.HQLA_CATEGORY as string,
-        haircut: Number(r.HAIRCUT),
-        value: Number(r.VAL),
-      })),
+      assets: withCentralBankCash(
+        assets.rows.map((r) => ({
+          wlk: r.WLK_CLUSTER as string,
+          name: r.CLUSTER_NAME as string,
+          hqla: r.HQLA_CATEGORY as string,
+          haircut: Number(r.HAIRCUT),
+          value: Number(r.VAL),
+        })),
+        Number(cash.rows[0]?.CASH ?? 0),
+      ),
       secured: secured.rows.map((r) => ({
         type: r.TRANSACTION_TYPE as string,
         eligible: (r.ELIGIBLE as string | null) ?? "",

@@ -76,7 +76,7 @@ DEFINE TABLE {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DTI_EVENTS (
     EVENT_ID VARCHAR(20) NOT NULL COMMENT 'Identifier of the DtI showcase event (DTI_01..).',
     EVENT_DATE DATE NOT NULL COMMENT 'Reporting date on which the event is visible in the comparison against the previous date.',
     ENTITY_ID VARCHAR(10) COMMENT 'Legal entity mainly affected.',
-    EVENT_TYPE VARCHAR(30) COMMENT 'DEPOSIT_WITHDRAWAL, BUCKET_SHIFT, CORRECTION or PRELIMINARY_DATA.',
+    EVENT_TYPE VARCHAR(30) COMMENT 'DEPOSIT_WITHDRAWAL, BUCKET_SHIFT, CORRECTION, PRELIMINARY_DATA, SECURITY_PURCHASE, WLK_DOWNGRADE, SECURITY_MATURITY, FUNDING_CLIFF or FUNDING_ROLL (the last two are the LCR stress events on the same book).',
     POSITION_ID VARCHAR(50) COMMENT 'Position expected as top driver (deposit account, contract or correction id); ground truth for sqlunit/dti_validation.sql.',
     AMOUNT_CHF NUMBER(18,2) COMMENT 'Nominal size of the event in CHF.',
     DESCRIPTION VARCHAR(500) COMMENT 'Business description shown in the app and used by the agent.',

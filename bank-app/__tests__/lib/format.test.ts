@@ -8,9 +8,11 @@ import {
   formatDuration,
   formatNumber,
   formatPercent,
+  formatPercentTick,
   formatRelative,
   formatValue,
   isNumeric,
+  lcrAxisDomain,
 } from '@/lib/format';
 import { describe, expect, it } from 'vitest';
 
@@ -90,5 +92,13 @@ describe('format durations, bytes, relative time', () => {
     expect(formatRelative('2026-10-23T12:05:00Z', now)).toBe('in 5 min');
     expect(formatRelative('2026-10-23T15:00:00Z', now)).toBe('in 3 h');
     expect(formatRelative('2026-10-30T12:00:00Z', now)).toBe('Oct 30, 2026');
+  });
+
+  it('percent axis ticks and the LCR domain are whole percent', () => {
+    expect(formatPercentTick(47.66999999999999)).toBe('48%');
+    expect(formatPercentTick(100)).toBe('100%');
+    expect(lcrAxisDomain(147.67)).toEqual([40, 160]);
+    expect(lcrAxisDomain(250)).toEqual([80, 260]);
+    expect(lcrAxisDomain(63)).toEqual([0, 80]);
   });
 });

@@ -91,8 +91,8 @@ SELECT 'DTI-06 group additivity' AS TEST_NAME, IFF(ABS(g.S - e.S) <= 1, 'PASS', 
        'group ' || ROUND(g.S) || ' vs sum of entities ' || ROUND(e.S) AS DETAIL
 FROM g, e;
 
--- DTI-07a: DTI_01 withdrawal lowers its entity's central bank balance and its share of the group cash
--- (central cash is allocated by the current deposit share of each entity)
+-- DTI-07a: DTI_01 withdrawal is settled from the SNB reserves: the entity's central bank balance falls while its
+-- share of the group cash stays the fixed CB_BALANCE_SHARE (a withdrawal does not move cash between entities)
 WITH e AS (
     SELECT SUM(REF_VALUE) AS REF_E, SUM(COMP_VALUE) AS COMP_E
     FROM TABLE(REPP_AGG_FN_DTI_COMPARE($D01::DATE, $P01::DATE, [$E01], 'STRESSED', 'BUCKETS', FALSE))
@@ -104,7 +104,7 @@ WITH e AS (
     WHERE NOT IS_INFO_ROW AND POSITION_CODE = 'POOL_CB_BALANCE'
 )
 SELECT 'DTI-07a event withdrawal' AS TEST_NAME,
-       IFF(e.REF_E < e.COMP_E AND e.REF_E / g.REF_G < e.COMP_E / g.COMP_G, 'PASS', 'FAIL') AS STATUS,
+       IFF(e.REF_E < e.COMP_E AND ABS(e.REF_E / g.REF_G - e.COMP_E / g.COMP_G) < 0.0001, 'PASS', 'FAIL') AS STATUS,
        $E01 || ' CB balance ' || ROUND(e.COMP_E / 1e6, 1) || 'M -> ' || ROUND(e.REF_E / 1e6, 1) || 'M, share '
            || ROUND(100 * e.COMP_E / g.COMP_G, 1) || '% -> ' || ROUND(100 * e.REF_E / g.REF_G, 1) || '% (event ' || ROUND($A01 / 1e6, 1) || 'M)' AS DETAIL
 FROM e CROSS JOIN g;
@@ -117,9 +117,11 @@ FROM (SELECT PERIOD_KEY, SUM(DELTA) AS D
       FROM TABLE(REPP_AGG_FN_DTI_COMPARE($D02::DATE, $P02::DATE, [$E02], 'STRESSED', 'BUCKETS', FALSE))
       WHERE NOT IS_INFO_ROW AND POSITION_CODE = 'DET_FIX_LOANS_CORP' GROUP BY 1);
 
--- DTI-07c: DTI_03 correction is a separate line of -15M
+-- DTI-07c: DTI_03 correction is a separate line with the amount of the event (sized from the CB balance)
+SET A03 = (SELECT AMOUNT_CHF FROM REP_RAW_V001.LIQI_RAW_TB_DTI_EVENTS WHERE EVENT_ID = 'DTI_03');
 SELECT 'DTI-07c event correction' AS TEST_NAME,
-       IFF(ROUND(SUM(REF_VALUE)) = -15000000, 'PASS', 'FAIL') AS STATUS, ROUND(SUM(REF_VALUE)) || ' CHF' AS DETAIL
+       IFF(ROUND(SUM(REF_VALUE)) = ROUND($A03) AND $A03 < 0, 'PASS', 'FAIL') AS STATUS,
+       ROUND(SUM(REF_VALUE)) || ' CHF (event ' || ROUND($A03) || ')' AS DETAIL
 FROM TABLE(REPP_AGG_FN_DTI_COMPARE($LATEST::DATE, $PREV::DATE, ['LE_01'], 'STRESSED', 'BUCKETS', FALSE))
 WHERE PRODUCT_TYPE = 'CORRECTION';
 

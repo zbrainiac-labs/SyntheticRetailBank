@@ -121,7 +121,7 @@ function Overview({ rows }: { rows: LoaderRow[] }) {
         </Panel>
       </div>
       <Panel title="Portfolio summary">
-        <DataTable rows={rows} />
+        <DataTable rows={rows} caption="One row per country / product / status; Loan count = number of applications in that group." />
       </Panel>
     </div>
   );

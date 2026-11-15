@@ -56,6 +56,7 @@ from dti_securities_generator import (
     WLK,
     DtiSecuritiesGenerator,
     is_business_day,
+    next_business_day,
 )
 from dti_securities_generator import INDUSTRY as SEC_INDUSTRY
 
@@ -68,11 +69,13 @@ DEPOSIT_TYPES = ref.deposit_types()      # deposit_type: (counterparty_type, bas
 CONTRACT_RULES = ref.contract_rules()    # (product, sector): (ASSET | FACILITY | LIABILITY, BASE rate)
 
 INFLOW_CAP = 0.75
+NEED_DAYS = 60  # horizon of the entity liquidity need that sizes each entity buffer (DtI)
+DAILY_PLAN_MONTHS = 6  # planning on business days for the first half year (DtI crossings), weekly afterwards
 L2B_CAP_RATIO = 15.0 / 85.0
 L2_CAP_RATIO = 2.0 / 3.0
 
 FALLBACK_FX_TO_CHF = {"CHF": 1.0, "EUR": 0.94, "USD": 0.80, "GBP": 1.07}
-GENERATOR_VERSION = "liq-book-3"
+GENERATOR_VERSION = "liq-book-4"
 
 # ---------------------------------------------------------------------------
 # DtI / Stichtagsvergleich (UC2) attributes - simulated ANUBIS / FRISCO / APEL /
@@ -310,7 +313,7 @@ class LCRBookGenerator:
             nonlocal cno
             cno += 1
             st = start or (self.start - timedelta(days=int(rng.integers(30, 1500))))
-            mat = self.start + timedelta(days=int(rng.integers(1, tenor_days)))
+            mat = self._bday(self.start + timedelta(days=int(rng.integers(1, tenor_days))))
             self.contracts.append({"CONTRACT_ID": f"CTR_{cno:06d}", "COUNTERPARTY_ID": cp, "PRODUCT_TYPE": product,
                                        "SECTOR": sector, "BUSINESS_UNIT": bu, "CURRENCY": ccy, "RATING": rating,
                                        "START_DATE": st, "MATURITY_DATE": mat, "OUTSTANDING_CCY": outstanding,
@@ -376,6 +379,12 @@ class LCRBookGenerator:
         self.holdings = [self.snb, {"HOLDING_ID": "HOLD-00002", "ASSET_TYPE": "CASH_VAULT", "ISSUER_ID": "ISS_VAULT",
                                         "SECURITY_NAME": "Vault cash", "MV_CHF": 25e6, "CUSTODIAN": "OWN"}]
 
+    @staticmethod
+    def _bday(d: date) -> date:
+        """Contracts mature on Zurich business days only, so they are repaid / rolled on their maturity date and
+        never sit in the 30-day window over a weekend."""
+        return next_business_day(d, ZURICH_HOLIDAYS)
+
     def _new_deposit(self, acc, cust, dtype, ccy, bal, seg, bu, sigma):
         cpt, _, allows, oper = DEPOSIT_TYPES[dtype]
         return {"ACCOUNT_ID": acc, "CUSTOMER_ID": cust, "DEPOSIT_TYPE": dtype, "CURRENCY": ccy, "BASE_BAL": bal, "BAL": bal,
@@ -407,13 +416,24 @@ class LCRBookGenerator:
                 stress_days.append(d)
             d += timedelta(days=1)
         self.stress_days = stress_days
-        # Event funding: matures far out; enters 30d window on STRESS_START, rolled on RECOVERY
+        # Recovery: treasury rolls the event funding in tranches on consecutive business days
+        self.recovery_days = self._business_days_from(self.evt_dates["RECOVERY"], len(ev["recovery"]["roll_tranches"]))
+        # Event funding: matures far out; enters 30d window on STRESS_START, rolled in tranches from RECOVERY
         self.evt_funding["MATURITY_DATE"] = self.evt_dates["STRESS_START"] + timedelta(days=ev["stress"]["funding_days_to_maturity"])
         self.evt_funding["PRE_EVENT_MATURITY"] = self.evt_dates["STRESS_START"] + timedelta(days=200)
         # Event loans: maturity pulled inside 30d window on INFLOW date
         for ln in self.evt_loans:
             ln["MATURITY_DATE"] = self.evt_dates["INFLOW"] + timedelta(days=ev["inflow"]["days_to_maturity"])
             ln["PRE_EVENT_MATURITY"] = self.evt_dates["INFLOW"] + timedelta(days=380)
+
+    @staticmethod
+    def _business_days_from(d: date, n: int) -> list[date]:
+        out = []
+        while len(out) < n:
+            if is_business_day(d, ZURICH_HOLIDAYS):
+                out.append(d)
+            d += timedelta(days=1)
+        return out
 
     # ---------------------------------------------------------- LCR (BASE)
     @staticmethod
@@ -566,14 +586,54 @@ class LCRBookGenerator:
                 c["OUTSTANDING_CCY"] *= k
                 c["UNDRAWN_CCY"] *= k
         self.sec.flow_scale = k
+        self.sec.rebook(self._entity_need(self.start), self._cash())
         if self.with_events:
             self._size_events(self.compute_lcr(self.start)["NET"])
+
+    def _cash(self) -> float:
+        """Central bank reserves and vault cash of the group (CHF)."""
+        return sum(h["MV_CHF"] for h in self.holdings)
+
+    def _entity_need(self, d: date) -> dict[str, float]:
+        """Stressed (COMBINED) outflow per legal entity over the DtI horizon of interest (NEED_DAYS): deposit
+        run-off within that part of its decay profile, facility drawdowns and the entity's interbank borrowing
+        due in that period. This is the liquidity need each entity covers with its own securities buffer (the
+        securities book is booked by this share), so entity DtI tracks the group."""
+        rates = ref.stress_rates("COMBINED")
+        need: dict[str, float] = {}
+        for entity, amount in self._deposit_need(d, rates) + self._contract_need(d, rates):
+            need[entity] = need.get(entity, 0.0) + amount
+        return need
+
+    def _deposit_need(self, d: date, rates: dict) -> list[tuple[str, float]]:
+        out = []
+        for dep in self.deposits:
+            rate, days = rates.get((dep["DEPOSIT_TYPE"], dep["COUNTERPARTY_TYPE"]), (0.0, None))
+            if dep["ACCOUNT_STATUS"] == "ACTIVE" and rate:
+                share = min(1.0, NEED_DAYS / days) if days else 1.0
+                out.append((self._dti_cp_entity(dep["CUSTOMER_ID"]),
+                            dep["BAL"] * (self.fx.rate(dep["CURRENCY"], d) or 0) * rate * share))
+        return out
+
+    def _contract_need(self, d: date, rates: dict) -> list[tuple[str, float]]:
+        out = []
+        horizon = d + timedelta(days=NEED_DAYS)
+        for c in (c for c in self.contracts if self._contract_valid(c)):
+            rate, _ = rates.get((c["PRODUCT_TYPE"], c["SECTOR"]), (0.0, None))
+            fx = self.fx.rate(c["CURRENCY"], d) or 0
+            entity = self._dti_cp_entity(c["COUNTERPARTY_ID"])
+            if c["UNDRAWN_CCY"] > 0 and rate:
+                out.append((entity, c["UNDRAWN_CCY"] * fx * rate))
+            if c["PRODUCT_TYPE"] == "INTERBANK_BORROWING" and d < c["MATURITY_DATE"] <= horizon:
+                out.append((entity, c["OUTSTANDING_CCY"] * fx))
+        return out
 
     def _size_events(self, n0: float):
         """Scale event amounts to the size of the book (day-0 net cash outflows)."""
         ev = self.ev_cfg
         self.n0 = n0
         self.evt_funding["OUTSTANDING_CCY"] = round(ev["stress"]["funding_share_of_net_outflow"] * n0, -6)
+        self.evt_funding_total = self.evt_funding["OUTSTANDING_CCY"]
         loan_total = round(ev["inflow"]["loan_share_of_net_outflow"] * n0, -6)
         for ln, w in zip(self.evt_loans, ev["inflow"]["loan_weights"]):
             ln["OUTSTANDING_CCY"] = round(loan_total * w, -5)
@@ -593,8 +653,9 @@ class LCRBookGenerator:
                   "short-term interbank funding from Zentralbank Partner AG falls inside the 30-day window",
                   "CP_FI_019", self.evt_funding["CONTRACT_ID"], fund, "DOWN", ev["stress"]["min_delta_pp"]),
             Event("EVT_03", dates["RECOVERY"], "RECOVERY",
-                  f"Treasury rolls the CHF {fund/1e6:.0f}M interbank funding to 6 months and buys CHF "
-                  f"{self.recovery_reserves/1e6:.0f}M SNB reserves with new term funding",
+                  f"Treasury rolls the CHF {fund/1e6:.0f}M interbank funding to 6 months in "
+                  f"{len(self.recovery_days)} tranches and buys CHF {self.recovery_reserves/1e6:.0f}M SNB reserves "
+                  "with new term funding",
                   "CP_FI_019", self.evt_funding["CONTRACT_ID"], fund, "UP", ev["recovery"]["min_delta_pp"]),
             Event("EVT_04", dates["INFLOW"], "LOAN_INFLOW",
                   f"CHF {loans/1e6:.0f}M corporate loan book (5 loans) scheduled to mature within 30 days - "
@@ -633,7 +694,7 @@ class LCRBookGenerator:
                     continue
                 # roll over: same notional, new tenor
                 c["START_DATE"] = d
-                c["MATURITY_DATE"] = d + timedelta(days=int(rng.integers(30, c["TENOR_DAYS"] + 30)))
+                c["MATURITY_DATE"] = self._bday(d + timedelta(days=int(rng.integers(30, c["TENOR_DAYS"] + 30))))
             if c["AMORTIZING"] and d.day == 1 and d.month in (1, 4, 7, 10):
                 c["OUTSTANDING_CCY"] *= (1 - 0.0125)
 
@@ -661,13 +722,26 @@ class LCRBookGenerator:
                     a["BASE_BAL"] -= w
                     run += w * (self.fx.rate(a["CURRENCY"], d) or 1.0)
             self.snb["MV_CHF"] -= run
-        if d == dates["RECOVERY"]:
-            self.evt_funding["START_DATE"] = d
-            self.evt_funding["MATURITY_DATE"] = d + timedelta(days=ev["recovery"]["funding_roll_days"])
-            self.snb["MV_CHF"] += self.recovery_reserves
-            self.sec.recover_prices(ev["recovery"]["price_recovery_share"])
+        if d in self.recovery_days:
+            self._recover(d, self.recovery_days.index(d))
         if d == dates["WITHDRAWAL_2"]:
             self._withdraw(ev["withdrawal_2"]["account"], self.withdrawal_2)
+
+    def _recover(self, d: date, k: int):
+        """Recovery tranche k: roll a share of the event funding into a new 6-month deal (CONTRACT_ID suffix -R<k>),
+        buy the same share of the new SNB reserves and recover the same share of the price shock."""
+        rec = self.ev_cfg["recovery"]
+        share = rec["roll_tranches"][k]
+        f = self.evt_funding
+        amount = round(self.evt_funding_total * share, -5) if k < len(rec["roll_tranches"]) - 1 else f["OUTSTANDING_CCY"]
+        f["OUTSTANDING_CCY"] -= amount
+        self.contracts.append({**f, "CONTRACT_ID": f"{f['CONTRACT_ID']}-R{k + 1}", "START_DATE": d,
+                               "MATURITY_DATE": self._bday(d + timedelta(days=rec["funding_roll_days"])),
+                               "OUTSTANDING_CCY": amount, "PRE_EVENT_MATURITY": None})
+        self.snb["MV_CHF"] += self.recovery_reserves * share
+        # remaining shock after this tranche: (1 - recovered share so far)
+        done = sum(rec["roll_tranches"][: k + 1]) * rec["price_recovery_share"]
+        self.sec.recover_prices((1 - done) / (1 - done + share * rec["price_recovery_share"]))
 
     def _pre_event_state(self, d: date):
         """Before their event dates, event contracts sit outside the 30-day window."""
@@ -821,11 +895,14 @@ class LCRBookGenerator:
                   for d in dates for e, _ in ENTITY_SHARES]
         pd.DataFrame(status).to_csv(out_dir / "dti_report_status.csv", index=False)
         corr = []
+        self.corr_amounts = {}
         for c in cfg["corrections"]:
             d = latest if c["date"] == "latest" else prev
+            amount = self._correction_amount(c)
+            self.corr_amounts[c["id"]] = amount
             corr.append({"CORRECTION_ID": c["id"], "AS_OF_DATE": d.isoformat(), "ENTITY_ID": c["entity"],
                              "LST_POSITION": c["position"], "VALUE_DATE": (d + timedelta(days=c["value_offset_days"])).isoformat(),
-                             "AMOUNT_CHF": c["amount_chf"], "COMMENT": c["comment"], "CREATED_BY": "LRCU_ANALYST",
+                             "AMOUNT_CHF": amount, "COMMENT": c["comment"], "CREATED_BY": "LRCU_ANALYST",
                              "CREATED_AT_UTC": f"{d.isoformat()} {c['time']}"})
         pd.DataFrame(corr).to_csv(out_dir / "dti_corrections.csv", index=False)
         pd.DataFrame(self._planning_rows(cfg["planning"], dates)).to_csv(out_dir / "dti_planning.csv", index=False)
@@ -834,18 +911,35 @@ class LCRBookGenerator:
         pd.DataFrame(evts, columns=["EVENT_ID", "EVENT_DATE", "ENTITY_ID", "EVENT_TYPE", "POSITION_ID",
                                     "AMOUNT_CHF", "DESCRIPTION"]).to_csv(out_dir / "dti_events.csv", index=False)
 
+    def _correction_amount(self, c: dict) -> float:
+        """Fixed amount, or (amount_share_of_cb) a share of the entity's central bank balance on the latest date
+        (CB share of the SNB reserves) - a correction can never turn the balance negative."""
+        if "amount_share_of_cb" not in c:
+            return float(c["amount_chf"])
+        balance = self.snb["MV_CHF"] * ENTITY_WEIGHT[c["entity"]]
+        return -round(c["amount_share_of_cb"] * balance, -5)
+
     def _planning_rows(self, p: dict, dates: list[date]) -> list[dict]:
-        """Planning positions (no deal level): monthly new lending (outflow) and planned funding (inflow)."""
+        """Planning positions (no deal level): new lending (outflow) and planned funding (inflow) of a rolling
+        12-month plan from the reporting date. The profile is the same on every reporting date (no cliff at
+        month turns): business days for the first DAILY_PLAN_MONTHS, weekly afterwards, so it has no lumps that would make
+        the DtI jump by weeks."""
         plan = []
+        days_per_month = 365 / 12
         for d in dates:
-            for e, w in ENTITY_SHARES:
-                for m in range(1, p["months"] + 1):
-                    vd = next_weekday(date(d.year + (d.month - 1 + m) // 12, (d.month - 1 + m) % 12 + 1, 1))
+            daily = self._business_days_from(d + timedelta(days=1), round(DAILY_PLAN_MONTHS * days_per_month * 5 / 7))
+            weekly = [next_business_day(daily[-1] + timedelta(days=7 * k), ZURICH_HOLIDAYS)
+                      for k in range(1, round((p["months"] - DAILY_PLAN_MONTHS) * 52 / 12) + 1)]
+            grid = [(vd, 7 / 5) for vd in daily] + [(vd, 7) for vd in weekly]
+            # the plan of an entity scales with its client book (same share as its liquidity buffer target)
+            for e, w in self.sec.book_shares:
+                for vd, cal_days in grid:
+                    month = math.ceil((vd - d).days / days_per_month)
+                    per_day = w / days_per_month * cal_days * self.scale
                     plan.append({"AS_OF_DATE": d.isoformat(), "ENTITY_ID": e, "PLAN_TYPE": "NEW_LENDING", "VALUE_DATE": vd.isoformat(),
-                                 "AMOUNT_CHF": round(p["new_lending_group_chf"] * self.scale * w / 100
-                                                     * (1 + p["new_lending_monthly_growth"] * m), -3)})
+                                 "AMOUNT_CHF": round(p["new_lending_group_chf"] * per_day * (1 + p["new_lending_monthly_growth"] * month), -2)})
                     plan.append({"AS_OF_DATE": d.isoformat(), "ENTITY_ID": e, "PLAN_TYPE": "FUNDING_PLAN", "VALUE_DATE": vd.isoformat(),
-                                 "AMOUNT_CHF": round(p["funding_plan_group_chf"] * self.scale * w / 100, -3)})
+                                 "AMOUNT_CHF": round(p["funding_plan_group_chf"] * per_day, -2)})
         return plan
 
     def _dti_event_rows(self, cfg: dict, latest: date) -> list[dict]:
@@ -865,18 +959,40 @@ class LCRBookGenerator:
                      "AMOUNT_CHF": sum(ln["OUTSTANDING_CCY"] for ln in self.evt_loans),
                      "DESCRIPTION": "Corporate loan book maturity moves from > 12 months into the 1-month bucket"},
                 {"EVENT_ID": "DTI_03", "EVENT_DATE": latest.isoformat(), "ENTITY_ID": c1["entity"],
-                     "EVENT_TYPE": "CORRECTION", "POSITION_ID": c1["id"], "AMOUNT_CHF": float(c1["amount_chf"]),
-                     "DESCRIPTION": f"Manual correction of the central bank balance (CHF {c1['amount_chf']/1e6:.0f}M)"},
+                     "EVENT_TYPE": "CORRECTION", "POSITION_ID": c1["id"], "AMOUNT_CHF": self.corr_amounts[c1["id"]],
+                     "DESCRIPTION": f"Manual correction of the central bank balance (CHF {self.corr_amounts[c1['id']]/1e6:.1f}M)"},
                 {"EVENT_ID": "DTI_04", "EVENT_DATE": latest.isoformat(), "ENTITY_ID": pe,
                      "EVENT_TYPE": "PRELIMINARY_DATA", "POSITION_ID": None, "AMOUNT_CHF": 0.0,
                      "DESCRIPTION": f"Legal Entity {int(pe[-2:])} LST run not yet locked: data is PRELIMINARY"},
+                *self._cross_engine_event_rows(),
             ]
+
+    def _cross_engine_event_rows(self) -> list[dict]:
+        """LCR events that also move the DtI (same book): the funding cliff, its roll and the second withdrawal.
+        Shown as markers on the DtI pages, which cannot read the LCR event table (DtI roles)."""
+        ev, f = self.evt_dates, self.evt_funding
+        fi = self._dti_cp_entity(f["COUNTERPARTY_ID"])
+        return [
+            {"EVENT_ID": "DTI_08", "EVENT_DATE": ev["STRESS_START"].isoformat(), "ENTITY_ID": fi,
+             "EVENT_TYPE": "FUNDING_CLIFF", "POSITION_ID": f["CONTRACT_ID"], "AMOUNT_CHF": self.evt_funding_total,
+             "DESCRIPTION": f"CHF {self.evt_funding_total/1e6:.0f}M interbank funding from Zentralbank Partner AG matures "
+                            "within 30 days: same contract as the LCR breach (EVT_02)"},
+            {"EVENT_ID": "DTI_09", "EVENT_DATE": ev["RECOVERY"].isoformat(), "ENTITY_ID": fi,
+             "EVENT_TYPE": "FUNDING_ROLL", "POSITION_ID": f["CONTRACT_ID"], "AMOUNT_CHF": self.evt_funding_total,
+             "DESCRIPTION": f"Treasury rolls the funding to 6 months in {len(self.recovery_days)} tranches "
+                            f"({f['CONTRACT_ID']}-R1..R{len(self.recovery_days)}): LCR recovery (EVT_03)"},
+            {"EVENT_ID": "DTI_10", "EVENT_DATE": ev["WITHDRAWAL_2"].isoformat(), "ENTITY_ID": self._dti_cp_entity("CP_CORP_EVT2"),
+             "EVENT_TYPE": "DEPOSIT_WITHDRAWAL", "POSITION_ID": self.ev_cfg["withdrawal_2"]["account"],
+             "AMOUNT_CHF": self.withdrawal_2,
+             "DESCRIPTION": f"Rhein Logistik Group AG withdraws CHF {self.withdrawal_2/1e6:.0f}M (EVT_05)"},
+        ]
 
     def _step(self, i: int, d: date, latest: date):
         self._pre_event_state(d)
         if i > 0:
             self._evolve(d)
             if is_business_day(d, ZURICH_HOLIDAYS):
+                self.sec.set_targets(self._entity_need(d), self._cash())
                 self.sec.evolve(d, latest)
             self.snb["MV_CHF"] += self.sec.take_cash()
         self._apply_events(d)
@@ -1047,6 +1163,19 @@ def write_manifest(out_dir: Path):
     pd.DataFrame(sorted(counts.items()), columns=["TABLE_NAME", "ROW_COUNT"]).to_csv(out_dir / "_manifest.csv", index=False)
 
 
+def calibrated_adjust(book, as_of: date, target: float) -> float:
+    """Calibration pass: scale adjustment that pins the BASE LCR to the target on the as-of date (the book
+    drifts between the first month-end and the window). LCR ~ c * adjust^p (NET scales with the wholesale
+    book, bent by the caps and the entity rebooking): two probes fix c and p, the final run hits the target."""
+    lcr0 = book(1.0).probe_lcr(as_of, as_of)
+    a1 = lcr0 / target
+    lcr1 = book(a1).probe_lcr(as_of, as_of)
+    p_exp = math.log(lcr1 / lcr0) / math.log(a1) if abs(math.log(a1)) > 1e-9 else -1.0
+    adjust = (target / lcr0) ** (1 / p_exp) if p_exp else a1
+    print(f"   - Calibration: LCR {lcr0:.2f}% @1.000, {lcr1:.2f}% @{a1:.3f} -> adjust {adjust:.4f}")
+    return adjust
+
+
 def main():
     p = argparse.ArgumentParser(description="Generate the persistent, calibrated LCR + DtI liquidity book")
     p.add_argument("--days", type=int, default=90, help="LCR window length in calendar days ending --as-of-date")
@@ -1096,10 +1225,7 @@ def main():
         return LCRBookGenerator(customer_ids, start, as_of, args.seed, args.target_lcr, fx, s, scenario,
                                 not args.no_events, scale_adjust=adjust)
 
-    # calibration pass: the BASE LCR is pinned to the target on the as-of date (the book drifts
-    # between the first month-end and the window); NET scales ~linearly with the wholesale book
-    adjust = book(1.0).probe_lcr(as_of, as_of) / args.target_lcr
-    gen = book(adjust)
+    gen = book(calibrated_adjust(book, as_of, args.target_lcr))
     summary = gen.run(out_dir, window_start, hist_dates, report_dates, run_id)
     pd.DataFrame([{"RUN_ID": run_id, "AS_OF_DATE": as_of.isoformat(), "WINDOW_START": window_start.isoformat(),
                        "HISTORY_START": start.isoformat(), "SEED": args.seed, "TARGET_LCR": args.target_lcr,

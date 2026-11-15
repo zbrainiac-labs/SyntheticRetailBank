@@ -15,6 +15,14 @@ from faker import Faker
 
 from base_generator import init_random_seed
 
+UNITED_KINGDOM = "United Kingdom"
+# Faker locale for PEP names per country (others: en_US)
+COUNTRY_LOCALE = {
+    'Germany': 'de_DE', 'France': 'fr_FR', UNITED_KINGDOM: 'en_GB', 'Italy': 'it_IT', 'Spain': 'es_ES',
+    'Netherlands': 'nl_NL', 'Belgium': 'fr_BE', 'Austria': 'de_AT', 'Switzerland': 'de_CH',
+    'Sweden': 'sv_SE', 'Norway': 'no_NO', 'Denmark': 'da_DK',
+}
+
 
 @dataclass
 class PEPRecord:
@@ -53,13 +61,13 @@ class PEPGenerator:
         
         # EMEA countries supported by the bank
         self.countries = [
-            'Germany', 'France', 'United Kingdom', 'Italy', 'Spain', 'Netherlands',
+            'Germany', 'France', UNITED_KINGDOM, 'Italy', 'Spain', 'Netherlands',
             'Belgium', 'Austria', 'Switzerland', 'Sweden', 'Norway', 'Denmark'
         ]
         
         # Country codes for reference links
         self.country_codes = {
-            'Germany': 'de', 'France': 'fr', 'United Kingdom': 'uk', 'Italy': 'it',
+            'Germany': 'de', 'France': 'fr', UNITED_KINGDOM: 'uk', 'Italy': 'it',
             'Spain': 'es', 'Netherlands': 'nl', 'Belgium': 'be', 'Austria': 'at',
             'Switzerland': 'ch', 'Sweden': 'se', 'Norway': 'no', 'Denmark': 'dk'
         }
@@ -98,7 +106,7 @@ class PEPGenerator:
         self.organizations = {
             'Germany': ['Bundestag', 'Bundesrat', 'Federal Government', 'Bundesbank', 'BaFin'],
             'France': ['Assemblée Nationale', 'Sénat', 'Government of France', 'Banque de France', 'AMF'],
-            'United Kingdom': ['House of Commons', 'House of Lords', 'HM Government', 'Bank of England', 'FCA'],
+            UNITED_KINGDOM: ['House of Commons', 'House of Lords', 'HM Government', 'Bank of England', 'FCA'],
             'Italy': ['Camera dei Deputati', 'Senato', 'Government of Italy', 'Banca d\'Italia', 'CONSOB'],
             'Spain': ['Congreso', 'Senado', 'Government of Spain', 'Banco de España', 'CNMV'],
             'Netherlands': ['Tweede Kamer', 'Eerste Kamer', 'Government of Netherlands', 'DNB', 'AFM'],
@@ -297,18 +305,7 @@ class PEPGenerator:
             pep_category = random.choice(['DOMESTIC', 'FOREIGN', 'INTERNATIONAL_ORG', 'FAMILY_MEMBER', 'CLOSE_ASSOCIATE'])
             
             # Generate name based on country
-            fake_local = Faker(['de_DE' if country == 'Germany' else
-                               'fr_FR' if country == 'France' else
-                               'en_GB' if country == 'United Kingdom' else
-                               'it_IT' if country == 'Italy' else
-                               'es_ES' if country == 'Spain' else
-                               'nl_NL' if country == 'Netherlands' else
-                               'fr_BE' if country == 'Belgium' else
-                               'de_AT' if country == 'Austria' else
-                               'de_CH' if country == 'Switzerland' else
-                               'sv_SE' if country == 'Sweden' else
-                               'no_NO' if country == 'Norway' else
-                               'da_DK' if country == 'Denmark' else 'en_US'])
+            fake_local = Faker([COUNTRY_LOCALE.get(country, 'en_US')])
             
             first_name = fake_local.first_name()
             last_name = fake_local.last_name()

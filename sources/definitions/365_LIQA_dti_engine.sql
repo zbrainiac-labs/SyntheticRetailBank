@@ -129,23 +129,16 @@ pool_sec AS (
     FROM {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DTI_SECURITIES s
     WHERE NOT s.IS_ENCUMBERED AND s.HQLA_CATEGORY IN ('L1', 'L2A', 'L2B')
 ),
--- Central bank and vault cash is booked centrally and allocated to the entities by their current share of the
--- active deposits (D_e / D on the same reporting date). The entities sum to the total cash, no entity can go
--- negative, and an entity-specific withdrawal lowers that entity's share.
-dep_ent AS (
-    SELECT AS_OF_DATE, ENTITY_ID, SUM(BALANCE_CHF) AS D_E,
-           SUM(SUM(BALANCE_CHF)) OVER (PARTITION BY AS_OF_DATE) AS D_TOT
-    FROM dep_all
-    WHERE ACCOUNT_STATUS = 'ACTIVE'
-    GROUP BY 1, 2
-),
+-- Central bank and vault cash is booked centrally and allocated to the entities by the fixed central bank share of
+-- the legal entity master (LIQI_RAW_TB_DTI_ENTITIES.CB_BALANCE_SHARE, shown on the Parameters page). The shares sum
+-- to 1, so the entities sum to the total cash; a deposit withdrawal does not move cash between entities.
 pool_cash AS (
-    SELECT h.AS_OF_DATE, s.ENTITY_ID, a.POSITION_CODE, a.PRODUCT_CLUSTER, 'GEL' AS APPLICATION_ID, 'A' AS AKTIV_PASSIV,
+    SELECT h.AS_OF_DATE, e.ENTITY_ID, a.POSITION_CODE, a.PRODUCT_CLUSTER, 'GEL' AS APPLICATION_ID, 'A' AS AKTIV_PASSIV,
            h.ASSET_TYPE AS PRODUCT_TYPE, h.HOLDING_ID AS SOURCE_ID, h.CURRENCY, h.AS_OF_DATE AS CF_DATE,
-           h.MARKET_VALUE_CHF * s.D_E / NULLIF(s.D_TOT, 0) AS BASE_AMT,
-           h.MARKET_VALUE_CHF * s.D_E / NULLIF(s.D_TOT, 0) AS STRESS_AMT
+           h.MARKET_VALUE_CHF * e.CB_BALANCE_SHARE AS BASE_AMT,
+           h.MARKET_VALUE_CHF * e.CB_BALANCE_SHARE AS STRESS_AMT
     FROM cash_all h
-    JOIN dep_ent s ON s.AS_OF_DATE = h.AS_OF_DATE
+    CROSS JOIN {{ db }}.{{ rep_raw }}.LIQI_RAW_TB_DTI_ENTITIES e
     JOIN asg a ON a.SOURCE_SYSTEM = 'HOLDINGS' AND a.PRODUCT_TYPE = h.ASSET_TYPE AND a.FLOW_KIND = 'POOL'
 ),
 -- 3. Modelled deposit run-off: balance x rate, spread linearly over the decay profile (per scenario).

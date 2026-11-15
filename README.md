@@ -67,11 +67,14 @@ SyntheticRetailBank/
 │   ├── tests.sqltest               59 SQL validation tests
 │   ├── lcr_validation.sql          LCR test gate (TC-/ENG- checks)
 │   ├── metadata_check.sql          Metadata gate (META- checks)
-│   ├── data_check.sql              Data gate: Customer 360, PII vault, accounts (DATA- checks)
+│   ├── data_check.sql              Data gate: Customer 360, PII vault, accounts, shared liquidity book (DATA- checks)
+│   ├── dti_validation.sql          DtI test gate (DTI- checks)
 │   ├── run_semantic_view_vqrs.py   Runs all 54 verified queries of the 19 semantic views
 │   └── agent_smoke_test.py         One question per agent
 ├── notebooks/                      9 interactive Snowflake notebooks
 ├── bank-app/                       Next.js bank app (Docker Desktop + SPCS, linux/arm64)
+├── local-ci/                       Local CI: lint, unit, SonarQube, image, e2e, sqlunit (local-ci/run.sh)
+├── reference_data/                 LIQI reference seeds (CSV) rendered into post_deploy.sql
 ├── README_master_agent.md          Master agent docs
 ├── business_requirements/          Business requirement documents
 ├── generators/                     21 Python data generator modules
@@ -153,6 +156,8 @@ The equity, fixed income and commodity generators keep holdings per account and 
 | PEP screening | Exact and fuzzy name match on the unmasked raw customer names (the Customer 360 DT refreshes as CICD, which only sees masked PII); one best match per customer |
 | Sanctions screening | Exact match, or fuzzy match with Jaro-Winkler ≥ 90 and edit distance ≤ 20% of the name length; one best hit per customer, `SANCTIONS_HIT_COUNT` keeps the number of hits |
 | Data quality | 8 DMFs with expectations (row counts, null share of names, Customer 360 freshness < 2 h); `EXECUTE DCM PROJECT AAA_DEV_SYNTHETIC_BANK.AAA_DCM.SYNTHETIC_RETAIL_BANK TEST ALL` |
+| Lifecycle stage | `CRMA_AGG_DT_CUSTOMER_360.LIFECYCLE_STAGE`: NEW (tenure <= 90 days), CHURNED (churn or account-close event), DORMANT (no transaction for 180+ days), DECLINING (no transaction for 90-180 days), MATURE (12+ months tenure, engagement >= 50), else ACTIVE. Dormancy uses transaction recency, not CRM events |
+| Dormant (Churn page) | `DAYS_SINCE_LAST_TRANSACTION > 180`; the KPI card and the Dormant Accounts panel use the same rule; 9999 days means no transaction yet |
 
 ---
 
@@ -218,7 +223,10 @@ Next.js app for Docker Desktop and SPCS (one linux/arm64 image). Replaces the fo
 | Liquidity | DtI comparison (summary, LST positions, application, product groups, products, deals, WLK securities, free assets, parameters, manual inputs), LCR Monitoring |
 | AI & Settings | Ask AI (Cortex Agents), Settings & data quality |
 
-Run locally from `bank-app/`: `make dev` (Next.js on :8080), `make build-local run-local` (container, `HOST_PORT=8088`), `make run-readonly` (second container as `DTI_READ_ONLY` on :8089). SPCS: `make build push`.
+- **KPI cards as filters:** on Customer 360, Risk & Compliance (all three tabs), AML & Fraud and Churn & Lifecycle, clicking a KPI card filters the list below it to the customers behind that number; click again (or "show all") to clear. On Customer 360 the cards toggle the matching checkbox filters.
+- **Customer ID links:** Customer IDs in the lists open the customer in Customer 360 (`/banking/customer-360?customer=<id>`); on Customer 360 itself they select the profile below.
+
+Run locally from `bank-app/`: `make dev` (Next.js on :8080), `make build-local run-local` (container, `HOST_PORT=8088`), `make run-readonly` (second container as `DTI_READ_ONLY` on :8089), `make demo-up` (both containers + demo gate). Rebuild after a change: `HOST_PORT=8088 docker compose up -d --build`. SPCS: `make build push`.
 
 ---
 
@@ -243,6 +251,8 @@ Status bands: **FAIL** < 100%, **WARNING** 100–110%, **PASS** >= 110%.
 | `tasks_and_dts.sql` | Suspend or resume all tasks and dynamic tables, read from Snowflake at run time (`-D action=suspend\|resume`, optional `-D task_like=` / `-D dt_like=`). After a DCM deploy, which resumes every task: `snow sql -c <conn> --role CICD -f operation/tasks_and_dts.sql --enable-templating JINJA -D db=AAA_DEV_SYNTHETIC_BANK -D action=suspend -D task_like=LIQI_RAW_TK_% -D dt_like=-` |
 | `execute_all_tasks_and_refresh_dts.sql` | Run every load task and refresh all dynamic tables in dependency order |
 | `reset_liqi_data.sql` | DEV only: empty the generated LIQI (LCR + DtI) book and its stages before loading a new generator run |
+| `demo_check.sql` | Demo gate DEMO-01..09 (LCR breach, recovery, DtI stability, free pool = LCR securities, funding cliff) |
+| `demo_reset.sql` | DEV only: put the showcase back into its generated state after a demo (remove manual corrections entered in the app, refresh the DtI dynamic tables, suspend the LIQI load tasks) |
 | `render_reference_seeds.py` | Render the LIQI reference seeds of `post_deploy.sql` from `reference_data/liqi` (`--check` fails if out of sync) |
 | `full_rebuild_test.sh` | From-scratch regression (see below) |
 | `setup_listings.sql` | One-time account-level setup (ACCOUNTADMIN) |

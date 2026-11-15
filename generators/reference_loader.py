@@ -58,6 +58,16 @@ def contract_rules() -> dict[tuple[str, str], tuple[str, float]]:
     return out
 
 
+def stress_rates(scenario_code: str = "COMBINED") -> dict[tuple[str, str], tuple[float, float | None]]:
+    """(product, sector) -> (run-off or drawdown rate, decay profile days) of one scenario (DtI stressed values)."""
+    out = {}
+    for r in _rows("behavioral_rules"):
+        rate = r["RUNOFF_RATE"] or r["DRAWDOWN_RATE"]
+        if r["STRESS_SCENARIO"] == scenario_code and rate:
+            out[(r["PRODUCT_TYPE"], r["COUNTERPARTY_SECTOR"])] = (float(rate), float(r["DECAY_PROFILE_DAYS"] or 0) or None)
+    return out
+
+
 def wlk_clusters() -> dict[str, tuple[str, float]]:
     """WLK cluster -> (HQLA category, haircut) (LIQI_RAW_TB_DTI_WLK_CLUSTERS)."""
     return {r["WLK_CLUSTER"]: (r["HQLA_CATEGORY"], float(r["HAIRCUT"])) for r in _rows("dti_wlk_clusters")}

@@ -3,8 +3,14 @@ import { DB, type LoaderDef } from "@/lib/loaders/types";
 const DT = `${DB}.CRM_AGG_V001.CRMA_AGG_DT_CUSTOMER_360`;
 const C360 = `${DB}.CRM_AGG_V001.CRMA_AGG_VW_CUSTOMER_360_ENRICHED`;
 
-/** Dormant-list filter of load_dormant_accounts(). */
-const DORMANT = `DAYS_SINCE_LAST_TRANSACTION > 180 AND LIFECYCLE_STAGE IN ('DORMANT', 'DECLINING')`;
+/**
+ * Dormant = no transaction for more than 180 days, the same rule as the KPI card.
+ * LIFECYCLE_STAGE is not used: it is derived from CRM events, not transactions, and
+ * currently marks customers DORMANT that transacted within the last weeks.
+ * DAYS_SINCE_LAST_TRANSACTION = 9999 means the customer has no transaction at all.
+ */
+const DORMANT = `DAYS_SINCE_LAST_TRANSACTION > 180`;
+const NO_TXN = 9999;
 
 /** Loaders of the ported churn page (port of the_bank_app/pages/churn_lifecycle.py). */
 export const LOADERS_CHURN: Record<string, LoaderDef> = {
@@ -50,15 +56,28 @@ export const LOADERS_CHURN: Record<string, LoaderDef> = {
            ORDER BY CHURN_PROBABILITY DESC, CUSTOMER_ID`,
   },
   "churn.dormant-stats": {
-    sql: `SELECT COUNT(*) AS DORMANT_COUNT, AVG(DAYS_SINCE_LAST_TRANSACTION) AS AVG_DAYS_INACTIVE,
-                 MAX(DAYS_SINCE_LAST_TRANSACTION) AS MAX_DAYS_INACTIVE,
+    // day statistics only over customers that did transact (9999 = never)
+    sql: `SELECT COUNT(*) AS DORMANT_COUNT,
+                 COUNT_IF(DAYS_SINCE_LAST_TRANSACTION = ${NO_TXN}) AS NEVER_TRANSACTED,
+                 AVG(NULLIF(DAYS_SINCE_LAST_TRANSACTION, ${NO_TXN})) AS AVG_DAYS_INACTIVE,
+                 MAX(NULLIF(DAYS_SINCE_LAST_TRANSACTION, ${NO_TXN})) AS MAX_DAYS_INACTIVE,
                  COUNT_IF(ACCOUNT_TIER IN ('GOLD', 'PLATINUM')) AS PREMIUM_DORMANT
             FROM ${DT}
            WHERE ${DORMANT}`,
   },
+  "churn.dormant-list": {
+    sql: `SELECT CUSTOMER_ID, ACCOUNT_TIER, COUNTRY, LIFECYCLE_STAGE,
+                 TO_VARCHAR(LAST_TRANSACTION_DATE) AS LAST_TRANSACTION_DATE,
+                 IFF(DAYS_SINCE_LAST_TRANSACTION = ${NO_TXN}, 'No transactions yet',
+                     TO_VARCHAR(DAYS_SINCE_LAST_TRANSACTION)) AS DAYS_INACTIVE,
+                 ROUND(CHURN_PROBABILITY, 1) AS CHURN_PROBABILITY
+            FROM ${DT}
+           WHERE ${DORMANT}
+           ORDER BY DAYS_SINCE_LAST_TRANSACTION DESC, CUSTOMER_ID`,
+  },
   /** 30 equal-width bins between min and max days inactive (px.histogram nbins=30). */
   "churn.dormant-histogram": {
-    sql: `WITH d AS (SELECT DAYS_SINCE_LAST_TRANSACTION AS D FROM ${DT} WHERE ${DORMANT}),
+    sql: `WITH d AS (SELECT DAYS_SINCE_LAST_TRANSACTION AS D FROM ${DT} WHERE ${DORMANT} AND DAYS_SINCE_LAST_TRANSACTION < ${NO_TXN}),
                r AS (SELECT MIN(D) AS LO, GREATEST((MAX(D) - MIN(D)) / 30, 1) AS W FROM d)
           SELECT ROUND(r.LO + LEAST(FLOOR((d.D - r.LO) / r.W), 29) * r.W) AS BIN_START, COUNT(*) AS CUSTOMERS
             FROM d, r

@@ -3,7 +3,7 @@
 import { ChartTooltip, CHART_THEME } from "@/components/chart-utils";
 import { DataTable, LoaderState, Panel, Tabs } from "@/components/data/data-table";
 import { PageHeader } from "@/components/page-header";
-import { CountList, countBy, CsvButton, isTrue, MatchTypeBars, ProfilePicker, RiskDonut } from "@/components/risk/common";
+import { CountList, countBy, CsvButton, CUSTOMER_LINK_COLUMN, FilterNote, isTrue, MatchTypeBars, RiskDonut, useCardFilter } from "@/components/risk/common";
 import { StatCard, StatCardSkeleton } from "@/components/stat-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { num, useLoader, type LoaderRow } from "@/lib/loaders/client";
@@ -54,7 +54,40 @@ function CountryRiskChart({ rows }: { rows: LoaderRow[] }) {
   );
 }
 
+/** Overview KPI cards that double as filters on the high-risk list. */
+const HR_FILTERS = {
+  critical: { label: "Critical/High Risk", test: (r: LoaderRow) => isTrue(r.IS_CRITICAL_HIGH) },
+  pep: { label: "Requires PEP Review", test: (r: LoaderRow) => isTrue(r.REQUIRES_EXPOSED_PERSON_REVIEW) },
+  sanctions: { label: "Requires Sanctions Review", test: (r: LoaderRow) => isTrue(r.REQUIRES_SANCTIONS_REVIEW) },
+};
+
+const HIGH = (v: unknown) => ["CRITICAL", "HIGH"].includes(String(v));
+
+const SANCTIONS_FILTERS = {
+  exact: { label: "Exact Matches", test: (r: LoaderRow) => r.SANCTIONS_MATCH_TYPE === "EXACT_MATCH" },
+  review: { label: "Requires Review", test: (r: LoaderRow) => isTrue(r.REQUIRES_SANCTIONS_REVIEW) },
+  high: { label: "High Risk", test: (r: LoaderRow) => HIGH(r.OVERALL_SANCTIONS_RISK) },
+};
+
+const PEP_FILTERS = {
+  review: { label: "Requires PEP Review", test: (r: LoaderRow) => isTrue(r.REQUIRES_EXPOSED_PERSON_REVIEW) },
+  exact: { label: "Exact PEP Matches", test: (r: LoaderRow) => r.EXPOSED_PERSON_MATCH_TYPE === "EXACT_MATCH" },
+};
+
+const HR_COLUMNS = [
+  CUSTOMER_LINK_COLUMN,
+  "FULL_NAME",
+  "COUNTRY",
+  "ACCOUNT_TIER",
+  "OVERALL_RISK_RATING",
+  "OVERALL_RISK_SCORE",
+  "EXPOSED_PERSON_MATCH_TYPE",
+  "SANCTIONS_MATCH_TYPE",
+  "ACTION_REQUIRED",
+];
+
 function Overview() {
+  const f = useCardFilter(HR_FILTERS);
   const kpis = useLoader("risk.kpis");
   const dist = useLoader("risk.rating-distribution");
   const screening = useLoader("risk.screening-status");
@@ -66,9 +99,9 @@ function Overview() {
   return (
     <div className="space-y-6">
       <KpiGrid loading={kpis.isPending}>
-        <StatCard label="Critical/High Risk" value={formatNumber(num(k?.CRITICAL_HIGH), 0)} />
-        <StatCard label="Requires PEP Review" value={formatNumber(num(k?.PEP_REVIEW), 0)} />
-        <StatCard label="Requires Sanctions Review" value={formatNumber(num(k?.SANCTIONS_REVIEW), 0)} />
+        {f.card("critical", formatNumber(num(k?.CRITICAL_HIGH), 0))}
+        {f.card("pep", formatNumber(num(k?.PEP_REVIEW), 0))}
+        {f.card("sanctions", formatNumber(num(k?.SANCTIONS_REVIEW), 0))}
         <StatCard label="High Risk %" value={`${num(k?.HIGH_RISK_PCT).toFixed(1)}%`} hint={`${formatNumber(num(k?.HIGH_RISK_COUNT), 0)} of ${formatNumber(num(k?.TOTAL_CUSTOMERS), 0)} customers`} />
       </KpiGrid>
 
@@ -100,17 +133,27 @@ function Overview() {
         actions={hr.data?.rows.length ? <CsvButton rows={hr.data.rows} label="Export High-Risk List (CSV)" filename="high_risk" /> : null}
       >
         <LoaderState q={hr} empty="No high-risk customers requiring immediate action">
-          {(rows) => (
-            <div className="space-y-3">
-              <Alert className="border-[var(--warning)]">
-                <AlertDescription>
-                  <strong>{rows.length}</strong> customers require immediate compliance review
-                </AlertDescription>
-              </Alert>
-              <DataTable rows={rows} />
-              <ProfilePicker rows={rows} />
-            </div>
-          )}
+          {(all) => {
+            const rows = f.apply(all);
+            return (
+              <div className="space-y-3">
+                <Alert className="border-[var(--warning)]">
+                  <AlertDescription>
+                    <strong>{rows.length}</strong> customers require immediate compliance review
+                    {f.label && (
+                      <>
+                        {" "}({f.label}){" "}
+                        <button type="button" onClick={f.clear} className="underline">
+                          show all
+                        </button>
+                      </>
+                    )}
+                  </AlertDescription>
+                </Alert>
+                <DataTable rows={rows} columns={HR_COLUMNS} />
+              </div>
+            );
+          }}
         </LoaderState>
       </Panel>
 
@@ -129,13 +172,15 @@ function Overview() {
 function Sanctions() {
   const q = useLoader("risk.sanctions-matches");
   const rows = q.data?.rows ?? [];
+  const f = useCardFilter(SANCTIONS_FILTERS);
+  const count = (k: keyof typeof SANCTIONS_FILTERS) => formatNumber(rows.filter((r) => SANCTIONS_FILTERS[k].test(r)).length, 0);
   return (
     <div className="space-y-6">
       <KpiGrid loading={q.isPending}>
         <StatCard label="Total Sanctions Matches" value={formatNumber(rows.length, 0)} />
-        <StatCard label="Exact Matches" value={formatNumber(rows.filter((r) => r.SANCTIONS_MATCH_TYPE === "EXACT_MATCH").length, 0)} />
-        <StatCard label="Requires Review" value={formatNumber(rows.filter((r) => isTrue(r.REQUIRES_SANCTIONS_REVIEW)).length, 0)} />
-        <StatCard label="High Risk" value={formatNumber(rows.filter((r) => ["CRITICAL", "HIGH"].includes(String(r.OVERALL_SANCTIONS_RISK))).length, 0)} />
+        {f.card("exact", count("exact"))}
+        {f.card("review", count("review"))}
+        {f.card("high", count("high"))}
       </KpiGrid>
       <LoaderState q={q} empty="No sanctions matches found">
         {(rows) => (
@@ -150,8 +195,8 @@ function Sanctions() {
             </div>
             <Panel title="Sanctions matches">
               <div className="space-y-3">
-                <DataTable rows={rows} columns={["CUSTOMER_ID", "FULL_NAME", "COUNTRY", "SANCTIONS_MATCH_TYPE", "SANCTIONS_MATCH_ACCURACY_PERCENT", "OVERALL_SANCTIONS_RISK"]} />
-                <ProfilePicker rows={rows} />
+                <FilterNote count={f.apply(rows).length} noun="sanctions matches" filter={f.label} onClear={f.clear} />
+                <DataTable rows={f.apply(rows)} columns={[CUSTOMER_LINK_COLUMN, "FULL_NAME", "COUNTRY", "SANCTIONS_MATCH_TYPE", "SANCTIONS_MATCH_ACCURACY_PERCENT", "OVERALL_SANCTIONS_RISK"]} />
               </div>
             </Panel>
           </>
@@ -166,12 +211,14 @@ function Kyc() {
   const kyc = useLoader("risk.kyc-completeness");
   const rows = pep.data?.rows ?? [];
   const totalCustomers = (kyc.data?.rows ?? []).reduce((s, r) => s + num(r.TOTAL_CUSTOMERS), 0);
+  const f = useCardFilter(PEP_FILTERS);
+  const count = (k: keyof typeof PEP_FILTERS) => formatNumber(rows.filter((r) => PEP_FILTERS[k].test(r)).length, 0);
   return (
     <div className="space-y-6">
       <KpiGrid loading={pep.isPending || kyc.isPending}>
         <StatCard label="PEP Matches" value={formatNumber(rows.length, 0)} />
-        <StatCard label="Requires PEP Review" value={formatNumber(rows.filter((r) => isTrue(r.REQUIRES_EXPOSED_PERSON_REVIEW)).length, 0)} />
-        <StatCard label="Exact PEP Matches" value={formatNumber(rows.filter((r) => r.EXPOSED_PERSON_MATCH_TYPE === "EXACT_MATCH").length, 0)} />
+        {f.card("review", count("review"))}
+        {f.card("exact", count("exact"))}
         <StatCard label="Total Customers" value={formatNumber(totalCustomers, 0)} />
       </KpiGrid>
       <LoaderState q={pep} empty="No PEP matches found">
@@ -187,8 +234,8 @@ function Kyc() {
             </div>
             <Panel title="PEP matches">
               <div className="space-y-3">
-                <DataTable rows={rows} columns={["CUSTOMER_ID", "FULL_NAME", "COUNTRY", "EXPOSED_PERSON_MATCH_TYPE", "EXPOSED_PERSON_MATCH_ACCURACY_PERCENT", "OVERALL_EXPOSED_PERSON_RISK"]} />
-                <ProfilePicker rows={rows} />
+                <FilterNote count={f.apply(rows).length} noun="PEP matches" filter={f.label} onClear={f.clear} />
+                <DataTable rows={f.apply(rows)} columns={[CUSTOMER_LINK_COLUMN, "FULL_NAME", "COUNTRY", "EXPOSED_PERSON_MATCH_TYPE", "EXPOSED_PERSON_MATCH_ACCURACY_PERCENT", "OVERALL_EXPOSED_PERSON_RISK"]} />
               </div>
             </Panel>
           </>
