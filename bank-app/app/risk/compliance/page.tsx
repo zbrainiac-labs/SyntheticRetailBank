@@ -173,7 +173,7 @@ function Sanctions() {
   const q = useLoader("risk.sanctions-matches");
   const rows = q.data?.rows ?? [];
   const f = useCardFilter(SANCTIONS_FILTERS);
-  const count = (k: keyof typeof SANCTIONS_FILTERS) => formatNumber(rows.filter(SANCTIONS_FILTERS[k].test).length, 0);
+  const count = (k: keyof typeof SANCTIONS_FILTERS) => formatNumber(rows.filter((r) => SANCTIONS_FILTERS[k].test(r)).length, 0);
   return (
     <div className="space-y-6">
       <KpiGrid loading={q.isPending}>
@@ -212,7 +212,7 @@ function Kyc() {
   const rows = pep.data?.rows ?? [];
   const totalCustomers = (kyc.data?.rows ?? []).reduce((s, r) => s + num(r.TOTAL_CUSTOMERS), 0);
   const f = useCardFilter(PEP_FILTERS);
-  const count = (k: keyof typeof PEP_FILTERS) => formatNumber(rows.filter(PEP_FILTERS[k].test).length, 0);
+  const count = (k: keyof typeof PEP_FILTERS) => formatNumber(rows.filter((r) => PEP_FILTERS[k].test(r)).length, 0);
   return (
     <div className="space-y-6">
       <KpiGrid loading={pep.isPending || kyc.isPending}>

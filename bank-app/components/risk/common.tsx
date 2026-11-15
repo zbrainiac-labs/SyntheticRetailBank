@@ -75,7 +75,11 @@ export function useCardFilter<K extends string>(defs: Record<K, { label: string;
     active,
     clear: () => setActive(null),
     label: active ? defs[active].label : undefined,
-    apply: (rows: LoaderRow[]) => (active ? rows.filter(defs[active].test) : rows),
+    apply: (rows: LoaderRow[]) => {
+      if (!active) return rows;
+      const { test } = defs[active];
+      return rows.filter((r) => test(r));
+    },
     card: (k: K, value: React.ReactNode) => (
       <FilterCard key={k} label={defs[k].label} value={value} active={active === k} onToggle={() => setActive((c) => (c === k ? null : k))} />
     ),
