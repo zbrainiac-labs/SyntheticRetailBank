@@ -3,7 +3,7 @@
 import { ChartTooltip, CHART_THEME, formatTick } from "@/components/chart-utils";
 import { Segmented } from "@/components/dti/common";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,7 +49,7 @@ export default function DtiFreeAssetsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Free Assets in the Collateral Pool"
         description={`Unencumbered liquid assets · ${entitiesText} · ${ref} · ${basisLabel}, CHF M`}

@@ -23,6 +23,8 @@ export interface DataColumn {
   /** custom cell rendering; default formats numbers and dates */
   render?: (row: LoaderRow) => ReactNode;
   numeric?: boolean;
+  /** wrap long text instead of one line; default: auto for text columns with values over 60 characters */
+  wrap?: boolean;
 }
 
 /** Cell: custom render, else numbers formatted (booleans excluded), else the formatted value. */
@@ -67,6 +69,8 @@ export function DataTable({
     });
   }, [rows, sort]);
   const numericCol = (c: DataColumn) => c.numeric ?? rows.slice(0, 20).some((r) => isNumeric(r[c.key]) && typeof r[c.key] !== "boolean");
+  // long free text (descriptions, comments) wraps instead of forcing horizontal scrolling
+  const wrapCol = (c: DataColumn) => c.wrap ?? (!numericCol(c) && rows.slice(0, 50).some((r) => typeof r[c.key] === "string" && (r[c.key] as string).length > 60));
   // paging instead of a hard cap (st.dataframe showed every row); back to page 1 on new data or sort
   const [page, setPage] = useState(0);
   useEffect(() => setPage(0), [rows, sort]);
@@ -99,7 +103,7 @@ export function DataTable({
             {pageRows.map(({ r, id }) => (
               <TableRow key={id}>
                 {cols.map((c) => (
-                  <TableCell key={c.key} numeric={numericCol(c)} className="whitespace-nowrap">
+                  <TableCell key={c.key} numeric={numericCol(c)} className={wrapCol(c) ? "min-w-64 whitespace-normal break-words" : "whitespace-nowrap"}>
                     {cellContent(c, r)}
                   </TableCell>
                 ))}

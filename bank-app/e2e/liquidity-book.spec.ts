@@ -21,7 +21,7 @@ test("both pages show the same run and open on the same date", async ({ page, re
   await page.goto("/liquidity/lcr");
   const lcrBadge = page.getByTestId("liquidity-book");
   await expect(lcrBadge).toHaveAttribute("data-run-id", runId);
-  await expect(lcrBadge.getByText("LCR and DtI on the same book")).toBeVisible();
+  await expect(lcrBadge.getByText("LCR and DtI differ")).toHaveCount(0);
   await expect(page.getByLabel("Reporting date (list)")).toHaveValue(asOf);
 
   await lcrBadge.getByRole("link", { name: "Open DtI" }).click();

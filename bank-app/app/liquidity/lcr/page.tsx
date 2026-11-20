@@ -231,7 +231,7 @@ function Overview({ base, events }: { base: LoaderRow[]; events: LoaderRow[] }) 
         <Panel title="Liquidity events">
           <DataTable
             rows={events}
-            columns={["EVENT_ID", "EVENT_DATE", "EVENT_TYPE", "DESCRIPTION", { key: "AMOUNT_CHF", label: "Amount", render: (r) => chfM(r.AMOUNT_CHF), numeric: true }]}
+            columns={["EVENT_ID", "EVENT_DATE", "EVENT_TYPE", { key: "DESCRIPTION", wrap: true }, { key: "AMOUNT_CHF", label: "Amount", render: (r) => chfM(r.AMOUNT_CHF), numeric: true }]}
           />
         </Panel>
       )}
@@ -319,7 +319,7 @@ function FlowsTab({ cur, base }: { cur: LoaderRow; base: LoaderRow[] }) {
         </Panel>
       </div>
       <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label="Gross outflows" value={chfM(out)} />
+        <StatCard label="Stressed outflows (weighted)" value={chfM(out)} />
         <StatCard label="Inflows (weighted)" value={chfM(cur.INFLOW_TOTAL)} />
         <StatCard label="Inflows after cap" value={chfM(cur.INFLOW_CAPPED)} />
         <StatCard label="Cap utilisation" value={`${formatNumber(out ? (num(cur.INFLOW_TOTAL) / (0.75 * out)) * 100 : 0, 0)}%`} />

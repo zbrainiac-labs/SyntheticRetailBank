@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,7 +65,7 @@ export default function DtiManualInputsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Manual Inputs"
         description={`Corrections and commenting thresholds · reference date ${f.referenceDate} · role ${access.data?.role ?? "…"}`}
@@ -193,7 +193,7 @@ export default function DtiManualInputsPage() {
                     <TableCell className="text-xs">{c.positionName}</TableCell>
                     <TableCell>{c.valueDate}</TableCell>
                     <TableCell numeric>{formatChfM(c.amount)}</TableCell>
-                    <TableCell className="max-w-80 truncate" title={c.comment}>
+                    <TableCell className="min-w-64 max-w-md whitespace-normal break-words">
                       {c.comment}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.createdBy ?? "—"}</TableCell>

@@ -3,7 +3,7 @@
 import { ForecastSection, scopeText } from "@/components/dti/common";
 import { PageFilterBar } from "@/components/dti/filter-bar";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -120,7 +120,7 @@ function Securities() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title={`Collateral Pool – WLK cluster ${wlk}${clusterName}`}
         description={`${valueBasis}, CHF M · ${scopeText(f)}`}

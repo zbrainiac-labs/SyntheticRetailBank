@@ -3,7 +3,7 @@
 import { DeltaGrid, type DeltaCellClick } from "@/components/delta-grid";
 import { PageFilterBar } from "@/components/dti/filter-bar";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildTree, pruneByAmount, reconciliationBreaks } from "@/lib/delta-tree";
@@ -70,7 +70,7 @@ function Positions() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="LST Positions"
         description={`${scope} · ${valueTypeLabel(f.valueType)} values in CHF M · ${f.referenceDate} vs. ${f.comparisonDate} · buckets relative to each date`}

@@ -4,7 +4,7 @@ import { ForecastSection, scopeText } from "@/components/dti/common";
 import { PageFilterBar } from "@/components/dti/filter-bar";
 import { PivotTable, type PivotGroup } from "@/components/dti/pivot-table";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCompare, useDtiMeta, useParameters } from "@/lib/dti/client";
 import { aggregate, cellOf, sideKeys, valueOf, type Measure, type Pivot } from "@/lib/dti/pivot";
@@ -82,7 +82,7 @@ export default function DtiApplicationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Application Level"
         description={`Changes in the fixed cash flows (incl. corrections) per application, CHF M · ${scopeText(f, false)}`}

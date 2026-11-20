@@ -20,7 +20,7 @@ const DESCRIPTIONS: Record<string, string> = {
 
 export default function Home() {
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-8">
+    <div className="space-y-8">
       <PageHeader
         eyebrow="Synthetic Retail Bank"
         title="Bank App"

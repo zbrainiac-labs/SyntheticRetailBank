@@ -2,7 +2,7 @@
 
 import { EmptyState } from "@/components/empty-state";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,7 @@ function DealLevel() {
   if (!sel) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="DtI comparison" title="Deal Level" />
+        <DtiHeader eyebrow="DtI comparison" title="Deal Level" />
         <EmptyState
           title="No cell selected"
           description="Open LST Positions and click a value to see the deals behind it."
@@ -82,7 +82,7 @@ function DealLevel() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Deal Level"
         description={`${path} · ${period} · ${scope} · ${valueTypeLabel(f.valueType)} values in CHF`}

@@ -18,6 +18,8 @@ test("Customer 360 renders KPIs, list and profile", async ({ page, request }) =>
   await expect(page.getByText(fmt(Number(k.TOTAL_CUSTOMERS)), { exact: true }).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(fmt(Number(k.PEP_MATCHES)), { exact: true }).first()).toBeVisible();
   await expect(page.getByText(`Found ${fmt(Number(k.TOTAL_CUSTOMERS))} customers matching your criteria`)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: "Customer list" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Customer profile" }).click();
   await expect(page.getByText("Identity & Demographics")).toBeVisible({ timeout: 30_000 });
 });
 
@@ -94,17 +96,17 @@ test("U1 Customer 360 address history shows zip codes as text", async ({ page, r
   }
 });
 
-test("U2 Customer ID in the list selects the profile", async ({ page, request }) => {
+test("U2 Customer ID in the list opens the profile tab", async ({ page, request }) => {
   const list = await rowsOf(request, "/api/data/customer360.list");
   const id = String(list[1].CUSTOMER_ID);
   await page.goto("/banking/customer-360");
-  const select = page.getByLabel("Select a customer to view detailed profile");
-  await expect(select).toHaveValue(String(list[0].CUSTOMER_ID), { timeout: 30_000 });
   const link = page.getByRole("link", { name: id, exact: true });
-  await expect(link).toHaveAttribute("href", /#customer-profile$/);
-  await link.click();
-  await expect(select).toHaveValue(id);
-  await expect(page.locator("#customer-profile")).toBeInViewport();
+  await link.click({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: "Customer profile" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("Select a customer to view detailed profile")).toHaveValue(id);
+  await expect(page.locator("#customer-profile")).toBeVisible();
+  await page.getByRole("button", { name: "← Back to list" }).click();
+  await expect(page.getByRole("tab", { name: "Customer list" })).toHaveAttribute("aria-selected", "true");
 });
 
 test("U3 Customer 360 KPI cards toggle the list filters", async ({ page, request }) => {

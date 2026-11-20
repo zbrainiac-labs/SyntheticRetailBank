@@ -5,7 +5,7 @@ import { PageFilterBar } from "@/components/dti/filter-bar";
 import { PivotTable, type PivotGroup } from "@/components/dti/pivot-table";
 import { EmptyState } from "@/components/empty-state";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dtiQuery, useCompare, useDtiMeta, useParameters } from "@/lib/dti/client";
 import { aggregate, cellOf, MEASURE_LABEL, sideKeys, SIDE_LABEL, valueOf, type Measure, type Pivot } from "@/lib/dti/pivot";
@@ -106,7 +106,7 @@ function SingleProducts() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Single Products per Cluster"
         description={info ? `${levelNames || "—"} › ${info.group} › ${info.name} · CHF M · ${scopeText(f)}` : `Select a product cluster · ${scopeText(f)}`}
