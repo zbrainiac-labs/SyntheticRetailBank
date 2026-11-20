@@ -48,7 +48,7 @@ function layout(rows: LoaderRow[], statement: Statement): Line[] {
   const p = of("PNL", (r) => r.FS_LINE !== "NCI_SHARE");
   const nci = of("PNL", (r) => r.FS_LINE === "NCI_SHARE");
   return [
-    ...p, { key: "T_NP", label: "Net profit", fsLines: keys(p), subtotal: true },
+    ...p, { key: "T_NP", label: "Net profit before NCI", fsLines: keys(p), subtotal: true },
     ...nci, { key: "T_NPA", label: "Net profit attributable to shareholders", fsLines: [...keys(p), ...keys(nci)], subtotal: true },
   ];
 }

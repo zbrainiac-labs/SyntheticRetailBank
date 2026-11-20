@@ -3,10 +3,11 @@ import { expect, test } from "@playwright/test";
 /** Financial Control consolidation showcase: decision bridge, sheet + answer trail, controls with the demo exception. */
 const M = (v: number, d = 1) => (Number((v / 1e6).toFixed(d)) || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 
+/** Month the page opens on: the latest complete month (a partial month stays selectable). */
 async function latestMonth(request: import("@playwright/test").APIRequestContext) {
   const { rows } = await (await request.get("/api/data/finance.periods")).json();
   expect(rows.length).toBeGreaterThan(1);
-  return String(rows[0].PERIOD_MONTH);
+  return String((rows.find((r: { IS_COMPLETE: boolean }) => r.IS_COMPLETE) ?? rows[0]).PERIOD_MONTH);
 }
 
 test("banner, KPIs and controls status match the loaders", async ({ page, request }) => {
@@ -40,8 +41,15 @@ test("bridge: opening + movements = closing and the summary names the drivers", 
   await expect(summary).toContainText(`CHF ${M(sum("OPENING"))}M`);
   await expect(summary).toContainText(`CHF ${M(sum("CLOSING"))}M`);
   await expect(page.getByTestId("bridge-table")).toContainText("FX effect");
-  await page.getByRole("button", { name: "Net profit" }).click();
-  await expect(summary).toContainText("Group net profit");
+  // profit composition: P&L lines -> before NCI -> NCI -> shareholders; the table total matches the KPI
+  const cons = (await (await request.get(`/api/data/finance.consolidation?month=${month}`)).json()).rows;
+  const profit = cons
+    .filter((r: { COL: string; STATEMENT: string }) => r.COL === "GROUP" && r.STATEMENT === "PL")
+    .reduce((s: number, r: { AMOUNT_CHF: number }) => s + Number(r.AMOUNT_CHF), 0);
+  await expect(page.getByTestId("profit-chart")).toBeVisible();
+  await expect(page.getByTestId("profit-table")).toContainText("Net profit before NCI");
+  await expect(page.getByTestId("profit-table")).toContainText(M(profit, 2));
+  await expect(page.getByTestId("profit-summary")).toContainText(`Profit to shareholders this month: CHF ${M(profit, 2)}M`);
 });
 
 test("consolidation sheet: group column = sum of entities + IC Elim + NCI, trail drawer ends at the group value", async ({ page }) => {
