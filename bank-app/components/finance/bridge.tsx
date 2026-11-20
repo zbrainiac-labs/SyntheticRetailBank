@@ -1,10 +1,10 @@
 "use client";
 
-import { ChartTooltip, CHART_THEME, formatTick } from "@/components/chart-utils";
+import { CHART_THEME, formatTick } from "@/components/chart-utils";
 import { DataTable, Panel } from "@/components/data/data-table";
 import { fmtDeltaM, fmtM, monthLabel } from "@/components/finance/common";
 import { num, type LoaderRow } from "@/lib/loaders/client";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 export type Metric = "NET_PROFIT" | "TOTAL_ASSETS";
 const STEP_LABEL: Record<string, string> = {
@@ -50,6 +50,13 @@ export function bridgeSteps(rows: LoaderRow[], metric: Metric) {
   return order.map((c) => ({ component: c, label: STEP_LABEL[c], amount: total(c) }));
 }
 
+/** Round tick step (1 / 2 / 5 x 10^n) for a value span: about five ticks. */
+function niceStep(span: number): number {
+  const raw = Math.max(span, 1) / 5;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  return ([1, 2, 5, 10].find((m) => m * mag >= raw) ?? 10) * mag;
+}
+
 /** Waterfall as range bars: totals from 0, movements from the running total; the axis zooms onto the movements. */
 function Waterfall({ steps, digits, zoom, testId }: Readonly<{ steps: Step[]; digits: number; zoom: boolean; testId: string }>) {
   let run = 0;
@@ -58,27 +65,30 @@ function Waterfall({ steps, digits, zoom, testId }: Readonly<{ steps: Step[]; di
     const hi = s.total ? Math.max(0, s.amount) : Math.max(run, run + s.amount);
     run = s.total ? s.amount : run + s.amount;
     const fill = s.total ? "var(--chart-1)" : s.amount >= 0 ? "var(--success)" : "var(--destructive)";
-    return { name: s.axis, range: [lo, hi], fill, value: s.amount };
+    return { name: s.axis, range: [lo, hi], fill, value: s.amount, label: s.total ? fmtM(s.amount, digits) : fmtDeltaM(s.amount, digits) };
   });
-  // zoom for the asset bridge: totals are cut at the bottom (a waterfall from 0 hides small changes)
+  // zoom for the asset bridge: totals are cut at the bottom (a waterfall from 0 hides small changes);
+  // bounds snap to a round step so the ticks read 6,000 / 6,100 / ... instead of 6,147.9
   const tops = chart.map((c) => c.range[1]);
   const lows = chart.filter((_, i) => !steps[i].total).map((c) => c.range[0]);
   const span = Math.max(...tops) - Math.min(...lows, ...tops);
+  const step = niceStep(span);
   const domain: [number, number] | ["auto", "auto"] = zoom
-    ? [Math.min(...lows, ...tops) - span * 0.6, Math.max(...tops) + span * 0.2]
+    ? [Math.floor((Math.min(...lows, ...tops) - span * 0.5) / step) * step, Math.ceil((Math.max(...tops) + span * 0.25) / step) * step]
     : ["auto", "auto"];
   return (
     <div data-testid={testId}>
       <ResponsiveContainer width="100%" height={320}>
-        <BarChart data={chart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <BarChart data={chart} margin={{ top: 24, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={CHART_THEME.grid} strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="name" tick={{ ...CHART_THEME.tick, fontSize: 11 }} interval={0} />
           <YAxis tick={CHART_THEME.tick} tickFormatter={formatTick} width={70} domain={domain} allowDataOverflow={zoom} />
-          <Tooltip content={<ChartTooltip />} formatter={(_v, _n, p) => `CHF ${fmtDeltaM(p.payload.value, digits)}M`} />
+          {/* values are printed on the bars; a tooltip would show the [low, high] range of the range bar */}
           <Bar dataKey="range" name="CHF" radius={[3, 3, 0, 0]}>
             {chart.map((c) => (
               <Cell key={c.name} fill={c.fill} />
             ))}
+            <LabelList dataKey="label" position="top" className="fill-foreground text-[11px] tabular-nums" />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

@@ -780,8 +780,13 @@ c4 AS (
     SELECT d.PERIOD_MONTH, ABS(COALESCE(s.CHF, 0) - d.CHF) + ABS(d.UNMAPPED) AS DIFF, d.AFFECTED
     FROM dtd d LEFT JOIN srcd s ON s.PERIOD_MONTH = d.PERIOD_MONTH
 ),
+-- freshness = lag of the consolidation behind its source (not wall-clock age): a quiet source is not stale
+src_ts AS (
+    SELECT MAX(CALCULATION_TIMESTAMP) AS SRC_REFRESHED FROM {{ db }}.{{ rep_agg }}.REPP_AGG_DT_LIQ_POSITIONS
+),
 c5 AS (
-    SELECT PERIOD_MONTH, DATEDIFF(minute, REFRESHED, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ) / 60 AS DIFF FROM dtd
+    SELECT d.PERIOD_MONTH, GREATEST(DATEDIFF(minute, d.REFRESHED, s.SRC_REFRESHED), 0) / 60 AS DIFF
+    FROM dtd d CROSS JOIN src_ts s
 ),
 chk AS (
     SELECT c1.PERIOD_MONTH, 'FC-C1' AS CHECK_ID, 'Balance sheet balances' AS CHECK_NAME,
@@ -809,8 +814,8 @@ chk AS (
     FROM c4
     UNION ALL
     SELECT PERIOD_MONTH, 'FC-C5', 'Data freshness',
-           'The consolidation was refreshed from the source data within the last 6 hours.',
-           6, DIFF, NULL, 'Check the refresh of the liquidity book dynamic tables.', DIFF, NULL
+           'The consolidation is up to date with its source: at most 2 hours behind the latest liquidity book refresh.',
+           2, DIFF, NULL, 'Check the refresh of the consolidation dynamic tables (target lag, warehouse).', DIFF, NULL
     FROM c5
 )
 SELECT PERIOD_MONTH, CHECK_ID::VARCHAR(10), CHECK_NAME::VARCHAR(60), DESCRIPTION::VARCHAR(200), TOLERANCE::NUMBER(18,2),

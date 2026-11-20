@@ -185,7 +185,7 @@ are not controls.
 | FCO-05 source completeness | FC-C4 passes in every month | FC-C4 |
 | FCO-06 bridge adds up | opening + movements = closing for every month (Bridge tab) | – |
 | FCO-07 trail ends at group | the calculation lineage adds up to the group value (Consolidation sheet) | – |
-| – | data freshness is checked live on the page | FC-C5 |
+| – | data freshness (consolidation at most 2 h behind its source) is checked live on the page | FC-C5 |
 
 ## Act 4 – Accounting assumptions (Method tab, 3 min, optional detail)
 

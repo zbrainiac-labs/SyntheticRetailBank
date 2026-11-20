@@ -46,7 +46,7 @@ export function Controls({
           {checks.map((r) => {
             const v = checkView(r, simulate);
             const ok = v.status === "PASS";
-            const unit = r.CHECK_ID === "FC-C5" ? "h since refresh" : "CHF difference";
+            const unit = r.CHECK_ID === "FC-C5" ? "h behind source" : "CHF difference";
             return (
               <div key={String(r.CHECK_ID)} className="rounded-lg border p-3" data-check={String(r.CHECK_ID)} data-status={v.status}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
