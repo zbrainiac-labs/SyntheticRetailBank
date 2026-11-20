@@ -1,7 +1,7 @@
 "use client";
 
 import { FilterControls } from "@/components/dti/filter-bar";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDtiMeta } from "@/lib/dti/client";
@@ -18,7 +18,7 @@ export default function DtiFilterPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Filter"
         description="Defaults for every DtI page. Pages can override single filters locally; changing a default here resets those local selections."

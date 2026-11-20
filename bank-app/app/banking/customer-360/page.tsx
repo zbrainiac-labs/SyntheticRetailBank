@@ -1,7 +1,7 @@
 "use client";
 
 import { Callout, Field, SELECT_CLS } from "@/components/banking/charts";
-import { DataTable, LoaderState, Panel } from "@/components/data/data-table";
+import { DataTable, LoaderState, Panel, Tabs } from "@/components/data/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { StateView } from "@/components/query-view";
 import { PageHeader } from "@/components/page-header";
@@ -18,6 +18,11 @@ const ANY = "_";
 /** Same character class as the loader "code" param rule; anything else is dropped. */
 const clean = (s: string) => s.replace(/[^A-Za-z0-9_ .&/-]/g, "").trim().slice(0, 100);
 const pct = (v: unknown) => (v === null || v === undefined ? "—" : `${formatNumber(num(v), 0)}%`);
+const TABS = [
+  { v: "list", label: "Customer list" },
+  { v: "profile", label: "Customer profile" },
+] as const;
+type Tab = (typeof TABS)[number]["v"];
 
 function Section({ title, open, children }: { title: string; open?: boolean; children: React.ReactNode }) {
   return (
@@ -212,6 +217,12 @@ function Customer360() {
     if (!selected || !ids.includes(selected)) setSelected(ids[0] ?? null);
   }, [rows, selected]);
   const detail = useLoader("customer360.detail", { id: selected }, { enabled: !!selected });
+  // a deep link (?customer=<id>) opens on the profile, otherwise start with the list
+  const [tab, setTab] = useState<Tab>(linked ? "profile" : "list");
+  useEffect(() => setTab(linked ? "profile" : "list"), [linked]);
+  const selectedRow = rows.find((r) => String(r.CUSTOMER_ID) === selected);
+  const selectedName = typeof selectedRow?.FULL_NAME === "string" ? selectedRow.FULL_NAME : "";
+  const profileTitle = selectedRow ? `Customer profile · ${String(selectedRow.CUSTOMER_ID)} - ${selectedName}` : "Customer profile";
 
   return (
     <div className="space-y-6">
@@ -302,17 +313,23 @@ function Customer360() {
           <Callout tone="info" title={`Found ${formatNumber(matches)} customers matching your criteria`}>
             {matches > rows.length ? `Table and picker show the first ${rows.length} by customer ID.` : null}
           </Callout>
-          <Panel title="Customers">
+          <Tabs tabs={[...TABS]} value={tab} onChange={setTab} />
+          {tab === "list" && (
+          <Panel title="Customers" description="Click a customer ID to open the profile">
             <DataTable
               rows={rows}
               columns={[
                 {
                   key: "CUSTOMER_ID",
-                  // select the customer and jump to the profile panel below
+                  // select the customer and switch to the profile tab
                   render: (r) => (
                     <a
                       href="#customer-profile"
-                      onClick={() => setSelected(String(r.CUSTOMER_ID))}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setSelected(String(r.CUSTOMER_ID));
+                        setTab("profile");
+                      }}
                       className="text-primary underline-offset-2 hover:underline"
                     >
                       {String(r.CUSTOMER_ID)}
@@ -330,10 +347,16 @@ function Customer360() {
               maxRows={500}
             />
           </Panel>
-          <Panel title="Customer Profile">
-            <div id="customer-profile" className="scroll-mt-4 space-y-4">
-              <label className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Select a customer to view detailed profile:</span>
+          )}
+          {tab === "profile" && (
+          <Panel title={profileTitle}>
+            <div id="customer-profile" className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <button type="button" className="text-primary hover:underline" onClick={() => setTab("list")}>
+                  ← Back to list
+                </button>
+                <label className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground">Switch customer:</span>
                 <select
                   aria-label="Select a customer to view detailed profile"
                   value={selected ?? ""}
@@ -346,12 +369,14 @@ function Customer360() {
                     </option>
                   ))}
                 </select>
-              </label>
+                </label>
+              </div>
               <LoaderState q={detail} empty="Customer not found">
                 {(d) => <Profile c={d[0]} />}
               </LoaderState>
             </div>
           </Panel>
+          )}
         </>
           )
         }

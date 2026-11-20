@@ -36,7 +36,7 @@ test("act 1 - one book, one run", async ({ page, request }) => {
   await page.goto("/liquidity/lcr");
   const badge = page.getByTestId("liquidity-book");
   await expect(badge).toHaveAttribute("data-run-id", runId);
-  await expect(badge.getByText("LCR and DtI on the same book")).toBeVisible();
+  await expect(badge.getByText("LCR and DtI differ")).toHaveCount(0);
   await expect(page.getByLabel("Reporting date (list)")).toHaveValue(asOf);
   await shot(page, 1);
 });

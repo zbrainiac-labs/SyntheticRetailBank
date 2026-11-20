@@ -135,14 +135,14 @@ if [[ "$WITH_SQLUNIT" -eq 1 ]]; then
   stage sqlunit
   CONN="${SNOWFLAKE_CONNECTION:-zs28104-svc_mdaeppen}"
   SQL_LOG="$LOG_DIR/sqlunit-$(date +%Y%m%dT%H%M%S).csv"
-  for f in lcr_validation dti_validation metadata_check data_check; do
+  for f in lcr_validation dti_validation fco_validation metadata_check data_check; do
     snow sql -c "$CONN" --role CICD --format CSV -f "$REPO/sqlunit/$f.sql" < /dev/null >> "$SQL_LOG" 2>&1 || true
   done
   for r in DTI_READ_ONLY DTI_LRC_READ; do
     f="dti_governance_$(echo "${r#DTI_}" | tr '[:upper:]' '[:lower:]')"
     snow sql -c "$CONN" --role "$r" --format CSV -f "$REPO/sqlunit/$f.sql" < /dev/null >> "$SQL_LOG" 2>&1 || true
   done
-  CHECKS='^(TC-|ENG-|DTI-|META-|DATA-)'
+  CHECKS='^(TC-|ENG-|DTI-|FCO-|META-|DATA-)'
   if grep -qE "${CHECKS}[^,]*,FAIL" "$SQL_LOG" || ! grep -qE "$CHECKS" "$SQL_LOG"; then
     grep -E "${CHECKS}[^,]*,FAIL" "$SQL_LOG" || echo "no check results (see $SQL_LOG)"
     echo "ERROR: sqlunit gate failed"; exit 1

@@ -1,7 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -69,7 +69,7 @@ export default function DtiParametersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="DtI comparison" title="Parameters" description="Every provision the DtI comparison relies on. Values are maintained in the reference tables of the liquidity book." />
+      <DtiHeader eyebrow="DtI comparison" title="Parameters" description="Every provision the DtI comparison relies on. Values are maintained in the reference tables of the liquidity book." />
       <div className="grid gap-6 lg:grid-cols-2">
         <RefTable
           title="Commenting thresholds"

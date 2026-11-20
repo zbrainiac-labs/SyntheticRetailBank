@@ -4,7 +4,7 @@ import { ForecastSection, scopeText } from "@/components/dti/common";
 import { PageFilterBar } from "@/components/dti/filter-bar";
 import { PivotTable, type PivotGroup } from "@/components/dti/pivot-table";
 import { StateView } from "@/components/query-view";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCompare, useDtiMeta, useParameters } from "@/lib/dti/client";
 import { aggregate, cellOf, sideKeys, SIDE_LABEL, valueOf, type Measure, type Pivot } from "@/lib/dti/pivot";
@@ -132,7 +132,7 @@ export default function DtiProductGroupsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="DtI comparison"
         title="Product Groups"
         description={`Changes per Level I position › product group › product cluster, CHF M · ${scopeText(f)}`}

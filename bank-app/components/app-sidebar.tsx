@@ -39,7 +39,7 @@ export function AppSidebar() {
   useEffect(() => setRefreshedAt(timeOf(new Date())), []);
   const conn = connectionView(health.isPending, health.data);
   const refresh = () => {
-    void queryClient.invalidateQueries();
+    void fetch("/api/cache/clear", { method: "POST" }).finally(() => queryClient.invalidateQueries());
     setRefreshedAt(timeOf(new Date()));
   };
 
@@ -57,7 +57,7 @@ export function AppSidebar() {
       <nav className="flex flex-col gap-4 text-sm" aria-label="Main">
         {NAV_SECTIONS.map((section) => (
           <div key={section.label} className="flex flex-col gap-0.5">
-            <span className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="px-2 pb-1 text-xs font-bold uppercase tracking-wider text-foreground">
               {section.label}
             </span>
             {section.items.map((item) => {

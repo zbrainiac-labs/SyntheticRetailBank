@@ -41,9 +41,11 @@ export function BookBadge({ other }: Readonly<{ other: "lcr" | "dti" }>) {
       <span>as of {data.asOf}</span>
       {pool !== null && <span>free pool CHF {formatNumber(pool / 1e6, 0)}M</span>}
       {check.comparable ? (
-        <Badge variant={check.ok ? "success" : "warning"} title="LCR and DtI end on the same date and value the same free pool">
-          {check.ok ? "LCR and DtI on the same book" : "LCR and DtI differ"}
-        </Badge>
+        !check.ok && (
+          <Badge variant="warning" title="LCR and DtI do not end on the same date or value different free pools">
+            LCR and DtI differ
+          </Badge>
+        )
       ) : (
         <Badge variant="outline" title="The current role cannot read both engines">
           LCR not visible for this role

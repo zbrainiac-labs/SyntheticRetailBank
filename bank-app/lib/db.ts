@@ -162,6 +162,7 @@ function ownerConnection(): Promise<snowflake.Connection> {
 
 /** Run one statement as the app identity. Always pass user input via binds. */
 export async function query<T extends Row = Row>(sqlText: string, binds: Bind[] = []): Promise<QueryResult<T>> {
+  if (!/^\s*(select|with|show|describe|desc)\b/i.test(sqlText)) clearResultCache();
   try {
     return await execute<T>(await ownerConnection(), sqlText, binds);
   } catch (e) {
@@ -176,23 +177,62 @@ export async function query<T extends Row = Row>(sqlText: string, binds: Bind[] 
 }
 
 /**
+ * Server-side result cache for read statements (default 60 min, DATA_CACHE_TTL_MS=0 disables).
+ * Keyed by viewer, statement and binds so per-user row access / masking results never leak
+ * between users. Any non-read statement (corrections, refresh) clears the whole cache.
+ */
+const CACHE_TTL_MS = Number(process.env.DATA_CACHE_TTL_MS ?? 60 * 60_000);
+const CACHE_MAX_ENTRIES = 500;
+const resultCache = new Map<string, { expires: number; result: Promise<QueryResult> }>();
+const READ_STATEMENT = /^\s*(select|with|show|describe|desc)\b/i;
+
+export function clearResultCache(): void {
+  resultCache.clear();
+}
+
+function cached<T extends Row>(viewer: string, sqlText: string, binds: Bind[], run: () => Promise<QueryResult<T>>): Promise<QueryResult<T>> {
+  if (!READ_STATEMENT.test(sqlText)) {
+    clearResultCache();
+    return run();
+  }
+  if (CACHE_TTL_MS <= 0) return run();
+  const key = JSON.stringify([viewer, sqlText, binds]);
+  const now = Date.now();
+  const hit = resultCache.get(key);
+  if (hit && hit.expires > now) return hit.result as Promise<QueryResult<T>>;
+  const result = run();
+  // failed queries are not cached
+  result.catch(() => resultCache.delete(key));
+  resultCache.delete(key);
+  resultCache.set(key, { expires: now + CACHE_TTL_MS, result });
+  // Map keeps insertion order: drop the oldest entries beyond the cap
+  while (resultCache.size > CACHE_MAX_ENTRIES) resultCache.delete(resultCache.keys().next().value as string);
+  return result;
+}
+
+/**
  * Run one statement with the calling user's rights (row access / masking
  * policies evaluate against the viewer). On SPCS this needs the request's
  * Sf-Context-Current-User-Token header; locally it falls back to the owner
- * connection, whose role is set by SNOWFLAKE_ROLE.
+ * connection, whose role is set by SNOWFLAKE_ROLE. Read results are cached per viewer.
  */
 export async function queryAsCaller<T extends Row = Row>(
   headers: Headers,
   sqlText: string,
   binds: Bind[] = [],
 ): Promise<QueryResult<T> & { identity: "caller" | "dev" }> {
-  if (!isSpcs()) return { ...(await query<T>(sqlText, binds)), identity: "dev" };
+  if (!isSpcs()) return { ...(await cached<T>("dev", sqlText, binds, () => query<T>(sqlText, binds))), identity: "dev" };
   const callerToken = headers.get("sf-context-current-user-token");
   if (!callerToken) throw new Error("Missing caller context (Sf-Context-Current-User-Token)");
-  const conn = await connect(spcsOptions(callerToken));
-  try {
-    return { ...(await execute<T>(conn, sqlText, binds)), identity: "caller" };
-  } finally {
-    conn.destroy(() => undefined);
-  }
+  // SPCS sets Sf-Context-Current-User on ingress; the token is the fallback key (never logged)
+  const viewer = headers.get("sf-context-current-user") ?? callerToken;
+  const run = async () => {
+    const conn = await connect(spcsOptions(callerToken));
+    try {
+      return await execute<T>(conn, sqlText, binds);
+    } finally {
+      conn.destroy(() => undefined);
+    }
+  };
+  return { ...(await cached<T>(viewer, sqlText, binds, run)), identity: "caller" };
 }

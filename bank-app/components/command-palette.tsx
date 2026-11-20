@@ -86,7 +86,7 @@ export function CommandPalette() {
               {resolvedTheme === 'dark' ? <Sun /> : <Moon />}
               Switch to {resolvedTheme === 'dark' ? 'light' : 'dark'} mode
             </CommandItem>
-            <CommandItem onSelect={run(() => queryClient.invalidateQueries())}>
+            <CommandItem onSelect={run(() => fetch("/api/cache/clear", { method: "POST" }).finally(() => queryClient.invalidateQueries()))}>
               <RefreshCw />
               Refresh data
             </CommandItem>

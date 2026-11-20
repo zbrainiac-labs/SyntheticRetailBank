@@ -2,6 +2,7 @@ import { LOADERS_AML } from "@/lib/loaders/aml";
 import { LOADERS_ASKAI } from "@/lib/loaders/askai";
 import { LOADERS_CHURN } from "@/lib/loaders/churn";
 import { LOADERS_CUSTOMER360 } from "@/lib/loaders/customer360";
+import { LOADERS_FINANCE } from "@/lib/loaders/finance";
 import { LCR_LOADERS } from "@/lib/loaders/lcr";
 import { LOADERS_LENDING } from "@/lib/loaders/lending";
 import { LOADERS_PORTFOLIO } from "@/lib/loaders/portfolio";
@@ -25,4 +26,5 @@ export const LOADERS: Record<string, LoaderDef> = {
   ...LOADERS_WEALTH,
   ...LOADERS_SETTINGS,
   ...LOADERS_ASKAI,
+  ...LOADERS_FINANCE,
 };

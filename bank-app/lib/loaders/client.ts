@@ -28,7 +28,7 @@ export function useLoader<T extends LoaderRow = LoaderRow>(
   return useQuery({
     queryKey: ["data", name, qs],
     enabled: ready && (opts.enabled ?? true),
-    staleTime: opts.staleTime ?? 10 * 60_000,
+    staleTime: opts.staleTime ?? 60 * 60_000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const query = qs ? `?${qs}` : "";

@@ -1,4 +1,4 @@
-name: CI
+name: CI / Deploy
 
 # Verify every change, then deploy main: lint, bank-app typecheck + unit tests, arm64 image
 # build + smoke test + Trivy, the SonarQube quality gate, and -- on main only, after all of them
@@ -99,7 +99,7 @@ jobs:
       contents: write   # GitHub release
       actions: read
       checks: write
-    uses: zbrainiac-labs/DataOpsBackbone/.github/workflows/dataops-pipeline.yml@main
+    uses: zbrainiac-labs/DataOpsBackbone/.github/workflows/dataops-pipeline.yml@v1
     with:
       SOURCE_DATABASE: AAA_DEV_SYNTHETIC_BANK
       SOURCE_SCHEMA: CRM_RAW_v001

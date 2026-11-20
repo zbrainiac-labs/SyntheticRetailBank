@@ -4,7 +4,7 @@ import { ChartTooltip, CHART_THEME, formatTick, getYAxisWidth } from "@/componen
 import { DtiEventsCard } from "@/components/dti/events-card";
 import { PageFilterBar } from "@/components/dti/filter-bar";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
+import { DtiHeader } from "@/components/dti/dti-header";
 import { StatCard, StatCardSkeleton } from "@/components/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -227,9 +227,9 @@ export default function DtiSummaryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <DtiHeader
         eyebrow="Days to Illiquidity (DtI) comparison"
-        title="Summary"
+        title="DtI Calculation"
         description={`${scope} · ${values} values · ${f.referenceDate} vs. ${f.comparisonDate}`}
       />
       <PageFilterBar page={PAGE} applicable={FILTERS} />

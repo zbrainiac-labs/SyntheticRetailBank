@@ -1,44 +1,24 @@
 "use client";
 
 import { StateView } from "@/components/query-view";
-import { BookBadge, useLiquidityBook } from "@/components/liquidity/book-badge";
+import { useLiquidityBook } from "@/components/liquidity/book-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDtiMeta } from "@/lib/dti/client";
-import { DTI_PAGES } from "@/lib/constants";
 import { FilterProvider } from "@/lib/filters/context";
 import { defaultDate, previousDate } from "@/lib/liquidity/book";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type React from "react";
 
-/** Shared frame of the DtI pages: reference data, filter state and sub-navigation. */
+/** Shared frame of the DtI pages: reference data and filter state (title, book badge and sub-navigation: DtiHeader). */
 export default function DtiLayout({ children }: { children: React.ReactNode }) {
   const meta = useDtiMeta();
   const book = useLiquidityBook();
-  const pathname = usePathname();
   // open on the as-of date of the shared liquidity book (same default date as /liquidity/lcr)
   const dates = meta.data?.dates ?? [];
   const latest = defaultDate(dates, book.data?.asOf);
   const previous = previousDate(dates, latest);
 
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <nav aria-label="DtI" className="flex flex-wrap gap-1 border-b pb-2 text-sm">
-        {DTI_PAGES.map((p) => (
-          <Link
-            key={p.href}
-            href={p.href}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
-              pathname === p.href && "bg-muted font-medium text-foreground",
-            )}
-          >
-            {p.label}
-          </Link>
-        ))}
-      </nav>
-      <BookBadge other="lcr" />
+    <div className="space-y-6">
       <StateView
         pending={meta.isPending || book.isPending}
         error={meta.error}
@@ -59,6 +39,6 @@ export default function DtiLayout({ children }: { children: React.ReactNode }) {
           </FilterProvider>
         )}
       </StateView>
-    </main>
+    </div>
   );
 }
