@@ -50,9 +50,13 @@ export const NAV_SECTIONS: { label: string; items: { label: string; href: string
   {
     label: 'Liquidity',
     items: [
-      { label: 'DtI comparison', href: '/dti' },
       { label: 'LCR Monitoring', href: '/liquidity/lcr' },
+      { label: 'DtI comparison', href: '/dti' },
     ],
+  },
+  {
+    label: 'Financial Control',
+    items: [{ label: 'Group Consolidation', href: '/finance/consolidation' }],
   },
   {
     label: 'AI & Settings',
