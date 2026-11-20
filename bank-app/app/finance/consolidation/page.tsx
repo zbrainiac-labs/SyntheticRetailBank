@@ -25,15 +25,18 @@ type Tab = (typeof TABS)[number]["v"];
 export default function ConsolidationPage() {
   const periods = useLoader("finance.periods");
   const [month, setMonth] = useState<string | null>(null);
-  const current = month ?? (periods.data?.rows[0]?.PERIOD_MONTH as string | undefined) ?? null;
-  const periodDate = periods.data?.rows.find((r) => r.PERIOD_MONTH === current)?.PERIOD_DATE as string | undefined;
+  // open on the latest complete month; a partial month (data before month-end) stays selectable
+  const rows = periods.data?.rows ?? [];
+  const latestComplete = (rows.find((r) => r.IS_COMPLETE) ?? rows[0])?.PERIOD_MONTH as string | undefined;
+  const current = month ?? latestComplete ?? null;
+  const periodDate = rows.find((r) => r.PERIOD_MONTH === current)?.PERIOD_DATE as string | undefined;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Financial Control"
         title="Group Consolidation"
-        description="What drove the change in group profit and assets versus last month, and how much came from entity performance, FX and intercompany eliminations?"
+        description="What drove the change in group assets versus last month, and how much came from entity performance, FX and intercompany eliminations? And what makes up this month's profit?"
         actions={
           <label className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Month</span>
@@ -43,9 +46,10 @@ export default function ConsolidationPage() {
               value={current ?? ""}
               onChange={(e) => setMonth(e.target.value)}
             >
-              {(periods.data?.rows ?? []).map((p) => (
+              {rows.map((p) => (
                 <option key={String(p.PERIOD_MONTH)} value={String(p.PERIOD_MONTH)}>
                   {monthLabel(p.PERIOD_MONTH)}
+                  {p.IS_COMPLETE ? "" : ` (partial, to ${String(p.PERIOD_DATE).slice(8, 10)}.)`}
                 </option>
               ))}
             </select>
@@ -97,7 +101,7 @@ function Content({ month }: Readonly<{ month: string }>) {
       <Tabs tabs={[...TABS]} value={tab} onChange={setTab} />
       {tab === "bridge" && (
         <LoaderState q={bridge} empty="No comparison month: this is the first reporting month.">
-          {(rows) => <Bridge rows={rows} names={names} />}
+          {(rows) => <Bridge rows={rows} names={names} pnl={(cons.data?.rows ?? []).filter((r) => r.COL === "GROUP" && r.STATEMENT === "PL")} />}
         </LoaderState>
       )}
       {tab === "sheet" && (
@@ -172,6 +176,7 @@ function Kpis({
   }
   const group = (t: (r: LoaderRow) => boolean) => sumWhere(cons, (r) => r.COL === "GROUP" && t(r));
   const profit = group((r) => r.STATEMENT === "PL");
+  const nciProfit = group((r) => r.FS_LINE === "NCI_SHARE");
   const assets = group((r) => r.SECTION === "ASSETS");
   const cta = group((r) => r.FS_LINE === "CTA");
   const icElim = Math.abs(sumWhere(cons, (r) => r.COL === "IC_ELIM" && r.FS_LINE === "IC_RECEIVABLES"));
@@ -183,8 +188,13 @@ function Kpis({
   const passed = checks.filter((r) => checkView(r, simulate).status === "PASS").length;
   const dp = delta("NET_PROFIT");
   const da = delta("TOTAL_ASSETS");
+  const vsLast = dp === null ? "" : `, ${fmtDeltaM(dp, 2)}M vs last month`;
   const kpis = [
-    { label: "Group net profit", value: `CHF ${fmtM(profit, 2)}M`, hint: dp === null ? "month, attributable" : `${fmtDeltaM(dp, 2)}M vs last month` },
+    {
+      label: "Profit to shareholders",
+      value: `CHF ${fmtM(profit, 2)}M`,
+      hint: `before NCI ${fmtM(profit - nciProfit, 2)}M, NCI ${fmtM(nciProfit, 2)}M${vsLast}`,
+    },
     { label: "Group total assets", value: `CHF ${fmtM(assets)}M`, hint: da === null ? "after eliminations" : `${fmtDeltaM(da)}M vs last month` },
     { label: "FX effect on assets", value: `CHF ${fmtDeltaM(fx)}M`, hint: "rate change vs last month" },
     { label: "IC eliminated", value: `CHF ${fmtM(icElim)}M`, hint: "receivables = payables" },

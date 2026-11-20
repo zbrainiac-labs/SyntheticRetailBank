@@ -5,9 +5,10 @@ const MONTH = [{ name: "month", type: "date" as const }];
 
 /** Loaders of the Financial Control consolidation page; names are "finance.<loader>". */
 export const LOADERS_FINANCE: Record<string, LoaderDef> = {
-  /** reporting months, newest first */
+  /** reporting months, newest first; IS_COMPLETE = the snapshot is the calendar month-end */
   "finance.periods": {
-    sql: `SELECT TO_VARCHAR(PERIOD_MONTH) AS PERIOD_MONTH, TO_VARCHAR(PERIOD_DATE) AS PERIOD_DATE
+    sql: `SELECT TO_VARCHAR(PERIOD_MONTH) AS PERIOD_MONTH, TO_VARCHAR(PERIOD_DATE) AS PERIOD_DATE,
+                 PERIOD_DATE = LAST_DAY(PERIOD_MONTH) AS IS_COMPLETE
             FROM ${REP}.FCOA_AGG_DT_FX_PERIODS
            WHERE CURRENCY = 'CHF'
            ORDER BY PERIOD_MONTH DESC`,
